@@ -15,6 +15,12 @@ import {
   type Status,
 } from "./status";
 import { summarizeSpec } from "./catalog";
+import {
+  bandsFromSpec,
+  creditPointsEarned,
+  creditPointsRange,
+  pointsAwarded,
+} from "./points";
 
 export const WORKSPACE_ID = "ws_default";
 
@@ -85,6 +91,8 @@ export interface RequirementView {
   note: string | null;
   evidenceCount: number;
   status: Status;
+  pointsEarned: number;
+  pointsPreview: number;
 }
 
 export interface CreditView {
@@ -100,6 +108,9 @@ export interface CreditView {
   pageStart: number | null;
   pageEnd: number | null;
   status: Status;
+  pointsEarned: number;
+  pointsMax: number | null;
+  pointsMin: number | null;
   requirements: RequirementView[];
 }
 
@@ -192,6 +203,15 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       valueText: e.valueText,
       evidenceCount,
     });
+    const numericSpec = e.numericSpec ? JSON.parse(e.numericSpec) : null;
+    const award = {
+      metricType: e.metricType,
+      pointsRaw: e.pointsRaw,
+      optionGroup: e.optionGroup,
+      numericSpec,
+      valueNumber: e.valueNumber,
+      status,
+    };
     const view: RequirementView = {
       entryId: e.entryId,
       requirementId: e.requirementId,
@@ -203,8 +223,10 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       pointsRaw: e.pointsRaw,
       optionGroup: e.optionGroup,
       pointsType: e.pointsType,
-      target: summarizeSpec(e.numericSpec),
-      numericSpec: e.numericSpec ? JSON.parse(e.numericSpec) : null,
+      target: bandsFromSpec(numericSpec).length
+        ? null
+        : summarizeSpec(e.numericSpec),
+      numericSpec,
       evidenceSpecs,
       requiresEvidence,
       pageStart: e.pageStart,
@@ -215,6 +237,8 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       note: e.note,
       evidenceCount,
       status,
+      pointsEarned: pointsAwarded(award, "earned"),
+      pointsPreview: pointsAwarded(award, "preview"),
     };
     const arr = byCredit.get(e.projectCreditId) ?? [];
     arr.push(view);
@@ -223,6 +247,8 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
 
   return pcs.map((p) => {
     const reqs = (byCredit.get(p.pcId) ?? []).sort((a, b) => a.seq - b.seq);
+    const cap = p.pointsRaw != null && p.pointsRaw !== "" ? Number(p.pointsRaw) : null;
+    const range = creditPointsRange(reqs, p.pointsRaw);
     return {
       projectCreditId: p.pcId,
       catalogCreditId: p.catalogCreditId,
@@ -236,6 +262,9 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       pageStart: p.pageStart,
       pageEnd: p.pageEnd,
       status: deriveCreditStatus(reqs.map((r) => r.status)),
+      pointsEarned: creditPointsEarned(reqs, p.pointsRaw, "earned"),
+      pointsMax: Number.isFinite(cap) ? cap : null,
+      pointsMin: range?.min ?? null,
       requirements: reqs,
     };
   });

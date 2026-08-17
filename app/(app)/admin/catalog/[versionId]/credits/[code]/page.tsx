@@ -5,7 +5,10 @@ import { Card } from "@/components/ui";
 import { getCatalogCredit, getVersion } from "@/lib/catalog";
 import { groupByOption } from "@/lib/option-group";
 import { OptionGroup } from "@/components/OptionGroup";
+import { BandTable } from "@/components/BandTable";
+import { bandPointsRange, bandsFromSpec, formatPointsSpan } from "@/lib/points";
 import type { CatalogRequirement } from "@/db/schema";
+import type { BandSet } from "@/lib/parser/types";
 
 interface NumericLimit {
   name: string;
@@ -17,6 +20,7 @@ interface NumericSpec {
   summary?: string;
   limits?: NumericLimit[];
   threshold?: { op: string; value: number; unit: string };
+  bands?: BandSet[];
 }
 
 interface EvidenceItem {
@@ -159,12 +163,21 @@ function CatalogRequirementRow({
         <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand-700">
           {r.metricType}
         </span>
-        {r.pointsRaw ? (
-          <span className="text-xs text-slate-400">
-            {r.pointsRaw} point{r.pointsRaw === "1" ? "" : "s"}
-            {r.pointsType === "scaled" ? " (scaled)" : ""}
-          </span>
-        ) : null}
+        {(() => {
+          const range = bandPointsRange(spec);
+          if (range)
+            return (
+              <span className="text-xs text-slate-400">
+                {formatPointsSpan(range.min, range.max)} pts depending on value
+              </span>
+            );
+          if (!r.pointsRaw) return null;
+          return (
+            <span className="text-xs text-slate-400">
+              {r.pointsRaw} point{r.pointsRaw === "1" ? "" : "s"}
+            </span>
+          );
+        })()}
         {r.optionGroup && !grouped ? (
           <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
             Option (either/or)
@@ -180,11 +193,12 @@ function CatalogRequirementRow({
         ) : null}
       </div>
       <p className="mt-2 text-sm text-slate-700">{r.text}</p>
-      {spec?.summary ? (
+      {spec?.summary && !bandsFromSpec(spec).length ? (
         <div className="mt-3 inline-block rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700">
           Measurable target: {spec.summary}
         </div>
       ) : null}
+      <BandTable sets={bandsFromSpec(spec)} />
       {spec?.limits?.length ? (
         <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <div className="mb-1.5 text-xs font-semibold text-slate-500">
@@ -231,9 +245,9 @@ export default async function CatalogCreditDetail({
   return (
     <PageChrome
       crumbs={[
-        { label: "Admin" },
-        { label: "Catalog" },
-        { label: `${v.version.scheme} ${v.version.stage}` },
+        { label: "Admin", href: "/admin/catalog" },
+        { label: "Catalog", href: "/admin/catalog" },
+        { label: `${v.version.scheme} ${v.version.stage}`, href: `/admin/catalog/${versionId}` },
         { label: credit.code },
       ]}
     >

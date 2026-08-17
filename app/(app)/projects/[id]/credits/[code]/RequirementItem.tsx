@@ -1,11 +1,19 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
 import { UploadIcon } from "@/components/icons";
 import { ExpandableText } from "@/components/ExpandableText";
+import { BandTable } from "@/components/BandTable";
 import { uploadEvidence } from "../../../actions";
 import type { RequirementView } from "@/lib/data";
+import {
+  bandPointsRange,
+  bandsFromSpec,
+  firstBands,
+  formatPointsSpan,
+  pointsForValue,
+} from "@/lib/points";
 
 /** id of the single per-credit save form (see the credit detail page header). */
 const SAVE_FORM = "save-credit";
@@ -46,6 +54,16 @@ export function RequirementItem({
 }) {
   const limits =
     (req.numericSpec as { limits?: NumericLimit[] } | null)?.limits ?? [];
+  const bandSets = bandsFromSpec(req.numericSpec);
+  const lookupBands = firstBands(req.numericSpec);
+  const [typed, setTyped] = useState<string>(
+    req.valueNumber != null ? String(req.valueNumber) : "",
+  );
+  const typedNum = typed === "" ? null : Number(typed);
+  const preview =
+    lookupBands.length && typedNum != null && Number.isFinite(typedNum)
+      ? pointsForValue(lookupBands, typedNum)
+      : null;
   const label = req.title ?? firstClause(req.text);
 
   return (
@@ -61,20 +79,35 @@ export function RequirementItem({
             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-500">
               {METRIC_LABEL[req.metricType] ?? req.metricType}
             </span>
-            {req.pointsRaw ? (
-              <span className="text-xs text-slate-400">
-                {req.pointsRaw} pt{req.pointsRaw === "1" ? "" : "s"} ref
-                {req.pointsType === "scaled" ? " (scaled)" : ""}
-              </span>
-            ) : null}
+            {(() => {
+              const range = bandPointsRange(req.numericSpec);
+              if (range)
+                return (
+                  <span className="text-xs text-slate-400">
+                    {formatPointsSpan(range.min, range.max)} pts depending on
+                    value
+                  </span>
+                );
+              if (!req.pointsRaw) return null;
+              return (
+                <span className="text-xs text-slate-400">
+                  {req.pointsRaw} pt{req.pointsRaw === "1" ? "" : "s"}
+                </span>
+              );
+            })()}
             {req.optionGroup && !grouped ? (
               <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
                 Option (either/or)
               </span>
             ) : null}
-            {req.target ? (
+            {req.target && bandSets.length === 0 ? (
               <span className="rounded bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700">
                 Should be: {req.target}
+              </span>
+            ) : null}
+            {req.status === "completed" && req.pointsEarned > 0 ? (
+              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700">
+                {req.pointsEarned} pts earned
               </span>
             ) : null}
           </div>
@@ -120,12 +153,18 @@ export function RequirementItem({
               step="any"
               form={SAVE_FORM}
               name={`num-${req.entryId}`}
-              defaultValue={req.valueNumber ?? ""}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
               placeholder="Measured value"
               className="input max-w-45"
             />
             {req.unit ? (
               <span className="text-sm text-slate-500">{req.unit}</span>
+            ) : null}
+            {preview != null ? (
+              <span className="text-sm font-medium text-brand-700">
+                {typedNum}% → {preview} pts
+              </span>
             ) : null}
           </div>
         ) : null}
@@ -141,6 +180,8 @@ export function RequirementItem({
           />
         ) : null}
       </div>
+
+      <BandTable sets={bandSets} />
 
       {/* Extracted limits table (reference detail) */}
       {limits.length > 0 ? (

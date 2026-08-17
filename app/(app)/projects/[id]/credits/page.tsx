@@ -24,6 +24,9 @@ export default async function CreditsPage({
     isKeystone: c.isKeystone,
     requirementCount: c.requirements.length,
     status: c.status,
+    pointsEarned: c.pointsEarned,
+    pointsMax: c.pointsMax,
+    pointsMin: c.pointsMin,
   }));
 
   const completed = rows.filter((r) => r.status === "completed").length;
@@ -33,8 +36,8 @@ export default async function CreditsPage({
   return (
     <PageChrome
       crumbs={[
-        { label: "Projects" },
-        { label: project.name },
+        { label: "Projects", href: "/projects" },
+        { label: project.name, href: `/projects/${id}` },
         { label: "Credits" },
       ]}
     >

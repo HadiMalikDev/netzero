@@ -307,7 +307,7 @@ function ReqCell({ req }: { req: ParsedDraftRequirement }) {
         {req.pointsRaw ? (
           <span className="text-slate-400">
             {req.pointsRaw} point{req.pointsRaw === "1" ? "" : "s"}
-            {req.pointsType === "scaled" ? " (scaled)" : ""}
+            {req.pointsType === "scaled" ? " (varies with value)" : ""}
           </span>
         ) : null}
         {req.optionGroup ? (

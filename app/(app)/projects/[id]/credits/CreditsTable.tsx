@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { StatusPill } from "@/components/StatusPill";
 import type { Status } from "@/lib/status";
+import { formatPointsSpan } from "@/lib/points";
 
 export interface CreditRow {
   code: string;
@@ -13,6 +14,9 @@ export interface CreditRow {
   isKeystone: boolean;
   requirementCount: number;
   status: Status;
+  pointsEarned: number;
+  pointsMax: number | null;
+  pointsMin: number | null;
 }
 
 const FILTERS: { key: "all" | Status; label: string }[] = [
@@ -93,6 +97,7 @@ export function CreditsTable({
             <tr className="border-b border-slate-100 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <th className="px-5 py-3">Credit</th>
               <th className="px-5 py-3">Requirements</th>
+              <th className="px-5 py-3">Points</th>
               <th className="px-5 py-3">Status</th>
             </tr>
           </thead>
@@ -108,7 +113,7 @@ export function CreditsTable({
             ))}
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-5 py-10 text-center text-slate-400">
+                <td colSpan={4} className="px-5 py-10 text-center text-slate-400">
                   No credits match this filter.
                 </td>
               </tr>
@@ -135,7 +140,7 @@ function CategoryGroup({
     <>
       <tr className="bg-slate-50/70">
         <td
-          colSpan={3}
+          colSpan={4}
           className="px-5 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500"
         >
           {code} · {name} ({rows.length})
@@ -161,6 +166,15 @@ function CategoryGroup({
             </Link>
           </td>
           <td className="px-5 py-3 text-slate-500">{c.requirementCount}</td>
+          <td className="px-5 py-3 text-slate-600">
+            {c.pointsMax != null
+              ? `${c.pointsEarned} / ${
+                  c.pointsMin != null && c.pointsMin !== c.pointsMax
+                    ? formatPointsSpan(c.pointsMin, c.pointsMax)
+                    : c.pointsMax
+                }`
+              : "—"}
+          </td>
           <td className="px-5 py-3">
             <StatusPill status={c.status} />
           </td>

@@ -9,6 +9,7 @@ import { RequirementItem } from "./RequirementItem";
 import { SaveCreditButton } from "./SaveCreditButton";
 import { groupByOption } from "@/lib/option-group";
 import { OptionGroup } from "@/components/OptionGroup";
+import { formatPointsSpan } from "@/lib/points";
 
 export default async function CreditDetailPage({
   params,
@@ -22,9 +23,9 @@ export default async function CreditDetailPage({
   return (
     <PageChrome
       crumbs={[
-        { label: "Projects" },
-        { label: project.name },
-        { label: "Credits" },
+        { label: "Projects", href: "/projects" },
+        { label: project.name, href: `/projects/${id}` },
+        { label: "Credits", href: `/projects/${id}/credits` },
         { label: credit.code },
       ]}
     >
@@ -53,9 +54,16 @@ export default async function CreditDetailPage({
             {credit.pageStart ? (
               <p className="mt-1 text-sm text-slate-400">
                 Source: manual pp.{credit.pageStart}–{credit.pageEnd}
-                {credit.pointsRaw
-                  ? ` · ${credit.pointsRaw} points (reference)`
-                  : ""}
+                {credit.pointsMax != null
+                  ? ` · ${credit.pointsEarned} / ${
+                      credit.pointsMin != null &&
+                      credit.pointsMin !== credit.pointsMax
+                        ? formatPointsSpan(credit.pointsMin, credit.pointsMax)
+                        : credit.pointsMax
+                    } points`
+                  : credit.pointsRaw
+                    ? ` · ${credit.pointsRaw} points (reference)`
+                    : ""}
               </p>
             ) : null}
           </div>
