@@ -1,11 +1,5 @@
-import { PageChrome, PageHeader } from "../_components/PageChrome";
-import { NotInSlice } from "@/components/EmptyState";
+import { NotInSlicePage } from "../_components/NotInSlicePage";
 
 export default function ReportsPage() {
-  return (
-    <PageChrome crumbs={[{ label: "Home", href: "/dashboard" }, { label: "Reports" }]}>
-      <PageHeader title="Reports" />
-      <NotInSlice name="Reports" />
-    </PageChrome>
-  );
+  return <NotInSlicePage title="Reports" />;
 }

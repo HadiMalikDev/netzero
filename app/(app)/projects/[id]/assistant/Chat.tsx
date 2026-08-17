@@ -3,6 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { BotIcon } from "@/components/icons";
+import { Button } from "@/components/ui";
 import type { Answer } from "@/lib/assistant/answer";
 import { ask } from "./actions";
 
@@ -46,7 +47,9 @@ function linkCodes(text: string, projectId: string, key: string): ReactNode[] {
 }
 
 function renderInline(text: string, projectId: string): ReactNode[] {
-  return text.split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*)/g).flatMap((seg, j) => {
+  return text
+    .split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*)/g)
+    .flatMap<ReactNode>((seg, j) => {
     const md = seg.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (md) {
       const href = taskHref(projectId, md[2]);
@@ -207,13 +210,13 @@ export function Chat({ projectId }: { projectId: string }) {
           placeholder="Ask what's left, what's missing, or a credit's status…"
           className="input flex-1"
         />
-        <button
+        <Button
           type="submit"
           disabled={pending || !input.trim()}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          className="disabled:opacity-50"
         >
           Ask
-        </button>
+        </Button>
       </form>
     </div>
   );

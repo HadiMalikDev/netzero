@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageChrome, PageHeader } from "../_components/PageChrome";
-import { Card, KpiTile } from "@/components/ui";
+import { Card, KpiTile, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusPill } from "@/components/StatusPill";
 import {
@@ -39,7 +39,7 @@ export default async function DashboardPage() {
         action={
           <Link
             href="/projects/new"
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            className={primaryButtonClass}
           >
             <PlusIcon width={16} height={16} /> New Project
           </Link>
@@ -54,7 +54,7 @@ export default async function DashboardPage() {
           action={
             <Link
               href="/projects/new"
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+              className={primaryButtonClass}
             >
               <PlusIcon width={16} height={16} /> Create your first project
             </Link>

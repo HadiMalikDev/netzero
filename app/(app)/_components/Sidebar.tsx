@@ -17,6 +17,7 @@ import {
   TaskIcon,
   UsersIcon,
 } from "@/components/icons";
+import { initials } from "@/lib/initials";
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -76,13 +77,6 @@ const GROUPS: NavGroup[] = [
 export function Sidebar({ userName }: { userName: string }) {
   const pathname = usePathname();
 
-  const initials = userName
-    .split(" ")
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-
   return (
     <aside className="flex h-screen w-64 flex-col bg-sidebar text-slate-300">
       <div className="flex items-center gap-2.5 px-5 py-5">
@@ -137,7 +131,7 @@ export function Sidebar({ userName }: { userName: string }) {
 
       <div className="flex items-center gap-3 border-t border-white/5 px-5 py-4">
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white">
-          {initials}
+          {initials(userName)}
         </span>
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-white">

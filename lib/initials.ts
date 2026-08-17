@@ -1,0 +1,9 @@
+/** First letters of the first two words, upper-cased — for avatar monograms. */
+export function initials(name: string): string {
+  return name
+    .split(" ")
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../_components/PageChrome";
 import { ProjectTabs } from "../_components/ProjectTabs";
-import { Card } from "@/components/ui";
+import { Card, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { FileIcon } from "@/components/icons";
 import { getProject, listProjectEvidence } from "@/lib/data";
@@ -38,7 +38,7 @@ export default async function DocumentsPage({
           action={
             <Link
               href={`/projects/${id}/credits`}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+              className={primaryButtonClass}
             >
               Go to credits
             </Link>
