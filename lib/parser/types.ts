@@ -12,10 +12,23 @@ export interface NumericLimit {
   unit: string;
 }
 
+/** One row of a Mostadam "Points Achieved / Percentage" table. */
+export interface ScoreBand {
+  min: number; // improvement/reduction threshold (e.g. 22)
+  points: number; // points awarded at or above `min`
+}
+
+/** One named table (E-04 has two: default vs warehouses/mosques). */
+export interface BandSet {
+  label: string | null;
+  bands: ScoreBand[];
+}
+
 export interface NumericSpec {
   limits?: NumericLimit[];
   threshold?: { op: string; value: number; unit: string };
   summary?: string;
+  bands?: BandSet[];
 }
 
 export interface EvidenceItem {

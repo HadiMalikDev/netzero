@@ -135,6 +135,75 @@ d("Commercial D+C parser (known-good HC-10 check)", () => {
     expect(gate.reason).toBeTruthy();
   });
 
+  it("extracts Points Achieved band tables onto scaled requirements", async () => {
+    const data = new Uint8Array(await readFile(MANUAL));
+    const res = await parseManual(data);
+
+    const pairs = (c: string) => {
+      const credit = res.credits.find((x) => x.code === c);
+      expect(credit, `${c} must be extracted`).toBeDefined();
+      const scaled = credit!.requirements.find((r) => r.pointsType === "scaled");
+      expect(scaled, `${c} must have a scaled requirement`).toBeDefined();
+      return (scaled!.numericSpec?.bands ?? []).map((s) =>
+        s.bands.map((b) => [b.points, b.min] as const),
+      );
+    };
+
+    expect(pairs("E-01")).toEqual([
+      [
+        [5, 0],
+        [6, 3],
+        [7, 6],
+        [8, 10],
+        [9, 14],
+        [10, 18],
+        [11, 22],
+        [12, 26],
+        [13, 30],
+        [14, 35],
+        [15, 40],
+      ],
+    ]);
+    const e01 = res.credits.find((c) => c.code === "E-01")!;
+    expect(e01.requirements.every((r) => r.optionGroup === "E-01 options")).toBe(
+      true,
+    );
+
+    const e04 = pairs("E-04");
+    expect(e04).toHaveLength(2);
+    expect(e04[0]).toEqual([
+      [1, 4],
+      [2, 6],
+      [3, 9],
+      [4, 12],
+      [5, 15],
+    ]);
+    expect(e04[1]).toEqual([
+      [3, 4],
+      [4, 6],
+      [5, 9],
+      [6, 12],
+      [7, 15],
+    ]);
+
+    expect(pairs("W-01")[0]).toEqual([
+      [3, 10],
+      [4, 15],
+      [5, 20],
+      [6, 25],
+      [7, 30],
+      [8, 35],
+      [9, 40],
+      [10, 45],
+    ]);
+    expect(pairs("W-02")[0]).toEqual([
+      [2, 50],
+      [3, 60],
+      [4, 70],
+      [5, 80],
+    ]);
+  });
+
   it("extract keeps per-page text for citations", async () => {
     const data = new Uint8Array(await readFile(MANUAL));
     const ext = await extractPdf(data);

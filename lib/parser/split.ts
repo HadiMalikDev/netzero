@@ -5,9 +5,11 @@ import type {
   EvidenceItem,
   EvidenceStage,
   MetricType,
+  BandSet,
   NumericLimit,
   ParsedCredit,
   ParsedRequirement,
+  ScoreBand,
 } from "./types";
 
 /**
@@ -139,6 +141,74 @@ function parseLimits(lines: Line[], from: number, to: number): NumericLimit[] {
     }
   }
   return limits;
+}
+
+const POINTS_TABLE_HDR = /^Table\s+[A-Z]{1,3}[.\-]\d+/i;
+const POINTS_PAIR = /^(\d{1,2})\s+(\d+(?:\.\d+)?)%$/;
+const POINTS_PAIR_G = /(\d{1,2})\s+(\d+(?:\.\d+)?)%/g;
+const POINTS_COL_HDR = /^(Points\s+[Aa]chieved|Percentage|improvement|reduction)$/i;
+const POINTS_PAGE_NUM = /^\d{1,3}$/;
+const POINTS_TABLE_STOP =
+  /^(b\)|c\)|d\)|Credit\s+Tool|Reference\s+Documents|Table\s+|Additional Clarifications|Renewable Energy|Simulation Software|For warehouses)/i;
+
+function pointsTableLabel(header: string): string | null {
+  const m = header.match(/points\s+achieved(?:\s+for)?\s+(.+)/i);
+  const raw = m?.[1]?.trim();
+  if (!raw || /^percentage/i.test(raw)) return null;
+  return raw.replace(/\s+/g, " ");
+}
+
+/**
+ * Parse "Table X.N Points achieved … / Percentage improvement" band tables
+ * from Supporting Guidance. Layout-based — no credit-code hardcoding.
+ */
+function parsePointsTables(
+  lines: Line[],
+  from: number,
+  to: number,
+): BandSet[] {
+  const sets: BandSet[] = [];
+  for (let i = from; i < to; i++) {
+    const t = lines[i].text;
+    if (!POINTS_TABLE_HDR.test(t)) continue;
+    const window = [t, lines[i + 1]?.text ?? "", lines[i + 2]?.text ?? ""].join(
+      " ",
+    );
+    if (!/points\s+achieved/i.test(window) || !/percent/i.test(window)) continue;
+
+    const bands: ScoreBand[] = [];
+    let j = i + 1;
+    while (j < to) {
+      const row = lines[j].text;
+      if (!row || POINTS_PAGE_NUM.test(row) || POINTS_COL_HDR.test(row)) {
+        j++;
+        continue;
+      }
+      const sole = row.match(POINTS_PAIR);
+      if (sole) {
+        bands.push({ points: Number(sole[1]), min: Number(sole[2]) });
+        j++;
+        continue;
+      }
+      const pairs = [...row.matchAll(POINTS_PAIR_G)];
+      if (pairs.length >= 2) {
+        for (const p of pairs)
+          bands.push({ points: Number(p[1]), min: Number(p[2]) });
+        j++;
+        continue;
+      }
+      if (bands.length > 0 && (POINTS_TABLE_STOP.test(row) || POINTS_TABLE_HDR.test(row)))
+        break;
+      if (bands.length > 0) break;
+      j++;
+      if (j > i + 8) break;
+    }
+    if (bands.length >= 2) {
+      sets.push({ label: pointsTableLabel(t), bands });
+      i = j - 1;
+    }
+  }
+  return sets;
 }
 
 // Include U+F0B7 (Symbol-font bullet) and friends some credits use.
@@ -766,6 +836,17 @@ export function splitCredits(
       target.numericSpec = { limits };
       target.metricType = "NUMERIC";
       target.unit = limits[0].unit;
+    }
+
+    // Points-achieved band tables → the scaled requirement(s) of this credit.
+    const bandSets = parsePointsTables(lines, start, end);
+    if (bandSets.length) {
+      const targets = requirements.filter((r) => r.pointsType === "scaled");
+      for (const r of targets) {
+        r.numericSpec = { ...(r.numericSpec ?? {}), bands: bandSets };
+        r.metricType = "NUMERIC";
+        if (!r.unit) r.unit = "%";
+      }
     }
 
     // Heuristic metric type for the rest.
