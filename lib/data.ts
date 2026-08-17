@@ -10,6 +10,7 @@ import {
   requirementEntries,
 } from "@/db/schema";
 import {
+  blockingRequirements,
   deriveCreditStatus,
   deriveRequirementStatus,
   type Status,
@@ -261,7 +262,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       aim: p.aim,
       pageStart: p.pageStart,
       pageEnd: p.pageEnd,
-      status: deriveCreditStatus(reqs.map((r) => r.status)),
+      status: deriveCreditStatus(reqs),
       pointsEarned: creditPointsEarned(reqs, p.pointsRaw, "earned"),
       pointsMax: Number.isFinite(cap) ? cap : null,
       pointsMin: range?.min ?? null,
@@ -344,7 +345,7 @@ export async function getProjectOverview(
     const cat = catMap.get(c.categoryCode) ?? { name: c.categoryName, count: 0 };
     cat.count++;
     catMap.set(c.categoryCode, cat);
-    for (const r of c.requirements) {
+    for (const r of blockingRequirements(c.requirements)) {
       if (r.requiresEvidence && r.evidenceCount === 0) missingEvidence++;
     }
   }

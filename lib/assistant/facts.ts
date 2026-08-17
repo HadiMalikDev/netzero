@@ -1,4 +1,5 @@
 import { getProjectCredits, type CreditView } from "@/lib/data";
+import { blockingRequirements } from "@/lib/status";
 
 /**
  * The assistant's ONLY source of truth: structured facts derived from the
@@ -35,6 +36,7 @@ export interface ProjectFacts {
       seq: number;
       metricType: string;
       status: string;
+      optionGroup: string | null;
       hasValue: boolean;
       requiresEvidence: boolean;
       evidenceCount: number;
@@ -71,8 +73,8 @@ export async function buildProjectFacts(
     const cat = catMap.get(c.categoryCode) ?? { name: c.categoryName, count: 0 };
     cat.count++;
     catMap.set(c.categoryCode, cat);
-    for (const r of c.requirements) {
-      requirements++;
+    for (const r of c.requirements) requirements++;
+    for (const r of blockingRequirements(c.requirements)) {
       if (r.requiresEvidence && r.evidenceCount === 0) missingEvidence++;
     }
   }
@@ -102,6 +104,7 @@ export async function buildProjectFacts(
         seq: r.seq,
         metricType: r.metricType,
         status: r.status,
+        optionGroup: r.optionGroup,
         hasValue:
           r.valueBool === true ||
           r.valueNumber !== null ||
@@ -127,9 +130,12 @@ export function missingEvidenceCredits(facts: ProjectFacts) {
   return facts.credits
     .map((c) => ({
       ...c,
-      requirements: c.requirements.filter(
-        (r) => r.requiresEvidence && r.evidenceCount === 0,
-      ),
+      requirements: blockingRequirements(
+        c.requirements.map((r) => ({
+          ...r,
+          status: r.status as "not_started" | "in_progress" | "completed",
+        })),
+      ).filter((r) => r.requiresEvidence && r.evidenceCount === 0),
     }))
     .filter((c) => c.requirements.length > 0);
 }

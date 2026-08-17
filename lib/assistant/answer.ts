@@ -1,4 +1,5 @@
 import { chatJSON, hasLLM } from "@/lib/ai/openrouter";
+import { blockingRequirements, type Status } from "@/lib/status";
 import {
   buildProjectFacts,
   citationFor,
@@ -95,7 +96,13 @@ export function deterministicAnswer(
   // Status of a specific credit or category.
   if (scope?.type === "credit") {
     const c = scope.credit;
-    const open = c.requirements.filter((r) => r.status !== "completed");
+    const open = blockingRequirements(
+      c.requirements.map((r) => ({
+        ...r,
+        status: r.status as Status,
+        optionGroup: r.optionGroup,
+      })),
+    );
     const body =
       `**${c.code} — ${c.title}** (${c.category}) is **${c.status.replace("_", " ")}**. ` +
       `${c.requirements.length} requirement(s); ${open.length} still open.` +
