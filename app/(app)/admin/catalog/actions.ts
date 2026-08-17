@@ -20,8 +20,11 @@ import {
   ensureRatingSystem,
   ensureVersion,
   promoteToCatalog,
+  saveParsedCredit,
+  saveParsedRequirements,
   summarizeSpec,
   WORKSPACE_ID,
+  type DraftReqInput,
 } from "@/lib/catalog";
 import { parseAndStore } from "@/lib/parser";
 import { detectManualMeta } from "@/lib/parser/meta";
@@ -104,6 +107,14 @@ export async function uploadManuals(formData: FormData): Promise<void> {
       .update(sourceDocuments)
       .set({ rsVersionId: versionId, scheme: meta.scheme, stage: meta.stage })
       .where(eq(sourceDocuments.id, id));
+    // The version id isn't known until after parsing, so parseAndStore couldn't
+    // persist Table 4's per-scope totals — write them now that it exists.
+    if (result.scopeTotals) {
+      await db
+        .update(rsVersions)
+        .set({ scopeTotals: JSON.stringify(result.scopeTotals) })
+        .where(eq(rsVersions.id, versionId));
+    }
     lastVersionId = versionId;
   }
 
@@ -146,6 +157,18 @@ export async function uploadManualToVersion(formData: FormData): Promise<void> {
   }
   revalidatePath(`/admin/catalog/${versionId}/review`);
   redirect(`/admin/catalog/${versionId}/review`);
+}
+
+/** Re-run the deterministic parser on an already-uploaded file. */
+export async function reparseDocument(formData: FormData): Promise<void> {
+  await requireUser();
+  const documentId = String(formData.get("documentId") ?? "");
+  const versionId = String(formData.get("versionId") ?? "");
+  if (!documentId) throw new Error("documentId required");
+  await parseAndStore(documentId);
+  revalidatePath("/admin/catalog");
+  if (versionId) revalidatePath(`/admin/catalog/${versionId}/review`);
+  redirect(versionId ? `/admin/catalog/${versionId}/review` : "/admin/catalog");
 }
 
 /**
@@ -296,6 +319,26 @@ export async function deleteSourceDocument(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/catalog");
   redirect("/admin/catalog");
+}
+
+/** Save a reviewer's in-place draft edits (credit + replace-set of requirements). */
+export async function saveDraftAction(
+  versionId: string,
+  parsedCreditId: string,
+  payload: {
+    title: string;
+    pointsRaw: string | null;
+    requirements: DraftReqInput[];
+  },
+): Promise<void> {
+  await requireUser();
+  if (!parsedCreditId) throw new Error("missing ids");
+  await saveParsedCredit(parsedCreditId, {
+    title: payload.title,
+    pointsRaw: payload.pointsRaw,
+  });
+  await saveParsedRequirements(parsedCreditId, payload.requirements);
+  revalidatePath(`/admin/catalog/${versionId}/review`);
 }
 
 /** Apply a credit's AI proposal to its draft requirements (human-accepted). */

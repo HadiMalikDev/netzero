@@ -10,6 +10,7 @@ import {
   rejectAiProposal,
   toggleDropParsed,
 } from "../../actions";
+import { DraftEditor } from "./DraftEditor";
 
 const METRIC_LABEL: Record<string, string> = {
   BOOLEAN: "Yes/No",
@@ -152,6 +153,25 @@ export function CreditDiffCard({
         </div>
       </div>
 
+      {!credit.promoted ? (
+        <DraftEditor
+          versionId={versionId}
+          parsedCreditId={credit.id}
+          title={credit.title}
+          pointsRaw={credit.pointsRaw}
+          requirements={credit.requirements}
+        />
+      ) : null}
+
+      {credit.requirements.length > 0 &&
+      credit.requirements.every((r) => !r.hasEvidence) ? (
+        <div className="border-b border-slate-100 bg-amber-50/60 px-5 py-2 text-xs text-amber-800">
+          <span className="font-semibold">No evidence extracted</span> for this
+          credit — re-parse the manual or check the source pages before
+          promoting.
+        </div>
+      ) : null}
+
       {/* PDF description (aim) */}
       {credit.aim ? (
         <div className="border-b border-slate-100 px-5 py-3">
@@ -160,6 +180,16 @@ export function CreditDiffCard({
             clamp={260}
             className="text-sm text-slate-500"
           />
+        </div>
+      ) : null}
+
+      {/* Reconcile-or-fail: extractor disagrees with the manual's own total. */}
+      {credit.reconciliation && !credit.reconciliation.ok ? (
+        <div className="border-b border-slate-100 bg-amber-50/60 px-5 py-2 text-xs text-amber-800">
+          <span className="font-semibold">⚠ Reconcile:</span>{" "}
+          {credit.reconciliation.note ||
+            `requirements sum to ${credit.reconciliation.got}, manual Total is ${credit.reconciliation.expected}`}{" "}
+          — review before promoting.
         </div>
       ) : null}
 
@@ -277,8 +307,27 @@ function ReqCell({ req }: { req: ParsedDraftRequirement }) {
         {req.pointsRaw ? (
           <span className="text-slate-400">
             {req.pointsRaw} point{req.pointsRaw === "1" ? "" : "s"}
+            {req.pointsType === "scaled" ? " (scaled)" : ""}
           </span>
         ) : null}
+        {req.optionGroup ? (
+          <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
+            Option (either/or)
+          </span>
+        ) : null}
+        {req.keystone ? (
+          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
+            Keystone
+          </span>
+        ) : null}
+        {Object.entries(req.evidenceByStage).map(([stage, n]) => (
+          <span
+            key={stage}
+            className="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700"
+          >
+            {stage}: {n}
+          </span>
+        ))}
         {req.measurable ? (
           <span className="rounded bg-brand-50 px-1.5 py-0.5 font-medium text-brand-700">
             Target: {req.measurable}

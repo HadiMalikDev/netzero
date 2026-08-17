@@ -8,6 +8,7 @@ import { CreditDiffCard } from "./CreditDiffCard";
 import { DiffReview, type TreeCredit } from "./DiffReview";
 import { VerifyRunner } from "./VerifyRunner";
 import { DeleteDocButton } from "./DeleteDocButton";
+import { ReparseButton } from "./ReparseButton";
 import { AcceptAllButton } from "./AcceptAllButton";
 
 export default async function VersionReviewPage({
@@ -82,6 +83,10 @@ export default async function VersionReviewPage({
                     </p>
                   </div>
                   <div className="flex items-start gap-2">
+                    <ReparseButton
+                      documentId={document.id}
+                      versionId={versionId}
+                    />
                     <VerifyRunner
                       credits={credits.map((c) => ({ id: c.id, code: c.code }))}
                     />

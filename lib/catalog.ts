@@ -7,9 +7,11 @@ import {
   parsedCredits,
   parsedRequirements,
   ratingSystems,
+  requirementEntries,
   rsVersions,
   sourceDocuments,
 } from "@/db/schema";
+import { reconcileFromParts } from "@/lib/parser/reconcile";
 
 export const WORKSPACE_ID = "ws_default";
 
@@ -165,10 +167,30 @@ export interface ParsedDraftRequirement {
   metricType: string;
   unit: string | null;
   pointsRaw: string | null;
+  pointsType: string | null; // fixed | scaled | shared
+  optionGroup: string | null; // XOR group label when the credit offers options
+  keystone: boolean;
   hasEvidence: boolean;
+  evidenceByStage: Record<string, number>; // e.g. { design: 1, construction: 3 }
   measurable: string | null; // human-readable target, if extracted
   origin: string; // deterministic | ai_added | ai_corrected
   pageStart: number | null;
+}
+
+/** Count evidence items per submission stage from the stored JSON blob. */
+function evidenceStageCounts(json: string | null): Record<string, number> {
+  if (!json) return {};
+  try {
+    const items = JSON.parse(json) as { stage?: string }[];
+    const out: Record<string, number> = {};
+    for (const it of items) {
+      const s = it.stage ?? "unknown";
+      out[s] = (out[s] ?? 0) + 1;
+    }
+    return out;
+  } catch {
+    return {};
+  }
 }
 
 interface NumericSpecShape {
@@ -209,6 +231,13 @@ export interface ProposedRequirementView {
   reasoning: string;
 }
 
+export interface ReconcileView {
+  ok: boolean;
+  expected: number | null;
+  got: number | null;
+  note: string;
+}
+
 export interface ParsedDraftCredit {
   id: string;
   code: string;
@@ -222,6 +251,7 @@ export interface ParsedDraftCredit {
   promoted: boolean;
   dropped: boolean;
   aiStatus: string | null; // proposed | applied | rejected
+  reconciliation: ReconcileView | null; // extractor ↔ manual self-check
   proposal: ProposedRequirementView[] | null;
   requirements: ParsedDraftRequirement[];
 }
@@ -303,21 +333,33 @@ export async function getVersionParsedDrafts(
         promoted: c.promoted,
         dropped: c.dropped,
         aiStatus: c.aiStatus,
+        reconciliation: c.reconciliation
+          ? (JSON.parse(c.reconciliation) as ReconcileView)
+          : null,
         proposal,
-        requirements: reqs.map((r) => ({
-          seq: r.seq,
-          title: r.title,
-          text: r.text,
-          metricType: r.metricType,
-          unit: r.unit,
-          pointsRaw: r.pointsRaw,
-          hasEvidence: r.evidenceSpecs
-            ? (JSON.parse(r.evidenceSpecs) as string[]).length > 0
-            : false,
-          measurable: summarizeSpec(r.numericSpec),
-          origin: r.origin,
-          pageStart: r.pageStart,
-        })),
+        requirements: reqs.map((r) => {
+          const byStage = evidenceStageCounts(r.evidence);
+          const evCount = Object.values(byStage).reduce((a, b) => a + b, 0);
+          return {
+            seq: r.seq,
+            title: r.title,
+            text: r.text,
+            metricType: r.metricType,
+            unit: r.unit,
+            pointsRaw: r.pointsRaw,
+            pointsType: r.pointsType,
+            optionGroup: r.optionGroup,
+            keystone: r.keystone,
+            hasEvidence: evCount > 0
+              || (r.evidenceSpecs
+                ? (JSON.parse(r.evidenceSpecs) as string[]).length > 0
+                : false),
+            evidenceByStage: byStage,
+            measurable: summarizeSpec(r.numericSpec),
+            origin: r.origin,
+            pageStart: r.pageStart,
+          };
+        }),
       });
     }
     out.push({ document: doc, credits: views });
@@ -345,26 +387,7 @@ export async function promoteToCatalog(
 
   let promoted = 0;
   for (const d of drafts) {
-    // Replace an existing canonical credit with the same (version, code).
-    const [existing] = await db
-      .select({ id: catalogCredits.id })
-      .from(catalogCredits)
-      .where(
-        and(
-          eq(catalogCredits.rsVersionId, rsVersionId),
-          eq(catalogCredits.code, d.code),
-        ),
-      );
-    if (existing) {
-      await db
-        .delete(catalogRequirements)
-        .where(eq(catalogRequirements.catalogCreditId, existing.id));
-      await db.delete(catalogCredits).where(eq(catalogCredits.id, existing.id));
-    }
-
-    const creditId = randomUUID();
-    await db.insert(catalogCredits).values({
-      id: creditId,
+    const creditValues = {
       workspaceId: WORKSPACE_ID,
       rsVersionId,
       code: d.code,
@@ -375,18 +398,51 @@ export async function promoteToCatalog(
       pointsRaw: d.pointsRaw,
       aim: d.aim,
       references: d.references,
+      applicability: d.applicability,
+      supportingGuidance: d.supportingGuidance,
+      toolRef: d.toolRef,
+      reconciliation: d.reconciliation,
       sourcePageStart: d.pageStart,
       sourcePageEnd: d.pageEnd,
-    });
+    };
+
+    // Re-promoting a (version, code) refreshes it IN PLACE — the canonical
+    // credit/requirement ids are preserved so any project already instantiated
+    // from this catalog keeps its foreign-key references (project_credit ->
+    // catalog_credit, requirement_entry -> catalog_requirement). A delete +
+    // reinsert would orphan those and fail the FK constraint.
+    const [existing] = await db
+      .select({ id: catalogCredits.id })
+      .from(catalogCredits)
+      .where(
+        and(
+          eq(catalogCredits.rsVersionId, rsVersionId),
+          eq(catalogCredits.code, d.code),
+        ),
+      );
+
+    let creditId: string;
+    if (existing) {
+      creditId = existing.id;
+      await db.update(catalogCredits).set(creditValues).where(eq(catalogCredits.id, creditId));
+    } else {
+      creditId = randomUUID();
+      await db.insert(catalogCredits).values({ id: creditId, ...creditValues });
+    }
 
     const reqs = await db
       .select()
       .from(parsedRequirements)
       .where(eq(parsedRequirements.parsedCreditId, d.id))
       .orderBy(parsedRequirements.seq);
+    const priorReqs = await db
+      .select()
+      .from(catalogRequirements)
+      .where(eq(catalogRequirements.catalogCreditId, creditId));
+    const priorBySeq = new Map(priorReqs.map((r) => [r.seq, r]));
+
     for (const r of reqs) {
-      await db.insert(catalogRequirements).values({
-        id: randomUUID(),
+      const reqValues = {
         workspaceId: WORKSPACE_ID,
         catalogCreditId: creditId,
         seq: r.seq,
@@ -395,11 +451,34 @@ export async function promoteToCatalog(
         metricType: r.metricType,
         unit: r.unit,
         pointsRaw: r.pointsRaw,
+        pointsType: r.pointsType,
+        optionGroup: r.optionGroup,
+        keystone: r.keystone,
+        keystoneCondition: r.keystoneCondition,
         numericSpec: r.numericSpec,
+        evidence: r.evidence,
         evidenceSpecs: r.evidenceSpecs,
         sourcePageStart: r.pageStart,
         sourcePageEnd: r.pageEnd,
-      });
+      };
+      // Upsert by seq so a requirement_entry pointing at this seq survives.
+      const prior = priorBySeq.get(r.seq);
+      if (prior) {
+        await db.update(catalogRequirements).set(reqValues).where(eq(catalogRequirements.id, prior.id));
+        priorBySeq.delete(r.seq);
+      } else {
+        await db.insert(catalogRequirements).values({ id: randomUUID(), ...reqValues });
+      }
+    }
+    // Obsolete requirements (a seq the new parse no longer emits): drop only if
+    // no project answer references it; otherwise leave it to keep the FK valid.
+    for (const orphan of priorBySeq.values()) {
+      const refs = await db
+        .select({ id: requirementEntries.id })
+        .from(requirementEntries)
+        .where(eq(requirementEntries.catalogRequirementId, orphan.id));
+      if (refs.length === 0)
+        await db.delete(catalogRequirements).where(eq(catalogRequirements.id, orphan.id));
     }
 
     await db
@@ -461,27 +540,60 @@ export async function applyStoredProposal(
   const bySeq = new Map(existing.map((r) => [r.seq, r] as const));
   let maxSeq = Math.max(0, ...existing.map((r) => r.seq));
 
+  // Split the proposal into in-place corrections and net-new additions.
+  const corrections = proposal.requirements.filter(
+    (p) => p.change !== "unchanged" && bySeq.has(p.seq),
+  );
+  const additions = proposal.requirements.filter(
+    (p) => p.change !== "unchanged" && !bySeq.has(p.seq),
+  );
+
+  // Reconcile GATE for additions: the manual's points are deterministic, so a
+  // gap-fill is only trusted when it moves the credit's total TOWARD its Total
+  // (e.g. recovering a genuinely-missing requirement), never away from it. This
+  // stops the verifier from inventing point-bearing rows that overshoot.
+  const toParts = (rows: { pointsRaw: string | null; optionGroup: string | null }[]) =>
+    rows.map((r) => ({ pointsRaw: r.pointsRaw, optionGroup: r.optionGroup }));
+  const cur = reconcileFromParts(credit.pointsRaw, toParts(existing));
+  const projected = reconcileFromParts(
+    credit.pointsRaw,
+    toParts([
+      ...existing,
+      ...additions.map((p) => ({ pointsRaw: p.proposed.pointsRaw, optionGroup: null })),
+    ]),
+  );
+  // With a known Total, an addition is trusted only if it moves the credit's
+  // sum toward that Total, never past it. With no Total there is nothing to
+  // overshoot, so the gate can't apply — allow the gap-fill.
+  const keepAdditions =
+    cur.expected == null ||
+    Math.abs((projected.got ?? 0) - cur.expected) <=
+      Math.abs((cur.got ?? 0) - cur.expected);
+
   let added = 0;
   let corrected = 0;
-  for (const p of proposal.requirements) {
-    if (p.change === "unchanged") continue;
-    const row = bySeq.get(p.seq);
-    if (row) {
-      await db
-        .update(parsedRequirements)
-        .set({
-          title: p.proposed.title,
-          text: p.proposed.text,
-          metricType: p.proposed.metricType,
-          unit: p.proposed.unit,
-          pointsRaw: p.proposed.pointsRaw,
-          numericSpec: withMeasurable(row.numericSpec, p.proposed.measurable),
-          origin: "ai_corrected",
-        })
-        .where(eq(parsedRequirements.id, row.id));
-      corrected++;
-    } else {
-      // Defensive: an added row must get a valid, non-colliding seq.
+
+  // Corrections: refine text / metric_type / unit / measurable target, but NEVER
+  // the points column — points come from the source table, not the model.
+  for (const p of corrections) {
+    const row = bySeq.get(p.seq)!;
+    await db
+      .update(parsedRequirements)
+      .set({
+        title: p.proposed.title,
+        text: p.proposed.text,
+        metricType: p.proposed.metricType,
+        unit: p.proposed.unit,
+        numericSpec: withMeasurable(row.numericSpec, p.proposed.measurable),
+        origin: "ai_corrected",
+      })
+      .where(eq(parsedRequirements.id, row.id));
+    corrected++;
+  }
+
+  // Additions: only when the reconcile gate approves (otherwise dropped).
+  if (keepAdditions) {
+    for (const p of additions) {
       const seq = p.seq > 0 && !bySeq.has(p.seq) ? p.seq : ++maxSeq;
       await db.insert(parsedRequirements).values({
         id: randomUUID(),
@@ -494,18 +606,138 @@ export async function applyStoredProposal(
         unit: p.proposed.unit,
         pointsRaw: p.proposed.pointsRaw,
         numericSpec: withMeasurable(null, p.proposed.measurable),
+        evidence: "[]",
         evidenceSpecs: "[]",
+        // An added row has no span of its own — inherit the credit's pages.
+        pageStart: credit.pageStart,
+        pageEnd: credit.pageEnd,
         origin: "ai_added",
       });
       added++;
     }
   }
 
+  // Re-reconcile against the manual's Total using the FINAL requirement set (the
+  // parse-time flag is stale once the AI has added/corrected rows).
+  const finalReqs = await db
+    .select({ pointsRaw: parsedRequirements.pointsRaw, optionGroup: parsedRequirements.optionGroup })
+    .from(parsedRequirements)
+    .where(eq(parsedRequirements.parsedCreditId, parsedCreditId));
+  const recon = reconcileFromParts(credit.pointsRaw, finalReqs);
+
   await db
     .update(parsedCredits)
-    .set({ aiStatus: "applied" })
+    .set({ aiStatus: "applied", reconciliation: JSON.stringify(recon) })
     .where(eq(parsedCredits.id, parsedCreditId));
   return { added, corrected };
+}
+
+// ---------- human draft edit (replace-set; testable) ----------
+
+export interface DraftReqInput {
+  seq: number;
+  title: string | null;
+  text: string;
+  pointsRaw: string | null;
+  metricType: string;
+  unit: string | null;
+  optionGroup: string | null;
+  pointsType: string | null;
+}
+
+export async function saveParsedCredit(
+  parsedCreditId: string,
+  fields: { title?: string; pointsRaw?: string | null },
+): Promise<void> {
+  const [credit] = await db
+    .select()
+    .from(parsedCredits)
+    .where(eq(parsedCredits.id, parsedCreditId));
+  if (!credit) throw new Error("credit not found");
+  const patch: { title?: string; pointsRaw?: string | null; reconciliation?: string } = {};
+  if (fields.title !== undefined) patch.title = fields.title;
+  if (fields.pointsRaw !== undefined) patch.pointsRaw = fields.pointsRaw;
+  if (Object.keys(patch).length === 0) return;
+
+  const pointsRaw = fields.pointsRaw !== undefined ? fields.pointsRaw : credit.pointsRaw;
+  const reqs = await db
+    .select({
+      pointsRaw: parsedRequirements.pointsRaw,
+      optionGroup: parsedRequirements.optionGroup,
+    })
+    .from(parsedRequirements)
+    .where(eq(parsedRequirements.parsedCreditId, parsedCreditId));
+  patch.reconciliation = JSON.stringify(reconcileFromParts(pointsRaw, reqs));
+
+  await db
+    .update(parsedCredits)
+    .set(patch)
+    .where(eq(parsedCredits.id, parsedCreditId));
+}
+
+/** Replace the requirement set for a draft credit and restamp reconcile. */
+export async function saveParsedRequirements(
+  parsedCreditId: string,
+  rows: DraftReqInput[],
+): Promise<void> {
+  const [credit] = await db
+    .select()
+    .from(parsedCredits)
+    .where(eq(parsedCredits.id, parsedCreditId));
+  if (!credit) throw new Error("credit not found");
+
+  const existing = await db
+    .select()
+    .from(parsedRequirements)
+    .where(eq(parsedRequirements.parsedCreditId, parsedCreditId));
+  const bySeq = new Map(existing.map((r) => [r.seq, r]));
+  const keep = new Set(rows.map((r) => r.seq));
+
+  for (const row of existing) {
+    if (!keep.has(row.seq))
+      await db.delete(parsedRequirements).where(eq(parsedRequirements.id, row.id));
+  }
+
+  for (const r of rows) {
+    const prior = bySeq.get(r.seq);
+    const values = {
+      seq: r.seq,
+      title: r.title,
+      text: r.text,
+      pointsRaw: r.pointsRaw,
+      metricType: r.metricType,
+      unit: r.unit,
+      optionGroup: r.optionGroup,
+      pointsType: r.pointsType,
+    };
+    if (prior) {
+      await db
+        .update(parsedRequirements)
+        .set(values)
+        .where(eq(parsedRequirements.id, prior.id));
+    } else {
+      await db.insert(parsedRequirements).values({
+        id: randomUUID(),
+        workspaceId: WORKSPACE_ID,
+        parsedCreditId,
+        ...values,
+        evidence: "[]",
+        evidenceSpecs: "[]",
+        pageStart: credit.pageStart,
+        pageEnd: credit.pageEnd,
+        origin: "deterministic",
+      });
+    }
+  }
+
+  const recon = reconcileFromParts(
+    credit.pointsRaw,
+    rows.map((r) => ({ pointsRaw: r.pointsRaw, optionGroup: r.optionGroup })),
+  );
+  await db
+    .update(parsedCredits)
+    .set({ reconciliation: JSON.stringify(recon) })
+    .where(eq(parsedCredits.id, parsedCreditId));
 }
 
 // ---------- authoring helpers (ensure rating system / version) ----------
