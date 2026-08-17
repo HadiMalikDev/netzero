@@ -5,7 +5,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { UploadIcon } from "@/components/icons";
 import { ExpandableText } from "@/components/ExpandableText";
 import { BandTable } from "@/components/BandTable";
-import { METRIC_LABEL, OptionBadge, PointsRange } from "@/components/req";
+import { MetricBadge, OptionBadge, PointsRange } from "@/components/req";
 import { uploadEvidence } from "../../../actions";
 import type { RequirementView } from "@/lib/data";
 import type { NumericLimit } from "@/lib/parser/types";
@@ -62,9 +62,7 @@ export function RequirementItem({
               #{req.seq}
             </span>
             <span className="font-semibold text-slate-900">{label}</span>
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-500">
-              {METRIC_LABEL[req.metricType] ?? req.metricType}
-            </span>
+            <MetricBadge metricType={req.metricType} />
             <PointsRange spec={req.numericSpec} pointsRaw={req.pointsRaw} />
             {req.optionGroup && !grouped ? <OptionBadge /> : null}
             {req.target && bandSets.length === 0 ? (

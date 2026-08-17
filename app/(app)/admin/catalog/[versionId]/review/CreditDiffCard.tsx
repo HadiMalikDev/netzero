@@ -1,5 +1,5 @@
 import { ExpandableText } from "@/components/ExpandableText";
-import { KeystoneBadge, METRIC_LABEL, OptionBadge } from "@/components/req";
+import { KeystoneBadge, MetricBadge, OptionBadge } from "@/components/req";
 import type {
   ParsedDraftCredit,
   ParsedDraftRequirement,
@@ -292,9 +292,7 @@ function ReqCell({ req }: { req: ParsedDraftRequirement }) {
     <div>
       <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs">
         <span className="font-semibold text-slate-500">#{req.seq}</span>
-        <span className="rounded bg-slate-200/70 px-1.5 py-0.5 text-slate-600">
-          {METRIC_LABEL[req.metricType] ?? req.metricType}
-        </span>
+        <MetricBadge metricType={req.metricType} />
         {req.pointsRaw ? (
           <span className="text-slate-400">
             {req.pointsRaw} point{req.pointsRaw === "1" ? "" : "s"}
@@ -341,13 +339,10 @@ function ProposedCell({
     <div>
       <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs">
         <span className="font-semibold text-slate-500">#{proposed.seq}</span>
-        <span
-          className={`rounded bg-slate-200/70 px-1.5 py-0.5 text-slate-600 ${hl(
-            !!original && original.metricType !== proposed.metricType,
-          )}`}
-        >
-          {METRIC_LABEL[proposed.metricType] ?? proposed.metricType}
-        </span>
+        <MetricBadge
+          metricType={proposed.metricType}
+          className={hl(!!original && original.metricType !== proposed.metricType)}
+        />
         {proposed.pointsRaw ? (
           <span
             className={hl(!!original && original.pointsRaw !== proposed.pointsRaw)}

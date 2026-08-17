@@ -1,11 +1,31 @@
 import { bandPointsRange, formatPointsSpan } from "@/lib/points";
 
-/** Human labels for the three metric types, shared across requirement views. */
-export const METRIC_LABEL: Record<string, string> = {
+/** Human labels for the three metric types (rendered by MetricBadge). */
+const METRIC_LABEL: Record<string, string> = {
   BOOLEAN: "Yes/No",
   NUMERIC: "Measured value",
   DESCRIPTIVE: "Document / text",
 };
+
+/**
+ * The metric-type pill (Yes/No · Measured value · Document / text). One look
+ * for every requirement view; pass `className` to layer a diff highlight on top.
+ */
+export function MetricBadge({
+  metricType,
+  className = "",
+}: {
+  metricType: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-500 ${className}`.trim()}
+    >
+      {METRIC_LABEL[metricType] ?? metricType}
+    </span>
+  );
+}
 
 /** Violet "either/or" pill shown on requirements that belong to an XOR option. */
 export function OptionBadge() {

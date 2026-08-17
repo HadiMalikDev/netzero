@@ -6,7 +6,12 @@ import { getCatalogCredit, getVersion } from "@/lib/catalog";
 import { groupByOption } from "@/lib/option-group";
 import { OptionGroup } from "@/components/OptionGroup";
 import { BandTable } from "@/components/BandTable";
-import { KeystoneBadge, OptionBadge, PointsRange } from "@/components/req";
+import {
+  KeystoneBadge,
+  MetricBadge,
+  OptionBadge,
+  PointsRange,
+} from "@/components/req";
 import { bandsFromSpec } from "@/lib/points";
 import type { CatalogRequirement } from "@/db/schema";
 import type {
@@ -146,9 +151,7 @@ function CatalogRequirementRow({
         {r.title ? (
           <span className="text-sm font-semibold text-slate-800">{r.title}</span>
         ) : null}
-        <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand-700">
-          {r.metricType}
-        </span>
+        <MetricBadge metricType={r.metricType} />
         <PointsRange spec={spec} pointsRaw={r.pointsRaw} />
         {r.optionGroup && !grouped ? <OptionBadge /> : null}
         {r.keystone ? <KeystoneBadge /> : null}
