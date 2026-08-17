@@ -12,7 +12,9 @@ import {
   sourceDocuments,
 } from "@/db/schema";
 import { reconcileFromParts } from "@/lib/parser/reconcile";
+import { firstBands, formatPointsSpan } from "@/lib/points";
 
+/** Canonical single-tenant workspace id (re-exported by `@/lib/data`). */
 export const WORKSPACE_ID = "ws_default";
 
 // ---------- reads ----------
@@ -214,10 +216,10 @@ export function summarizeSpec(json: string | null): string | null {
     const f = spec.limits[0];
     return `${spec.limits.length} limit${spec.limits.length === 1 ? "" : "s"} · e.g. ${f.name} ${f.op} ${f.value} ${f.unit}`;
   }
-  const first = spec.bands?.[0]?.bands;
-  if (first?.length) {
-    const pts = first.map((b) => b.points);
-    return `${Math.min(...pts)}–${Math.max(...pts)} pts by % improvement`;
+  const bands = firstBands(spec);
+  if (bands.length) {
+    const pts = bands.map((b) => b.points);
+    return `${formatPointsSpan(Math.min(...pts), Math.max(...pts))} pts by % improvement`;
   }
   if (spec.threshold)
     return `${spec.threshold.op} ${spec.threshold.value}${spec.threshold.unit ? " " + spec.threshold.unit : ""}`;

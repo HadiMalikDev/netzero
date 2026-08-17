@@ -14,7 +14,7 @@ import {
   saveParsedCredit,
   saveParsedRequirements,
   WORKSPACE_ID,
-} from "./catalog";
+} from "@/lib/catalog";
 
 const rsId = randomUUID();
 const versionId = randomUUID();

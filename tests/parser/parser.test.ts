@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { parseManual } from "./index";
-import { mostadamGate } from "./mostadam";
-import { extractPdf } from "./extract";
+import { parseManual } from "@/lib/parser/index";
+import { mostadamGate } from "@/lib/parser/mostadam";
+import { extractPdf } from "@/lib/parser/extract";
 
 const MANUAL = ".data/manuals/commercial-dc.pdf";
 const has = existsSync(MANUAL);

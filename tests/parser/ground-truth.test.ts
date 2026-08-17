@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { parseManual } from "./index";
-import groundTruth from "../../db/ground-truth.json";
+import { parseManual } from "@/lib/parser/index";
+import groundTruth from "@/db/ground-truth.json";
 
 /**
  * Structural diff of the deterministic parse against hand-authored ground truth.

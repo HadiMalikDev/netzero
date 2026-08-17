@@ -4,17 +4,18 @@ import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { uploadManuals } from "./actions";
 import { UploadIcon } from "@/components/icons";
+import { Button } from "@/components/ui";
 
 function Submit({ count }: { count: number }) {
   const { pending } = useFormStatus();
   return (
-    <button
+    <Button
       type="submit"
       disabled={pending || count === 0}
-      className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+      className="disabled:opacity-50"
     >
       {pending ? "Parsing & detecting…" : "Parse manual"}
-    </button>
+    </Button>
   );
 }
 

@@ -1,3 +1,4 @@
+import { parseNum } from "@/lib/num";
 import { reduceByOption } from "@/lib/option-group";
 import type { Applicability, CreditReconcile, ParsedCredit } from "./types";
 
@@ -27,23 +28,8 @@ export interface ReconcileReport {
   scopes: ScopeReconcile[];
 }
 
-const num = (s: string | null): number | null => {
-  if (s == null) return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-};
-
 function requirementPoints(r: { pointsRaw: string | null }): number {
-  return num(r.pointsRaw) ?? 0;
-}
-
-/**
- * Recompute a credit's points from its requirements. Consecutive rows that
- * share an `option_group` are mutually exclusive (XOR) → they contribute
- * their MAX; everything else sums. Rows with no parsed points contribute 0.
- */
-export function expectedCreditPoints(credit: ParsedCredit): number {
-  return reduceByOption(credit.requirements, requirementPoints);
+  return parseNum(r.pointsRaw) ?? 0;
 }
 
 /**
@@ -56,7 +42,7 @@ export function reconcileFromParts(
   reqs: { pointsRaw: string | null; optionGroup: string | null }[],
 ): CreditReconcile {
   const sum = reduceByOption(reqs, requirementPoints);
-  const expected = num(creditPointsRaw);
+  const expected = parseNum(creditPointsRaw);
   if (expected == null)
     return { ok: true, expected: null, got: sum, note: "no credit total in manual; nothing to reconcile against" };
   const ok = expected === sum;
@@ -111,7 +97,7 @@ function mode(nums: number[]): number {
   return best;
 }
 
-export function reconcileScopes(
+function reconcileScopes(
   credits: ParsedCredit[],
   scopeTotals: Record<string, number> | null,
 ): ScopeReconcile[] {

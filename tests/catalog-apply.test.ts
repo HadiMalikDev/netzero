@@ -10,7 +10,7 @@ import {
   sourceDocuments,
   workspaces,
 } from "@/db/schema";
-import { applyStoredProposal, WORKSPACE_ID } from "./catalog";
+import { applyStoredProposal, WORKSPACE_ID } from "@/lib/catalog";
 
 // Throwaway rows for this test, cleaned up afterwards.
 const rsId = randomUUID();

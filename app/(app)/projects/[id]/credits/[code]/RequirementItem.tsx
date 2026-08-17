@@ -5,31 +5,14 @@ import { StatusPill } from "@/components/StatusPill";
 import { UploadIcon } from "@/components/icons";
 import { ExpandableText } from "@/components/ExpandableText";
 import { BandTable } from "@/components/BandTable";
+import { MetricBadge, OptionBadge, PointsRange } from "@/components/req";
 import { uploadEvidence } from "../../../actions";
 import type { RequirementView } from "@/lib/data";
-import {
-  bandPointsRange,
-  bandsFromSpec,
-  firstBands,
-  formatPointsSpan,
-  pointsForValue,
-} from "@/lib/points";
+import type { NumericLimit } from "@/lib/parser/types";
+import { bandsFromSpec, firstBands, pointsForValue } from "@/lib/points";
 
 /** id of the single per-credit save form (see the credit detail page header). */
 const SAVE_FORM = "save-credit";
-
-const METRIC_LABEL: Record<string, string> = {
-  BOOLEAN: "Yes/No",
-  NUMERIC: "Measured value",
-  DESCRIPTIVE: "Document / text",
-};
-
-interface NumericLimit {
-  name: string;
-  op: string;
-  value: number;
-  unit: string;
-}
 
 /** A short label when the catalog has no explicit title. */
 function firstClause(text: string): string {
@@ -79,30 +62,9 @@ export function RequirementItem({
               #{req.seq}
             </span>
             <span className="font-semibold text-slate-900">{label}</span>
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-500">
-              {METRIC_LABEL[req.metricType] ?? req.metricType}
-            </span>
-            {(() => {
-              const range = bandPointsRange(req.numericSpec);
-              if (range)
-                return (
-                  <span className="text-xs text-slate-400">
-                    {formatPointsSpan(range.min, range.max)} pts depending on
-                    value
-                  </span>
-                );
-              if (!req.pointsRaw) return null;
-              return (
-                <span className="text-xs text-slate-400">
-                  {req.pointsRaw} pt{req.pointsRaw === "1" ? "" : "s"}
-                </span>
-              );
-            })()}
-            {req.optionGroup && !grouped ? (
-              <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
-                Option (either/or)
-              </span>
-            ) : null}
+            <MetricBadge metricType={req.metricType} />
+            <PointsRange spec={req.numericSpec} pointsRaw={req.pointsRaw} />
+            {req.optionGroup && !grouped ? <OptionBadge /> : null}
             {req.target && bandSets.length === 0 ? (
               <span className="rounded bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700">
                 Should be: {req.target}

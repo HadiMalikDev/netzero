@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { logout } from "@/app/(auth)/actions";
 import { BellIcon, SearchIcon } from "@/components/icons";
+import { initials } from "@/lib/initials";
 
 export interface Crumb {
   label: string;
@@ -14,13 +15,6 @@ export function TopBar({
   crumbs: Crumb[];
   userName: string;
 }) {
-  const initials = userName
-    .split(" ")
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-6 backdrop-blur">
       <nav className="flex items-center gap-1.5 text-sm">
@@ -70,7 +64,7 @@ export function TopBar({
             title="Sign out"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">
-              {initials}
+              {initials(userName)}
             </span>
             <span className="hidden text-sm font-medium text-slate-700 sm:inline">
               Sign out

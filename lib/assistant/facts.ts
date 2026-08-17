@@ -1,5 +1,6 @@
 import { getProjectCredits, type CreditView } from "@/lib/data";
 import {
+  hasValue,
   missingEvidenceRequirements,
   type Status,
 } from "@/lib/status";
@@ -99,7 +100,7 @@ export async function buildProjectFacts(
     const cat = catMap.get(c.categoryCode) ?? { name: c.categoryName, count: 0 };
     cat.count++;
     catMap.set(c.categoryCode, cat);
-    for (const r of c.requirements) requirements++;
+    requirements += c.requirements.length;
     missingEvidence += missingEvidenceRequirements(c.requirements).length;
   }
 
@@ -130,10 +131,14 @@ export async function buildProjectFacts(
         metricType: r.metricType,
         status: r.status,
         optionGroup: r.optionGroup,
-        hasValue:
-          r.valueBool === true ||
-          r.valueNumber !== null ||
-          !!(r.valueText && r.valueText.trim()),
+        hasValue: hasValue({
+          metricType: r.metricType,
+          requiresEvidence: r.requiresEvidence,
+          valueBool: r.valueBool,
+          valueNumber: r.valueNumber,
+          valueText: r.valueText,
+          evidenceCount: r.evidenceCount,
+        }),
         requiresEvidence: r.requiresEvidence,
         evidenceCount: r.evidenceCount,
         text: r.text.slice(0, 200),

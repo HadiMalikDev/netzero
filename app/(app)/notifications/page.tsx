@@ -1,11 +1,5 @@
-import { PageChrome, PageHeader } from "../_components/PageChrome";
-import { NotInSlice } from "@/components/EmptyState";
+import { NotInSlicePage } from "../_components/NotInSlicePage";
 
 export default function NotificationsPage() {
-  return (
-    <PageChrome crumbs={[{ label: "Home", href: "/dashboard" }, { label: "Notifications" }]}>
-      <PageHeader title="Notifications" />
-      <NotInSlice name="Notifications" />
-    </PageChrome>
-  );
+  return <NotInSlicePage title="Notifications" />;
 }

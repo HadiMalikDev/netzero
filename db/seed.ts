@@ -1,14 +1,14 @@
+import { eq } from "drizzle-orm";
 import { db } from "./index";
 import { users, workspaces } from "./schema";
 import { hashPassword } from "../lib/auth/session";
-import { eq } from "drizzle-orm";
+import { WORKSPACE_ID } from "../lib/catalog";
 
 /**
  * Seeds the single Stage-1 workspace + solo user from env
  * (AUTH_EMAIL / AUTH_PASSWORD). Idempotent.
  */
 async function main() {
-  const WORKSPACE_ID = "ws_default";
   const USER_ID = "user_solo";
   const email = process.env.AUTH_EMAIL || "admin@netzero.local";
   const password = process.env.AUTH_PASSWORD || "netzero";

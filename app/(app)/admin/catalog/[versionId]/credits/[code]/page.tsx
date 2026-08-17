@@ -6,28 +6,19 @@ import { getCatalogCredit, getVersion } from "@/lib/catalog";
 import { groupByOption } from "@/lib/option-group";
 import { OptionGroup } from "@/components/OptionGroup";
 import { BandTable } from "@/components/BandTable";
-import { bandPointsRange, bandsFromSpec, formatPointsSpan } from "@/lib/points";
+import {
+  KeystoneBadge,
+  MetricBadge,
+  OptionBadge,
+  PointsRange,
+} from "@/components/req";
+import { bandsFromSpec } from "@/lib/points";
 import type { CatalogRequirement } from "@/db/schema";
-import type { BandSet } from "@/lib/parser/types";
-
-interface NumericLimit {
-  name: string;
-  op: string;
-  value: number;
-  unit: string;
-}
-interface NumericSpec {
-  summary?: string;
-  limits?: NumericLimit[];
-  threshold?: { op: string; value: number; unit: string };
-  bands?: BandSet[];
-}
-
-interface EvidenceItem {
-  stage: string;
-  text: string;
-}
-type Applicability = Record<string, Record<string, number | null>>;
+import type {
+  Applicability,
+  EvidenceItem,
+  NumericSpec,
+} from "@/lib/parser/types";
 
 /** Evidence grouped by the submission stage that reviews it (audit B2). */
 function EvidenceByStage({
@@ -160,34 +151,10 @@ function CatalogRequirementRow({
         {r.title ? (
           <span className="text-sm font-semibold text-slate-800">{r.title}</span>
         ) : null}
-        <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand-700">
-          {r.metricType}
-        </span>
-        {(() => {
-          const range = bandPointsRange(spec);
-          if (range)
-            return (
-              <span className="text-xs text-slate-400">
-                {formatPointsSpan(range.min, range.max)} pts depending on value
-              </span>
-            );
-          if (!r.pointsRaw) return null;
-          return (
-            <span className="text-xs text-slate-400">
-              {r.pointsRaw} point{r.pointsRaw === "1" ? "" : "s"}
-            </span>
-          );
-        })()}
-        {r.optionGroup && !grouped ? (
-          <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
-            Option (either/or)
-          </span>
-        ) : null}
-        {r.keystone ? (
-          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
-            Keystone
-          </span>
-        ) : null}
+        <MetricBadge metricType={r.metricType} />
+        <PointsRange spec={spec} pointsRaw={r.pointsRaw} />
+        {r.optionGroup && !grouped ? <OptionBadge /> : null}
+        {r.keystone ? <KeystoneBadge /> : null}
         {r.unit ? (
           <span className="text-xs text-slate-400">unit: {r.unit}</span>
         ) : null}

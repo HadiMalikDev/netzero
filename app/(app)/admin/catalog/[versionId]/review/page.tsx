@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../_components/PageChrome";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusPill } from "@/components/StatusPill";
+import { Button } from "@/components/ui";
 import { getVersion, getVersionParsedDrafts } from "@/lib/catalog";
 import { promoteDocument } from "../../actions";
 import { CreditDiffCard } from "./CreditDiffCard";
@@ -101,12 +102,9 @@ export default async function VersionReviewPage({
                       <form action={promoteDocument}>
                         <input type="hidden" name="versionId" value={versionId} />
                         <input type="hidden" name="documentId" value={document.id} />
-                        <button
-                          type="submit"
-                          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-                        >
+                        <Button type="submit">
                           Promote all {promotable.length}
-                        </button>
+                        </Button>
                       </form>
                     ) : null}
                     <DeleteDocButton

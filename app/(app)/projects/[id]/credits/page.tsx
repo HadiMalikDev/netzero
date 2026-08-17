@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../_components/PageChrome";
 import { ProjectTabs } from "../_components/ProjectTabs";
-import { KpiTile } from "@/components/ui";
+import { KpiTile, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { CreditsIcon, UploadIcon } from "@/components/icons";
 import { getProject, getProjectCredits } from "@/lib/data";
@@ -55,7 +55,7 @@ export default async function CreditsPage({
           action={
             <Link
               href={`/projects/${id}/documents`}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+              className={primaryButtonClass}
             >
               <UploadIcon width={16} height={16} /> Upload a manual
             </Link>

@@ -15,7 +15,8 @@ import {
   missingEvidenceRequirements,
   type Status,
 } from "./status";
-import { summarizeSpec } from "./catalog";
+import { summarizeSpec, WORKSPACE_ID } from "./catalog";
+import { parseNum } from "./num";
 import {
   bandsFromSpec,
   creditPointsEarned,
@@ -23,7 +24,9 @@ import {
   pointsAwarded,
 } from "./points";
 
-export const WORKSPACE_ID = "ws_default";
+// The single-tenant default workspace id lives in `./catalog`; re-exported here
+// so existing `@/lib/data` importers keep working.
+export { WORKSPACE_ID };
 
 // ---------- projects ----------
 
@@ -248,7 +251,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
 
   return pcs.map((p) => {
     const reqs = (byCredit.get(p.pcId) ?? []).sort((a, b) => a.seq - b.seq);
-    const cap = p.pointsRaw != null && p.pointsRaw !== "" ? Number(p.pointsRaw) : null;
+    const cap = parseNum(p.pointsRaw);
     const range = creditPointsRange(reqs, p.pointsRaw);
     return {
       projectCreditId: p.pcId,
@@ -264,7 +267,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       pageEnd: p.pageEnd,
       status: deriveCreditStatus(reqs),
       pointsEarned: creditPointsEarned(reqs, p.pointsRaw, "earned"),
-      pointsMax: Number.isFinite(cap) ? cap : null,
+      pointsMax: cap,
       pointsMin: range?.min ?? null,
       requirements: reqs,
     };

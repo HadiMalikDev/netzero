@@ -1,17 +1,14 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
+import { Button } from "@/components/ui";
 
 /** Submit button for the single per-credit checklist save form. */
 export function SaveCreditButton() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-    >
+    <Button type="submit" disabled={pending} className="disabled:opacity-60">
       {pending ? "Saving…" : "Save all"}
-    </button>
+    </Button>
   );
 }

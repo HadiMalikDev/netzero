@@ -3,8 +3,9 @@ import {
   blockingRequirements,
   deriveCreditStatus,
   deriveRequirementStatus,
+  hasValue,
   type EntryState,
-} from "./status";
+} from "@/lib/status";
 
 const base: EntryState = {
   metricType: "BOOLEAN",
@@ -14,6 +15,25 @@ const base: EntryState = {
   valueText: null,
   evidenceCount: 0,
 };
+
+describe("hasValue", () => {
+  it("judges presence by the row's own metric type", () => {
+    // A NUMERIC row is satisfied by a number, not by stray text left in another
+    // column — the divergence the assistant's inline check used to get wrong.
+    expect(
+      hasValue({ ...base, metricType: "NUMERIC", valueText: "n/a" }),
+    ).toBe(false);
+    expect(
+      hasValue({ ...base, metricType: "NUMERIC", valueNumber: 42 }),
+    ).toBe(true);
+    expect(hasValue({ ...base, metricType: "BOOLEAN", valueBool: true })).toBe(
+      true,
+    );
+    expect(
+      hasValue({ ...base, metricType: "DESCRIPTIVE", valueText: "done" }),
+    ).toBe(true);
+  });
+});
 
 describe("deriveRequirementStatus", () => {
   it("not_started with no value and no evidence", () => {

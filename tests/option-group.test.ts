@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupByOption, reduceByOption } from "./option-group";
+import { groupByOption, reduceByOption } from "@/lib/option-group";
 
 describe("groupByOption", () => {
   it("keeps ungrouped rows as singles", () => {

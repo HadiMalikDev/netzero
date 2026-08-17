@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { deterministicAnswer } from "./answer";
-import { creditHref, creditMd, type ProjectFacts } from "./facts";
+import { deterministicAnswer } from "@/lib/assistant/answer";
+import { creditHref, creditMd, type ProjectFacts } from "@/lib/assistant/facts";
 
 const facts: ProjectFacts = {
   projectName: "Tower",

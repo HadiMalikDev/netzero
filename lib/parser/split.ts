@@ -39,8 +39,6 @@ interface Section {
 // makes it real, so we do NOT restrict to a fixed set of category prefixes —
 // prefixes differ across Mostadam schemes (Residential/Commercial/Communities).
 const HEADER_RE = /^([A-Z]{1,3})-(\d{1,2})\s+(.{2,80})$/;
-const UNIT_RE =
-  /(micrograms?\s+per\s+m3|µg\/m3|mg\/m3|ppm|ppb|dB\(A\)?[A-Za-z]*|kWh\/m2|kWh|liters?\/|litres?\/|%|m3|m²|m2|lux|W\/m2)/i;
 
 function flatten(pages: string[]): Line[] {
   const lines: Line[] = [];

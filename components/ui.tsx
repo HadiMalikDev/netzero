@@ -1,4 +1,21 @@
-import type { ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
+
+/** Shared primary-CTA styling (use on <Link>/<label>; <Button> applies it too). */
+export const primaryButtonClass =
+  "inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700";
+
+/** Primary <button>. Inherits every native button prop (type, formAction, …). */
+export function Button({
+  children,
+  className = "",
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button className={`${primaryButtonClass} ${className}`.trim()} {...props}>
+      {children}
+    </button>
+  );
+}
 
 export function Card({
   children,

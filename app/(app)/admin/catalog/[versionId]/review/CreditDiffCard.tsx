@@ -1,4 +1,5 @@
 import { ExpandableText } from "@/components/ExpandableText";
+import { KeystoneBadge, MetricBadge, OptionBadge } from "@/components/req";
 import type {
   ParsedDraftCredit,
   ParsedDraftRequirement,
@@ -11,12 +12,6 @@ import {
   toggleDropParsed,
 } from "../../actions";
 import { DraftEditor } from "./DraftEditor";
-
-const METRIC_LABEL: Record<string, string> = {
-  BOOLEAN: "Yes/No",
-  NUMERIC: "Measured value",
-  DESCRIPTIVE: "Document / text",
-};
 
 type ChangeKind = "unchanged" | "corrected" | "added";
 
@@ -72,11 +67,7 @@ export function CreditDiffCard({
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-slate-900">{credit.code}</span>
             <span className="text-slate-700">{credit.title}</span>
-            {credit.isKeystone ? (
-              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
-                Keystone
-              </span>
-            ) : null}
+            {credit.isKeystone ? <KeystoneBadge /> : null}
             {credit.promoted ? (
               <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                 In catalog
@@ -301,25 +292,15 @@ function ReqCell({ req }: { req: ParsedDraftRequirement }) {
     <div>
       <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs">
         <span className="font-semibold text-slate-500">#{req.seq}</span>
-        <span className="rounded bg-slate-200/70 px-1.5 py-0.5 text-slate-600">
-          {METRIC_LABEL[req.metricType] ?? req.metricType}
-        </span>
+        <MetricBadge metricType={req.metricType} />
         {req.pointsRaw ? (
           <span className="text-slate-400">
             {req.pointsRaw} point{req.pointsRaw === "1" ? "" : "s"}
             {req.pointsType === "scaled" ? " (varies with value)" : ""}
           </span>
         ) : null}
-        {req.optionGroup ? (
-          <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
-            Option (either/or)
-          </span>
-        ) : null}
-        {req.keystone ? (
-          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
-            Keystone
-          </span>
-        ) : null}
+        {req.optionGroup ? <OptionBadge /> : null}
+        {req.keystone ? <KeystoneBadge /> : null}
         {Object.entries(req.evidenceByStage).map(([stage, n]) => (
           <span
             key={stage}
@@ -358,13 +339,10 @@ function ProposedCell({
     <div>
       <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs">
         <span className="font-semibold text-slate-500">#{proposed.seq}</span>
-        <span
-          className={`rounded bg-slate-200/70 px-1.5 py-0.5 text-slate-600 ${hl(
-            !!original && original.metricType !== proposed.metricType,
-          )}`}
-        >
-          {METRIC_LABEL[proposed.metricType] ?? proposed.metricType}
-        </span>
+        <MetricBadge
+          metricType={proposed.metricType}
+          className={hl(!!original && original.metricType !== proposed.metricType)}
+        />
         {proposed.pointsRaw ? (
           <span
             className={hl(!!original && original.pointsRaw !== proposed.pointsRaw)}
