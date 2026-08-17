@@ -1,0 +1,79 @@
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+import { parseManual } from "./index";
+import { mostadamGate } from "./mostadam";
+import { extractPdf } from "./extract";
+
+const MANUAL = ".data/manuals/commercial-dc.pdf";
+const has = existsSync(MANUAL);
+
+// The manual is a 6MB public PDF (see spec "Default test files"). If it hasn't
+// been downloaded, skip rather than fail so CI without the fixture stays green.
+const d = has ? describe : describe.skip;
+
+d("Commercial D+C parser (known-good HC-10 check)", () => {
+  it("walks the whole manual, not one hardcoded credit", async () => {
+    const data = new Uint8Array(await readFile(MANUAL));
+    const res = await parseManual(data); // deterministic only (no AI in tests)
+    expect(res.ok).toBe(true);
+    expect(res.scheme).toBe("commercial");
+    expect(res.stage).toBe("D+C");
+    // Many credits, spanning multiple categories.
+    expect(res.credits.length).toBeGreaterThan(40);
+    const cats = new Set(res.credits.map((c) => c.categoryCode));
+    expect(cats.size).toBeGreaterThanOrEqual(6);
+    // No duplicate codes after within-doc dedupe.
+    const codes = res.credits.map((c) => c.code);
+    expect(new Set(codes).size).toBe(codes.length);
+  });
+
+  it("extracts HC-10 Indoor Air Quality exactly", async () => {
+    const data = new Uint8Array(await readFile(MANUAL));
+    const res = await parseManual(data);
+    const hc10 = res.credits.find((c) => c.code === "HC-10");
+    expect(hc10, "HC-10 must be extracted").toBeDefined();
+    expect(hc10!.title).toBe("Indoor Air Quality");
+    expect(hc10!.categoryName).toBe("Health and Comfort");
+    expect(hc10!.isKeystone).toBe(false);
+    expect(hc10!.pointsRaw).toBe("3");
+    expect(hc10!.requirements).toHaveLength(2);
+
+    const [r1, r2] = hc10!.requirements;
+    expect(r1.pointsRaw).toBe("1");
+    // Title is split from the body.
+    expect(r1.title).toBe("Indoor Air Quality (IAQ) Management Plan");
+    expect(r1.text).toMatch(/^Develop and implement/i);
+    expect(r1.text).toMatch(/flush-out/i);
+    expect(r2.pointsRaw).toBe("2");
+    expect(r2.metricType).toBe("NUMERIC");
+
+    // Table HC-10.1 limits.
+    const limits = r2.numericSpec?.limits ?? [];
+    const byName = (kw: RegExp) =>
+      limits.find((l) => kw.test(l.name))?.value;
+    expect(byName(/formaldehyde/i)).toBe(27);
+    expect(byName(/PM2\.5/i)).toBe(15);
+    expect(byName(/PM10/i)).toBe(150);
+    expect(byName(/TVOC|Volatile/i)).toBe(500);
+
+    // Citations point at the source pages (HC-10 is on pp.182-185 of the PDF).
+    expect(hc10!.pageStart).toBeGreaterThanOrEqual(180);
+    expect(hc10!.pageStart).toBeLessThanOrEqual(186);
+  });
+
+  it("rejects a non-Mostadam document", async () => {
+    // A PDF-shaped but non-Mostadam text blob must fail the gate.
+    const fake = "This is a LEED v4 reference guide. Sustainable Sites credit.";
+    const gate = mostadamGate(fake, [fake]);
+    expect(gate.ok).toBe(false);
+    expect(gate.reason).toBeTruthy();
+  });
+
+  it("extract keeps per-page text for citations", async () => {
+    const data = new Uint8Array(await readFile(MANUAL));
+    const ext = await extractPdf(data);
+    expect(ext.pageCount).toBe(269);
+    expect(ext.pages).toHaveLength(269);
+  });
+});
