@@ -18,8 +18,8 @@ import {
   getCatalogCredit,
   promoteToCatalog,
   WORKSPACE_ID,
-} from "./catalog";
-import { parseAndStore } from "./parser";
+} from "@/lib/catalog";
+import { parseAndStore } from "@/lib/parser";
 
 const MANUAL = ".data/manuals/commercial-dc.pdf";
 const d = existsSync(MANUAL) ? describe : describe.skip;

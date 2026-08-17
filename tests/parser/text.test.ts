@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanText } from "./text";
+import { cleanText } from "@/lib/parser/text";
 
 describe("cleanText", () => {
   it("converts PUA bullet glyphs (U+F0B7) to readable bullets", () => {

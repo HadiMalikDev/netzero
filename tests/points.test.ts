@@ -4,8 +4,8 @@ import {
   creditPointsRange,
   pointsAwarded,
   pointsForValue,
-} from "./points";
-import type { ScoreBand } from "./parser/types";
+} from "@/lib/points";
+import type { ScoreBand } from "@/lib/parser/types";
 
 const E01: ScoreBand[] = [
   { min: 0, points: 5 },
@@ -53,6 +53,17 @@ describe("creditPointsRange", () => {
         "15",
       ),
     ).toEqual({ min: 5, max: 15 });
+  });
+
+  it("never inverts when the credit Total is below the band floor", () => {
+    // A malformed/OCR'd Total ("3") under the smallest band (5) must not yield
+    // max < min — it clamps up to the floor instead.
+    const range = creditPointsRange(
+      [{ numericSpec: { bands: [{ label: null, bands: E01 }] } }],
+      "3",
+    );
+    expect(range).toEqual({ min: 5, max: 5 });
+    expect(range!.max).toBeGreaterThanOrEqual(range!.min);
   });
 });
 
