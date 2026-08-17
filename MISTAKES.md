@@ -1,5 +1,13 @@
 # Mistakes
 
+## 2026-08-16 — Reached for regex to detect manual metadata instead of the LLM
+
+**What happened:** To seed catalog metadata (org / scheme / stage / version) from an uploaded manual, I started building regex/heuristic detection over the extracted PDF text. The client interrupted: "detection should be offloaded to LLM."
+
+**Root cause:** Defaulted to deterministic parsing out of habit, even though the target data (title/version) lives on a cover image that extracts poorly and the body contains misleading year references — exactly the fuzzy, OCR-degraded case where regex is brittle and an LLM excels.
+
+**Prevention:** For extracting facts from unstructured or poorly-extracted document text (titles, versions, org names), prefer an LLM call with a constrained JSON schema over regex; keep the deterministic detector only as a fallback. Reserve regex for well-structured, reliably-extracted layout (e.g. the credit-header split).
+
 ## 2026-08-16 — Deferred the spec parser out of Stage 1
 
 **What happened:** Proposed hand-entering HC-10 and parking document upload/parse for a later slice. Client pushed back: the parser has to be set up in Stage 1.
