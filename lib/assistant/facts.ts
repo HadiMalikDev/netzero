@@ -1,5 +1,8 @@
 import { getProjectCredits, type CreditView } from "@/lib/data";
-import { blockingRequirements } from "@/lib/status";
+import {
+  missingEvidenceRequirements,
+  type Status,
+} from "@/lib/status";
 
 /**
  * The assistant's ONLY source of truth: structured facts derived from the
@@ -13,6 +16,19 @@ export interface Citation {
   title: string;
   page: number | null;
   ref: string; // human-readable, e.g. "HC-10 (p.182)"
+}
+
+export interface FactRequirement {
+  seq: number;
+  metricType: string;
+  status: Status;
+  optionGroup: string | null;
+  hasValue: boolean;
+  requiresEvidence: boolean;
+  evidenceCount: number;
+  text: string;
+  page: number | null;
+  href: string;
 }
 
 export interface ProjectFacts {
@@ -30,20 +46,30 @@ export interface ProjectFacts {
     code: string;
     title: string;
     category: string;
-    status: string;
+    status: Status;
     page: number | null;
-    requirements: {
-      seq: number;
-      metricType: string;
-      status: string;
-      optionGroup: string | null;
-      hasValue: boolean;
-      requiresEvidence: boolean;
-      evidenceCount: number;
-      text: string;
-      page: number | null;
-    }[];
+    href: string;
+    requirements: FactRequirement[];
   }[];
+}
+
+export function creditHref(
+  projectId: string,
+  code: string,
+  seq?: number,
+): string {
+  const base = `/projects/${projectId}/credits/${encodeURIComponent(code)}`;
+  return seq != null ? `${base}#req-${seq}` : base;
+}
+
+export function creditMd(
+  projectId: string,
+  code: string,
+  title?: string,
+  seq?: number,
+): string {
+  const label = title ? `${code} ${title}` : seq != null ? `${code} #${seq}` : code;
+  return `[${label}](${creditHref(projectId, code, seq)})`;
 }
 
 export function citationFor(c: {
@@ -74,9 +100,7 @@ export async function buildProjectFacts(
     cat.count++;
     catMap.set(c.categoryCode, cat);
     for (const r of c.requirements) requirements++;
-    for (const r of blockingRequirements(c.requirements)) {
-      if (r.requiresEvidence && r.evidenceCount === 0) missingEvidence++;
-    }
+    missingEvidence += missingEvidenceRequirements(c.requirements).length;
   }
 
   const facts: ProjectFacts = {
@@ -100,6 +124,7 @@ export async function buildProjectFacts(
       category: `${c.categoryCode} ${c.categoryName}`,
       status: c.status,
       page: c.pageStart,
+      href: creditHref(projectId, c.code),
       requirements: c.requirements.map((r) => ({
         seq: r.seq,
         metricType: r.metricType,
@@ -113,6 +138,7 @@ export async function buildProjectFacts(
         evidenceCount: r.evidenceCount,
         text: r.text.slice(0, 200),
         page: r.pageStart,
+        href: creditHref(projectId, c.code, r.seq),
       })),
     })),
   };
@@ -130,12 +156,7 @@ export function missingEvidenceCredits(facts: ProjectFacts) {
   return facts.credits
     .map((c) => ({
       ...c,
-      requirements: blockingRequirements(
-        c.requirements.map((r) => ({
-          ...r,
-          status: r.status as "not_started" | "in_progress" | "completed",
-        })),
-      ).filter((r) => r.requiresEvidence && r.evidenceCount === 0),
+      requirements: missingEvidenceRequirements(c.requirements),
     }))
     .filter((c) => c.requirements.length > 0);
 }

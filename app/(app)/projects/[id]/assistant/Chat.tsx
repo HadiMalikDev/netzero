@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
+import Link from "next/link";
 import { BotIcon } from "@/components/icons";
 import type { Answer } from "@/lib/assistant/answer";
 import { ask } from "./actions";
@@ -18,24 +19,68 @@ const QUICK = [
   "What's in progress vs not started?",
 ];
 
-/** Very small markdown-ish renderer (bold + bullet lines) — no external deps. */
-function renderText(text: string) {
+function isCreditCode(seg: string): boolean {
+  return /^[A-Z]{1,3}-\d{1,2}$/.test(seg);
+}
+
+function taskHref(projectId: string, href: string): string | null {
+  const prefix = `/projects/${projectId}/credits/`;
+  if (!href.startsWith(prefix)) return null;
+  return href;
+}
+
+function linkCodes(text: string, projectId: string, key: string): ReactNode[] {
+  return text.split(/(\b[A-Z]{1,3}-\d{1,2}\b)/g).map((seg, i) =>
+    isCreditCode(seg) ? (
+      <Link
+        key={`${key}-${i}`}
+        href={`/projects/${projectId}/credits/${seg}`}
+        className="font-medium text-brand-700 underline-offset-2 hover:underline"
+      >
+        {seg}
+      </Link>
+    ) : (
+      <span key={`${key}-${i}`}>{seg}</span>
+    ),
+  );
+}
+
+function renderInline(text: string, projectId: string): ReactNode[] {
+  return text.split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*)/g).flatMap((seg, j) => {
+    const md = seg.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (md) {
+      const href = taskHref(projectId, md[2]);
+      if (href)
+        return [
+          <Link
+            key={j}
+            href={href}
+            className="font-medium text-brand-700 underline-offset-2 hover:underline"
+          >
+            {md[1]}
+          </Link>,
+        ];
+      return [<span key={j}>{seg}</span>];
+    }
+    if (seg.startsWith("**") && seg.endsWith("**"))
+      return [
+        <strong key={j}>{linkCodes(seg.slice(2, -2), projectId, `${j}b`)}</strong>,
+      ];
+    return linkCodes(seg, projectId, String(j));
+  });
+}
+
+/** Very small markdown-ish renderer (bold, links, bullets) — no external deps. */
+function renderText(text: string, projectId: string) {
   return text.split("\n").map((line, i) => {
     const bulleted = line.startsWith("- ");
-    const content = (bulleted ? line.slice(2) : line).split(/(\*\*[^*]+\*\*)/g);
-    const nodes = content.map((seg, j) =>
-      seg.startsWith("**") && seg.endsWith("**") ? (
-        <strong key={j}>{seg.slice(2, -2)}</strong>
-      ) : (
-        <span key={j}>{seg}</span>
-      ),
-    );
+    const content = bulleted ? line.slice(2) : line;
     return (
       <p
         key={i}
         className={bulleted ? "ml-4 list-item list-disc" : line ? "" : "h-2"}
       >
-        {nodes}
+        {renderInline(content, projectId)}
       </p>
     );
   });
@@ -112,7 +157,9 @@ export function Chat({ projectId }: { projectId: string }) {
                       : "max-w-[85%] rounded-2xl rounded-bl-sm bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-100"
                   }
                 >
-                  <div className="space-y-0.5">{renderText(t.text)}</div>
+                  <div className="space-y-0.5">
+                    {renderText(t.text, projectId)}
+                  </div>
                   {t.answer && t.answer.citations.length > 0 ? (
                     <div className="mt-3 border-t border-slate-200 pt-2">
                       <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">

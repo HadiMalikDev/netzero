@@ -1,8 +1,9 @@
 import { chatJSON, hasLLM } from "@/lib/ai/openrouter";
-import { blockingRequirements, type Status } from "@/lib/status";
+import { blockingRequirements } from "@/lib/status";
 import {
   buildProjectFacts,
   citationFor,
+  creditMd,
   findScope,
   missingEvidenceCredits,
   remaining,
@@ -24,6 +25,7 @@ Rules you must never break:
 - If the facts do not contain the answer, say so plainly.
 - "Overdue"/"at risk" means incomplete or missing evidence, NOT a calendar date (there are no due dates).
 - Always cite the specific credit codes you used.
+- When you mention a credit or requirement, link it with markdown [label](href) using the href from the facts. Never invent a URL.
 Respond ONLY as JSON: {"answer": "<concise markdown answer>", "citations": ["<CODE>", ...]}.
 Use credit codes exactly as they appear in the facts (e.g. "HC-10").`;
 
@@ -82,13 +84,14 @@ export async function answerQuestion(
     }
   }
 
-  return deterministicAnswer(facts, question);
+  return deterministicAnswer(facts, question, projectId);
 }
 
 /** Deterministic guardrail answerer — also the no-key fallback. */
 export function deterministicAnswer(
   facts: ProjectFacts,
   question: string,
+  projectId: string,
 ): Answer {
   const q = question.toLowerCase();
   const scope = findScope(facts, question);
@@ -96,22 +99,16 @@ export function deterministicAnswer(
   // Status of a specific credit or category.
   if (scope?.type === "credit") {
     const c = scope.credit;
-    const open = blockingRequirements(
-      c.requirements.map((r) => ({
-        ...r,
-        status: r.status as Status,
-        optionGroup: r.optionGroup,
-      })),
-    );
+    const open = blockingRequirements(c.requirements);
     const body =
-      `**${c.code} — ${c.title}** (${c.category}) is **${c.status.replace("_", " ")}**. ` +
+      `${creditMd(projectId, c.code, c.title)} (${c.category}) is **${c.status.replace("_", " ")}**. ` +
       `${c.requirements.length} requirement(s); ${open.length} still open.` +
       (open.length
         ? "\n\nOpen requirements:\n" +
           open
             .map(
               (r) =>
-                `- #${r.seq} (${r.metricType}) — ${r.status.replace("_", " ")}` +
+                `- [${c.code} #${r.seq}](${r.href}) (${r.metricType}) — ${r.status.replace("_", " ")}` +
                 (r.requiresEvidence && r.evidenceCount === 0
                   ? ", evidence missing"
                   : ""),
@@ -137,7 +134,10 @@ export function deterministicAnswer(
         `**${scope.category.code} — ${scope.category.name}**: ${inCat.length} credits, ${done} completed, ` +
         `${inCat.length - done} open.\n\n` +
         inCat
-          .map((c) => `- ${c.code} ${c.title} — ${c.status.replace("_", " ")}`)
+          .map(
+            (c) =>
+              `- ${creditMd(projectId, c.code, c.title)} — ${c.status.replace("_", " ")}`,
+          )
           .join("\n"),
       citations: inCat.map((c) =>
         citationFor({ code: c.code, title: c.title, pageStart: c.page }),
@@ -164,8 +164,8 @@ export function deterministicAnswer(
         list
           .map(
             (c) =>
-              `- **${c.code} ${c.title}**: ${c.requirements
-                .map((r) => `#${r.seq}`)
+              `- ${creditMd(projectId, c.code, c.title)}: ${c.requirements
+                .map((r) => `[#${r.seq}](${r.href})`)
                 .join(", ")}`,
           )
           .join("\n"),
@@ -184,9 +184,11 @@ export function deterministicAnswer(
     return {
       answer:
         `**In progress (${ip.length}):**\n` +
-        (ip.map((c) => `- ${c.code} ${c.title}`).join("\n") || "- none") +
+        (ip.map((c) => `- ${creditMd(projectId, c.code, c.title)}`).join("\n") ||
+          "- none") +
         `\n\n**Not started (${ns.length}):**\n` +
-        (ns.map((c) => `- ${c.code} ${c.title}`).join("\n") || "- none"),
+        (ns.map((c) => `- ${creditMd(projectId, c.code, c.title)}`).join("\n") ||
+          "- none"),
       citations: [...ip, ...ns]
         .slice(0, 12)
         .map((c) =>
@@ -206,7 +208,10 @@ export function deterministicAnswer(
       "Open credits:\n" +
       open
         .slice(0, 15)
-        .map((c) => `- ${c.code} ${c.title} — ${c.status.replace("_", " ")}`)
+        .map(
+          (c) =>
+            `- ${creditMd(projectId, c.code, c.title)} — ${c.status.replace("_", " ")}`,
+        )
         .join("\n") +
       (open.length > 15 ? `\n…and ${open.length - 15} more.` : ""),
     citations: open

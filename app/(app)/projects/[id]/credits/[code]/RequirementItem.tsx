@@ -67,7 +67,10 @@ export function RequirementItem({
   const label = req.title ?? firstClause(req.text);
 
   return (
-    <div className="border-b border-slate-100 py-4 last:border-0">
+    <div
+      id={`req-${req.seq}`}
+      className="scroll-mt-24 border-b border-slate-100 py-4 last:border-0"
+    >
       {/* Row header */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
