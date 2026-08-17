@@ -78,6 +78,8 @@ export const rsVersions = sqliteTable(
     versionLabel: text("version_label").notNull(), // e.g. 2019
     status: text("status").notNull().default("draft"), // draft | published
     sourceDocumentId: text("source_document_id"), // the manual it was authored from
+    // Table 4 denominators: { "Shell only": 35, "Core & Shell": 130, ... }
+    scopeTotals: text("scope_totals"), // JSON
     notes: text("notes"),
     createdAt: integer("created_at").notNull().default(now),
   },
@@ -111,6 +113,12 @@ export const catalogCredits = sqliteTable(
     pointsRaw: text("points_raw"),
     aim: text("aim"),
     references: text("references"), // JSON string[]
+    // Credit Applicability Conditions: { scope: { typology: points|null } }
+    applicability: text("applicability"), // JSON
+    supportingGuidance: text("supporting_guidance"),
+    toolRef: text("tool_ref"),
+    // Extractor↔manual reconciliation flags: { ok, expected, got, note }
+    reconciliation: text("reconciliation"), // JSON
     sourcePageStart: integer("source_page_start"),
     sourcePageEnd: integer("source_page_end"),
     createdAt: integer("created_at").notNull().default(now),
@@ -132,9 +140,15 @@ export const catalogRequirements = sqliteTable("catalog_requirement", {
   metricType: text("metric_type").notNull(), // BOOLEAN | NUMERIC | DESCRIPTIVE
   unit: text("unit"),
   pointsRaw: text("points_raw"),
+  pointsType: text("points_type"), // fixed | scaled | shared
+  optionGroup: text("option_group"), // XOR grouping label, e.g. "E-01 options"
+  keystone: integer("keystone", { mode: "boolean" }).notNull().default(false),
+  keystoneCondition: text("keystone_condition"),
   // Reference values: { limits?: [...], threshold?: {...}, bands?: [...] }
   numericSpec: text("numeric_spec"), // JSON
-  evidenceSpecs: text("evidence_specs"), // JSON string[]
+  // Evidence per stage: [{ stage: "design"|"construction", text }]
+  evidence: text("evidence"), // JSON
+  evidenceSpecs: text("evidence_specs"), // JSON string[] (deprecated; kept for back-compat)
   sourcePageStart: integer("source_page_start"),
   sourcePageEnd: integer("source_page_end"),
   createdAt: integer("created_at").notNull().default(now),
@@ -193,6 +207,10 @@ export const parsedCredits = sqliteTable(
     pointsRaw: text("points_raw"),
     aim: text("aim"),
     references: text("references"),
+    applicability: text("applicability"), // JSON
+    supportingGuidance: text("supporting_guidance"),
+    toolRef: text("tool_ref"),
+    reconciliation: text("reconciliation"), // JSON
     pageStart: integer("page_start"),
     pageEnd: integer("page_end"),
     promoted: integer("promoted", { mode: "boolean" }).notNull().default(false),
@@ -219,7 +237,12 @@ export const parsedRequirements = sqliteTable("parsed_requirement", {
   metricType: text("metric_type").notNull(),
   unit: text("unit"),
   pointsRaw: text("points_raw"),
+  pointsType: text("points_type"),
+  optionGroup: text("option_group"),
+  keystone: integer("keystone", { mode: "boolean" }).notNull().default(false),
+  keystoneCondition: text("keystone_condition"),
   numericSpec: text("numeric_spec"),
+  evidence: text("evidence"), // JSON [{stage,text}]
   evidenceSpecs: text("evidence_specs"),
   pageStart: integer("page_start"),
   pageEnd: integer("page_end"),

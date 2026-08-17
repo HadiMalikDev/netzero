@@ -1,6 +1,9 @@
-import { categoryName, KNOWN_PREFIXES } from "./mostadam";
+import { categoryName } from "./mostadam";
 import { cleanText } from "./text";
 import type {
+  Applicability,
+  EvidenceItem,
+  EvidenceStage,
   MetricType,
   NumericLimit,
   ParsedCredit,
@@ -30,9 +33,10 @@ interface Section {
   pageEnd: number;
 }
 
-const HEADER_RE = new RegExp(
-  `^(${KNOWN_PREFIXES.join("|")})-(\\d{1,2})\\s+(.{2,80})$`,
-);
+// Any credit-code header; the following-layout check (isRealCreditStart) is what
+// makes it real, so we do NOT restrict to a fixed set of category prefixes —
+// prefixes differ across Mostadam schemes (Residential/Commercial/Communities).
+const HEADER_RE = /^([A-Z]{1,3})-(\d{1,2})\s+(.{2,80})$/;
 const UNIT_RE =
   /(micrograms?\s+per\s+m3|µg\/m3|mg\/m3|ppm|ppb|dB\(A\)?[A-Za-z]*|kWh\/m2|kWh|liters?\/|litres?\/|%|m3|m²|m2|lux|W\/m2)/i;
 
@@ -137,60 +141,343 @@ function parseLimits(lines: Line[], from: number, to: number): NumericLimit[] {
   return limits;
 }
 
-const BULLET_RE = /^[•o▪○·\-]\s+/;
+// Include U+F0B7 (Symbol-font bullet) and friends some credits use.
+const BULLET_RE = /^(?:[•▪●○·]\s*|[o-]\s+)/;
+
+// Evidence region begins at a "<X> Stage Evidence" header (D+C: Design /
+// Construction) OR a plain "Evidence" / "# Evidence per Requirement" header
+// (O+E and others use a single, unstaged block). Detect the label; don't assume.
+const STAGE_HDR_RE = /^([A-Za-z][A-Za-z ]*?)\s+Stage\s+Evidence$/;
+const EVIDENCE_START_RE = /(Stage\s+Evidence$|^#?\s*Evidence(\s+per\s+Requirement)?$)/i;
 
 /**
- * Collect evidence bullets grouped by requirement seq. Scans only the Evidence
- * block(s) of the section and joins wrapped continuation lines back onto their
- * bullet.
+ * Collect evidence per requirement, tagged with whatever submission stage the
+ * document declares (design/construction in D+C, a single stage in O+E). Stages
+ * are separately reviewed/certified, so they must not be merged (audit B2).
+ * Wrapped continuation lines are joined; leaked page numbers are ignored.
  */
-function parseEvidenceBySeq(
+function parseEvidenceByStage(
   lines: Line[],
   from: number,
   to: number,
   seqCount: number,
-): Map<number, string[]> {
-  const byReq = new Map<number, string[]>();
-  const evStart = findLine(lines, from, to, /Stage\s+Evidence$/i);
+): Map<number, EvidenceItem[]> {
+  const byReq = new Map<number, EvidenceItem[]>();
+  const evStart = findLine(lines, from, to, EVIDENCE_START_RE);
   if (evStart < 0) return byReq;
 
-  let current = 0;
-  let buf: string[] | null = null; // current bullet's lines
+  let stage: EvidenceStage = "unknown";
+  // One or more seqs the next bullets belong to. Shared labels ("1 & 2")
+  // attach the same evidence to every listed requirement.
+  let currents: number[] = [];
+  let pendingAnd: number[] | null = null;
+  let buf: string[] | null = null;
+  // Option credits (e.g. E-01) list evidence per option, each with its own
+  // "# Evidence per Requirement" restarting at 1. Requirements were renumbered
+  // across options (1,2,…), so we offset the evidence seq by the requirements
+  // consumed in earlier options of the SAME stage. `base` resets each stage.
+  let base = 0;
+  let maxSeqInBlock = 0;
+  const inRange = (n: number) => n >= 1 && n <= seqCount;
+  const setCurrents = (seqs: number[]) => {
+    currents = seqs.filter(inRange).map((n) => base + n);
+    for (const n of seqs) if (inRange(n)) maxSeqInBlock = Math.max(maxSeqInBlock, n);
+  };
   const push = () => {
-    if (buf && current) {
-      const clean = cleanText(buf.join(" "));
-      if (clean) {
-        const arr = byReq.get(current) ?? [];
-        arr.push(clean);
-        byReq.set(current, arr);
+    if (buf && currents.length) {
+      // Drop a trailing leaked page number ("… Energy Tool. 100").
+      const text = cleanText(buf.join(" ").replace(/\s+\d{2,3}\s*$/, ""));
+      if (text) {
+        for (const seq of currents) {
+          const arr = byReq.get(seq) ?? [];
+          arr.push({ stage, text });
+          byReq.set(seq, arr);
+        }
       }
     }
     buf = null;
   };
 
-  for (let i = evStart + 1; i < to; i++) {
+  for (let i = evStart; i < to; i++) {
     const t = lines[i].text;
     if (/^(Supporting Guidance|Credit Tool|Reference Documents)/i.test(t)) {
       push();
       break;
     }
     if (!t) continue;
-    if (/Stage\s+Evidence$/i.test(t) || /^#\s*Evidence/i.test(t)) continue;
-    const seqM = t.match(/^(\d{1,2})$/);
-    if (seqM && Number(seqM[1]) >= 1 && Number(seqM[1]) <= seqCount) {
+    const stageM = t.match(STAGE_HDR_RE);
+    if (stageM) {
       push();
-      current = Number(seqM[1]);
+      stage = stageM[1].trim().toLowerCase(); // e.g. "design", "construction"
+      base = 0;
+      maxSeqInBlock = 0;
+      continue;
+    }
+    // Option sub-header: advance the base past the previous option's rows so its
+    // evidence maps to the right (renumbered) requirement, and consume the line
+    // so "Option 2 – Performance Option" never leaks into evidence text.
+    if (OPTION_HDR_RE.test(t)) {
+      push();
+      base += maxSeqInBlock;
+      maxSeqInBlock = 0;
+      continue;
+    }
+    if (/^#?\s*Evidence(\s+per\s+Requirement)?$/i.test(t)) continue;
+    // A standalone integer bigger than the requirement count is a leaked page
+    // number, not a requirement marker — skip it.
+    if (/^\d+$/.test(t) && Number(t) > seqCount) continue;
+    // Shared evidence: "1 & 2" (one line) or "1 &" then "2" (wrapped).
+    const andAll = t.match(/^(\d{1,2}(?:\s*&\s*\d{1,2})+)\s*$/);
+    if (andAll && t.includes("&")) {
+      push();
+      pendingAnd = null;
+      setCurrents([...t.matchAll(/\d{1,2}/g)].map((m) => Number(m[0])));
+      continue;
+    }
+    const andOpen = t.match(/^(\d{1,2})\s*&\s*$/);
+    if (andOpen && inRange(Number(andOpen[1]))) {
+      push();
+      pendingAnd = [Number(andOpen[1])];
+      currents = [];
+      continue;
+    }
+    // Design-stage blocks put the seq + first bullet on ONE line ("1 • text");
+    // construction-stage puts the seq on its own line. Handle both.
+    const combo = t.match(/^(\d{1,2})\s+[•o▪●○·]\s*(.*)$/);
+    if (combo && inRange(Number(combo[1]))) {
+      push();
+      pendingAnd = null;
+      setCurrents([Number(combo[1])]);
+      buf = [combo[2].trim()];
+      continue;
+    }
+    const seqM = t.match(/^(\d{1,2})$/);
+    if (seqM && inRange(Number(seqM[1]))) {
+      const n = Number(seqM[1]);
+      if (pendingAnd) {
+        pendingAnd.push(n);
+        setCurrents(pendingAnd);
+        pendingAnd = null;
+        continue;
+      }
+      push();
+      setCurrents([n]);
       continue;
     }
     if (BULLET_RE.test(t)) {
       push();
       buf = [t.replace(BULLET_RE, "").trim()];
     } else if (buf) {
-      buf.push(t); // wrapped continuation of the current bullet
+      // Strip a trailing leaked page number before appending the continuation.
+      buf.push(t.replace(/\s+\d{2,3}\s*$/, ""));
     }
   }
   push();
   return byReq;
+}
+
+// A matrix cell: a points integer, or "-"/"–"/"N/A" meaning not-applicable.
+const CELL_RE = /^(\d+|[-–—]|n\/?a)$/i;
+const cellValue = (c: string): number | null =>
+  /^\d+$/.test(c) ? Number(c) : null;
+
+// Scope row labels carry footnote markers in some credits ("Shell Only*"), which
+// would otherwise fork one scope into two. Strip trailing marker glyphs so the
+// scope vocabulary stays consistent across credits (and matches Table 4).
+const normScope = (label: string): string =>
+  cleanText(label.replace(/\s*[*¹²³⁴†‡]+\s*$/u, "").replace(/[-–]/g, " "));
+
+const stripMarker = (s: string): string =>
+  cleanText(s.replace(/\s*[*¹²³⁴†‡]+\s*$/u, ""));
+
+/**
+ * Rebuild typology column names from wrapped header lines. Do NOT split on `/`
+ * — names like "Offices/Commercial/Government" are one column. Slash-wrapped
+ * lines join; a one-word line joins the next one-word line; a crowded last
+ * line splits on distinct capitalized tokens. Falls back to [] if we cannot
+ * recover exactly `cols` names (caller uses col1…colN).
+ */
+function recoverTypologyNames(headerLines: string[], cols: number): string[] {
+  if (!headerLines.length || cols < 1) return [];
+
+  // 1. Join slash-continuations ("Offices/" + "Commercial/" + "Government*").
+  const joined: string[] = [];
+  for (const raw of headerLines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const prev = joined[joined.length - 1];
+    if (prev && /[/-]$/.test(prev)) joined[joined.length - 1] = prev + line;
+    else joined.push(line);
+  }
+
+  // 2. Join a lone Title-case word with the next lone Title-case word
+  //    ("Educational" + "Institutions").
+  const phrases: string[] = [];
+  for (let i = 0; i < joined.length; i++) {
+    const cur = joined[i];
+    const next = joined[i + 1];
+    const oneWord = (s: string) =>
+      /^[A-Z][A-Za-z]+[*¹²³⁴†‡]*$/.test(s) && !s.includes("/");
+    if (next && oneWord(cur) && oneWord(next)) {
+      phrases.push(`${cur} ${next}`);
+      i++;
+    } else {
+      phrases.push(cur);
+    }
+  }
+
+  // 3. Split a crowded line into capitalized tokens; keep slash-compounds.
+  const names: string[] = [];
+  for (const p of phrases) {
+    const parts = p.split(/\s{2,}|\s+/).filter(Boolean);
+    if (parts.length <= 1) {
+      names.push(stripMarker(p));
+      continue;
+    }
+    // Split only a crowded line (3+ standalone names, or a slash-compound
+    // plus extra tokens). "Educational Institutions" stays one name.
+    const allStandalone = parts.every(
+      (w) => /^[A-Z]/.test(w) && !w.includes("/"),
+    );
+    const hasCompound = parts.some((w) => w.includes("/"));
+    if ((allStandalone && parts.length >= 3) || (hasCompound && parts.length > 1)) {
+      for (const w of parts) names.push(stripMarker(w));
+    } else {
+      names.push(stripMarker(p));
+    }
+  }
+
+  const cleaned = names.map((n) => n.trim()).filter(Boolean);
+  return cleaned.length === cols ? cleaned : [];
+}
+
+/**
+ * Parse the Credit Applicability Conditions matrix (scope → typology → pts).
+ *
+ * Both the scope row labels and the typology column headers are DETECTED from
+ * the document, not hardcoded — the vocabulary differs across the Mostadam
+ * family. A scope row is any line ending in a run of matrix cells (digits/"-");
+ * its leading words are the scope label. Typology names come from the header
+ * line(s) between the section title and the first data row; if they can't be
+ * cleanly recovered we fall back to positional keys ("col1"…) so the numbers
+ * are never lost (the LLM shape step can rename them later).
+ */
+function parseApplicability(
+  lines: Line[],
+  from: number,
+  to: number,
+): Applicability | null {
+  const hdr = findLine(lines, from, to, /^Credit\s+Applicability\s+Conditions/i);
+  if (hdr < 0) return null;
+
+  // First pass: find the data rows (trailing run of >=2 matrix cells) and the
+  // widest cell count, so we know how many typology columns there are.
+  interface Row {
+    label: string;
+    cells: (number | null)[];
+  }
+  const rows: Row[] = [];
+  const headerLines: string[] = [];
+  for (let i = hdr + 1; i < Math.min(hdr + 40, to); i++) {
+    const t = lines[i].text.trim();
+    if (!t) continue;
+    // Stop at the next block (evidence/guidance/tool/references/next section).
+    if (
+      /Stage\s+Evidence$/i.test(t) ||
+      /^#?\s*Evidence/i.test(t) ||
+      /^(Supporting\s+Guidance|Credit\s+Tool|Reference\s+Documents)/i.test(t)
+    )
+      break;
+    const tokens = t.split(/\s+/).filter(Boolean);
+    // Trailing run of matrix cells.
+    let k = tokens.length;
+    while (k > 0 && CELL_RE.test(tokens[k - 1])) k--;
+    const cellTokens = tokens.slice(k);
+    if (cellTokens.length >= 2 && k > 0) {
+      rows.push({
+        label: tokens.slice(0, k).join(" "),
+        cells: cellTokens.map(cellValue),
+      });
+    } else {
+      // Non-data line before the first row = part of the typology header.
+      if (rows.length === 0) headerLines.push(t);
+    }
+  }
+  if (!rows.length) return null;
+
+  const cols = Math.max(...rows.map((r) => r.cells.length));
+  const headerNames = recoverTypologyNames(headerLines, cols);
+  const typologies =
+    headerNames.length === cols
+      ? headerNames
+      : Array.from({ length: cols }, (_, i) => `col${i + 1}`);
+
+  const matrix: Applicability = {};
+  for (const r of rows) {
+    const row: Record<string, number | null> = {};
+    typologies.forEach((typ, idx) => {
+      row[typ] = idx < r.cells.length ? r.cells[idx] : null;
+    });
+    matrix[normScope(r.label)] = row;
+  }
+  return Object.keys(matrix).length ? matrix : null;
+}
+
+/** Capture the Supporting Guidance block text (auditors need the thresholds). */
+function parseSupportingGuidance(
+  lines: Line[],
+  from: number,
+  to: number,
+): string | null {
+  const start = findLine(lines, from, to, /^Supporting\s+Guidance$/i);
+  if (start < 0) return null;
+  const stop = findLine(lines, start + 1, to, /^(Credit\s+Tool|Reference\s+Documents)$/i);
+  const endAt = stop >= 0 ? stop : to;
+  const text = cleanText(
+    lines
+      .slice(start + 1, endAt)
+      .map((l) => l.text)
+      .filter(Boolean)
+      .join(" "),
+  );
+  return text || null;
+}
+
+interface ReqHeader {
+  keystone: boolean;
+  points: string | null;
+}
+
+/**
+ * Parse the credit's opening "Credit Requirements … Points Allocated" block —
+ * rows like "Requirement #1 No 1" (or "… No No 1" in O+E, "Option 1 –
+ * Requirement #1 Yes 5" for options). This block is the AUTHORITATIVE source of
+ * each requirement's keystone flag and points, so it overrides values scraped
+ * from the body table (which can pick up a stray number from an embedded rating
+ * table — see SS-06). Column count varies across the family, so we take the
+ * first Yes/No as keystone and the LAST integer on the row as points.
+ */
+function parseReqHeader(
+  lines: Line[],
+  from: number,
+  to: number,
+): Map<number, ReqHeader> {
+  const map = new Map<number, ReqHeader>();
+  for (let i = from; i < Math.min(from + 14, to); i++) {
+    const m = lines[i].text.match(/Requirement\s*#(\d+)\b(.*)$/i);
+    if (!m) continue;
+    const seq = Number(m[1]);
+    const rest = m[2];
+    const ks = /\b(Yes|No)\b/i.exec(rest);
+    const nums = rest.match(/\d+/g);
+    if (!map.has(seq)) {
+      map.set(seq, {
+        keystone: ks ? /yes/i.test(ks[1]) : false,
+        points: nums ? nums[nums.length - 1] : null,
+      });
+    }
+  }
+  return map;
 }
 
 const TITLE_STOPWORDS = new Set([
@@ -221,33 +508,77 @@ function extractTitle(textLines: string[]): string | null {
   return null;
 }
 
-/** Parse the "# Requirement Points Available ... Total N" table. */
-function parseRequirements(
+// A requirement whose points scale with performance (%, band, "dependent on…")
+// rather than a flat award. Used to tag point_type without hardcoding a credit.
+const SCALED_RE =
+  /(number of points awarded is dependent|percentage improvement|scaled|per\s+band|awarded per|refer to supporting guidance below for more details)/i;
+
+function classifyPointsType(text: string): "fixed" | "scaled" {
+  return SCALED_RE.test(text) ? "scaled" : "fixed";
+}
+
+/**
+ * Walk ONE "# Requirement Points Available … Total N" table between [from,to).
+ * Sequence markers restart at 1 per table; the trailing standalone integer on a
+ * row is its points. Returns the rows plus the table's declared `Total`.
+ */
+function walkReqTable(
   lines: Line[],
-  section: Section,
-): { requirements: ParsedRequirement[]; totalPoints: string | null } {
-  const { start, end } = section;
-  const reqHdr = findLine(lines, start, end, /^Requirements$/i);
-  const totalIdx = findLine(lines, reqHdr < 0 ? start : reqHdr, end, /^Total\s+\d+/i);
-  const totalPoints =
+  from: number,
+  to: number,
+): { reqs: ParsedRequirement[]; total: string | null } {
+  const totalIdx = findLine(lines, from, to, /^Total\b/i);
+  const total =
     totalIdx >= 0 ? (lines[totalIdx].text.match(/Total\s+(\d+)/i)?.[1] ?? null) : null;
 
-  const requirements: ParsedRequirement[] = [];
-  if (reqHdr < 0) return { requirements, totalPoints };
-
-  // The table body starts after the "# Requirement Points Available" header row.
-  let bodyStart = reqHdr + 1;
-  const colHdr = findLine(lines, reqHdr, Math.min(reqHdr + 4, end), /Points\s+Available/i);
+  let bodyStart = from;
+  const colHdr = findLine(lines, from, Math.min(from + 6, to), /Points\s+Available/i);
   if (colHdr >= 0) bodyStart = colHdr + 1;
-  const bodyEnd = totalIdx >= 0 ? totalIdx : end;
+  const bodyEnd = totalIdx >= 0 ? totalIdx : to;
 
-  // Walk sequential seq markers (1,2,3,...). Between markers: text + a trailing
-  // standalone integer = points.
+  const reqs: ParsedRequirement[] = [];
   let expected = 1;
   let cur: { seq: number; page: number; buf: string[] } | null = null;
+  const emptySeqs: { seq: number; page: number }[] = [];
+  // A row can begin either as the bare seq on its own line, or combined as
+  // "<seq> <text> … <points>" on one line (both occur across the family).
+  // Mid-sentence wraps ("3 additional amenities") must NOT start a new row —
+  // only treat the combo as a new seq when the remainder looks like a row start.
+  const looksLikeNewRow = (rest: string): boolean => {
+    const s = rest.trim();
+    if (!s) return false;
+    if (/^[a-z]/.test(s)) return false;
+    return /^[A-Z(0-9]/.test(s) || BULLET_RE.test(s);
+  };
+  const comboStart = (t: string): string | null => {
+    const m = t.match(/^(\d{1,2})\s+(\S.*)$/);
+    if (!m || Number(m[1]) !== expected) return null;
+    return looksLikeNewRow(m[2]) ? m[2] : null;
+  };
+  const makeReq = (
+    seq: number,
+    page: number,
+    title: string | null,
+    text: string,
+    points: string | null,
+  ): ParsedRequirement => ({
+    seq,
+    title,
+    text,
+    pointsRaw: points,
+    pointsType: classifyPointsType(text),
+    optionGroup: null,
+    keystone: false,
+    keystoneCondition: null,
+    metricType: "DESCRIPTIVE",
+    unit: null,
+    numericSpec: null,
+    evidence: [],
+    pageStart: page,
+    pageEnd: page,
+  });
   const flush = () => {
     if (!cur) return;
-    // Last standalone-integer line in buf is the points.
     let points: string | null = null;
     const textLines: string[] = [];
     for (const b of cur.buf) {
@@ -257,7 +588,6 @@ function parseRequirements(
         textLines.push(b);
       }
     }
-    // Fallback: if trailing wasn't integer, scan from the end.
     if (points === null) {
       for (let k = cur.buf.length - 1; k >= 0; k--) {
         if (/^\d{1,2}$/.test(cur.buf[k])) {
@@ -267,34 +597,34 @@ function parseRequirements(
         }
       }
     }
-    // Split a short title line (e.g. "Indoor Air Quality (IAQ) Management Plan")
-    // from the body, when the manual provides one. Conservative — the LLM label
-    // fallback covers prose requirements that have no clean title line.
+    // Combined "… text. 3" rows: split a trailing bare points integer off the
+    // last text line (the "Points Available" column ran into the text).
+    if (points === null && textLines.length) {
+      const last = textLines[textLines.length - 1].match(/^(.*\S)\s+(\d{1,2})$/);
+      if (last) {
+        textLines[textLines.length - 1] = last[1];
+        points = last[2];
+      }
+    }
     const title = extractTitle(textLines);
-    const text = cleanText(
-      (title ? textLines.slice(1) : textLines).join(" "),
-    );
-    requirements.push({
-      seq: cur.seq,
-      title,
-      text,
-      pointsRaw: points,
-      metricType: "DESCRIPTIVE",
-      unit: null,
-      numericSpec: null,
-      evidenceSpecs: [],
-      pageStart: cur.page,
-      pageEnd: cur.page,
-    });
+    const text = cleanText((title ? textLines.slice(1) : textLines).join(" "));
+    // Drop empty/degenerate rows (D2) and stray "Total" rows (D1). Remember
+    // the empty seq so a following pass can steal a leftover bullet.
+    if ((text || title) && !/^total\b/i.test(text)) {
+      reqs.push(makeReq(cur.seq, cur.page, title, text, points));
+    } else if (!text && !title) {
+      emptySeqs.push({ seq: cur.seq, page: cur.page });
+    }
     cur = null;
   };
 
   for (let i = bodyStart; i < bodyEnd; i++) {
     const t = lines[i].text;
     if (!t) continue;
-    if (t === String(expected)) {
+    const combo = comboStart(t);
+    if (t === String(expected) || combo !== null) {
       flush();
-      cur = { seq: expected, page: lines[i].page, buf: [] };
+      cur = { seq: expected, page: lines[i].page, buf: combo !== null ? [combo] : [] };
       expected++;
       continue;
     }
@@ -302,7 +632,77 @@ function parseRequirements(
   }
   flush();
 
-  return { requirements, totalPoints };
+  // Empty numbered row after a multi-bullet previous row: the last bullet
+  // belongs to the empty seq (HC-16: two bullets under #1, bare "2").
+  for (const empty of emptySeqs) {
+    const prev = [...reqs].reverse().find((r) => r.seq < empty.seq);
+    if (!prev) continue;
+    const parts = prev.text.split(/\s+•\s+/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length < 2) continue;
+    const stolen = parts.pop()!;
+    prev.text = parts.join(" • ");
+    prev.pointsType = classifyPointsType(prev.text);
+    reqs.push(makeReq(empty.seq, empty.page, null, stolen, null));
+    reqs.sort((a, b) => a.seq - b.seq);
+  }
+
+  return { reqs, total };
+}
+
+// Where the requirements region ends: the next known block.
+const REQ_REGION_END_RE =
+  /^(Credit\s+Applicability\s+Conditions|.*Stage\s+Evidence$|#?\s*Evidence|Supporting\s+Guidance|Credit\s+Tool|Reference\s+Documents)/i;
+const OPTION_HDR_RE = /^Option\s+(\d+)\s*[–—-]\s*(.+)$/i;
+
+/**
+ * Parse a credit's requirements. Most credits have one requirements table; some
+ * (e.g. E-01) offer mutually-exclusive Options, each its OWN sub-table with its
+ * own `Total`. Options are an XOR set: they share an `option_group` and the
+ * credit's points is the MAX option total, not the sum (B5/E-01). Detected from
+ * "Option N – …" sub-headers, not hardcoded to any credit.
+ */
+function parseRequirements(
+  lines: Line[],
+  section: Section,
+): { requirements: ParsedRequirement[]; totalPoints: string | null } {
+  const { start, end } = section;
+  const reqHdr = findLine(lines, start, end, /^Requirements$/i);
+  if (reqHdr < 0) return { requirements: [], totalPoints: null };
+
+  let regionEnd = findLine(lines, reqHdr + 1, end, REQ_REGION_END_RE);
+  if (regionEnd < 0) regionEnd = end;
+
+  // Option sub-headers within the requirements region only.
+  const opts: { i: number; label: string }[] = [];
+  for (let i = reqHdr + 1; i < regionEnd; i++) {
+    const m = lines[i].text.match(OPTION_HDR_RE);
+    if (m) opts.push({ i, label: cleanText(m[2]) });
+  }
+
+  if (opts.length >= 2) {
+    const requirements: ParsedRequirement[] = [];
+    const optionTotals: number[] = [];
+    const groupLabel = `${section.code} options`;
+    let seqBase = 0;
+    for (let o = 0; o < opts.length; o++) {
+      const from = opts[o].i + 1;
+      const to = o + 1 < opts.length ? opts[o + 1].i : regionEnd;
+      const { reqs, total } = walkReqTable(lines, from, to);
+      if (total != null) optionTotals.push(Number(total));
+      for (const r of reqs) {
+        r.seq = ++seqBase; // options restart at 1; renumber across the credit
+        r.optionGroup = groupLabel;
+        if (!r.title) r.title = opts[o].label;
+        requirements.push(r);
+      }
+    }
+    // XOR: the credit is worth its best option, never the sum.
+    const totalPoints = optionTotals.length ? String(Math.max(...optionTotals)) : null;
+    return { requirements, totalPoints };
+  }
+
+  const { reqs, total } = walkReqTable(lines, reqHdr + 1, regionEnd);
+  return { requirements: reqs, totalPoints: total };
 }
 
 export function splitCredits(
@@ -317,12 +717,10 @@ export function splitCredits(
   for (const section of sections) {
     const { start, end } = section;
 
-    // Keystone + per-requirement points from the sub-header block.
-    let isKeystone = false;
-    for (let i = start; i < Math.min(start + 8, end); i++) {
-      const m = lines[i].text.match(/Requirement\s*#\d+\s+(Yes|No)\s+\d+/i);
-      if (m && /Yes/i.test(m[1])) isKeystone = true;
-    }
+    // Requirement-level keystone + authoritative points from the credit's header
+    // block; credit-level keystone is overridden later from Table 3 (parseManual).
+    const reqHeader = parseReqHeader(lines, start, end);
+    const isKeystone = [...reqHeader.values()].some((h) => h.keystone);
 
     // Aim text.
     const aimIdx = findLine(lines, start, end, /^Aim$/i);
@@ -340,10 +738,22 @@ export function splitCredits(
 
     const { requirements, totalPoints } = parseRequirements(lines, section);
 
-    // Evidence per requirement (Design + Construction stage blocks).
-    const evByReq = parseEvidenceBySeq(lines, start, end, requirements.length || 9);
+    // Evidence per requirement, separated by design/construction stage.
+    const evByReq = parseEvidenceByStage(lines, start, end, requirements.length || 9);
+    // The header "Points Allocated" column is only a per-requirement value when
+    // it lists a line PER requirement. When it collapses the credit into a
+    // single summary line ("Requirement #1 Yes 3" for a 3-req credit, or
+    // "Requirement #1 & #2 Yes 2"), that number is the CREDIT total, not seq 1's
+    // points — so only trust it when the header covers at least every
+    // requirement (>= the count). Keystone flags are always taken from the header.
+    const headerPointsReliable = reqHeader.size >= requirements.length;
     for (const r of requirements) {
-      r.evidenceSpecs = evByReq.get(r.seq) ?? [];
+      r.evidence = evByReq.get(r.seq) ?? [];
+      const h = reqHeader.get(r.seq);
+      if (h) {
+        r.keystone = h.keystone;
+        if (headerPointsReliable && h.points != null) r.pointsRaw = h.points;
+      }
     }
 
     // Numeric limits (attach to the requirement that references them, else the last).
@@ -379,6 +789,9 @@ export function splitCredits(
       }
     }
 
+    const applicability = parseApplicability(lines, start, end);
+    const supportingGuidance = parseSupportingGuidance(lines, start, end);
+
     credits.push({
       scheme,
       stage,
@@ -391,6 +804,9 @@ export function splitCredits(
       aim,
       references,
       creditTool,
+      supportingGuidance,
+      applicability,
+      reconciliation: null, // filled by parseManual after document-wide passes
       pageStart: section.pageStart,
       pageEnd: section.pageEnd,
       requirements,

@@ -63,7 +63,14 @@ For each requirement provide:
 - measurable: a SHORT target string exactly as the source supports (e.g. ">= 45% improvement", "<= 27 ug/m3"), or null,
 - reasoning: one sentence justifying the classification, citing what the source says.
 HARD RULES: Use ONLY the provided source text. NEVER invent a requirement, number, unit, or target not present in it. If the source supports the draft, mark it "unchanged".
+NEVER "add" a row that is NOT a scored requirement. Do NOT turn any of these into requirements: a keystone note (e.g. "Keystone Requirement – achieve requirement #1"), an applicability/points footnote (e.g. "Requirement #1 awards 2 points to Hospitality at fit-out"), a "Total N" line, or a bare "Option N –" label. These are annotations, not requirements.
 Respond ONLY as JSON: {"requirements":[{"seq","change","title","metric_type","unit","points_raw","text","measurable","reasoning"}]}.`;
+
+// Text that is an annotation (keystone note, applicability footnote, total,
+// bare option label) rather than a real scored requirement. Such a row must
+// never be ADDED by the verifier — it double-counts points and lacks evidence.
+const NOTE_RE =
+  /(^keystone requirement\b|awards?\s+\d+\s+points?\s+to\b|^total\b|^option\s+\d+\s*[–—-]\s*$)/i;
 
 interface RawReq {
   seq?: number;
@@ -128,7 +135,13 @@ export async function verifyAndCompleteCredit(
           measurable: r.measurable?.toString().trim() || null,
         },
         reasoning: cleanText(r.reasoning ?? ""),
-      }));
+      }))
+      // Drop annotation rows the model tried to ADD as requirements, and any
+      // added row with no text.
+      .filter(
+        (it) =>
+          !(it.change === "added" && (!it.proposed.text || NOTE_RE.test(it.proposed.text))),
+      );
     if (items.length === 0) return null;
 
     // Never let a bad model seq (e.g. -1) through: any non-positive seq gets a

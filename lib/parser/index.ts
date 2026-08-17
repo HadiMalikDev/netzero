@@ -2,9 +2,15 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { parsedCredits, parsedRequirements, sourceDocuments } from "@/db/schema";
+import {
+  parsedCredits,
+  parsedRequirements,
+  rsVersions,
+  sourceDocuments,
+} from "@/db/schema";
 import { extractPdf } from "./extract";
-import { mostadamGate } from "./mostadam";
+import { mostadamGate, parseKeystoneTable, parseScopeTotals } from "./mostadam";
+import { reconcile, type ReconcileReport } from "./reconcile";
 import { shapeCredits } from "./shape";
 import { splitCredits } from "./split";
 import type { ParsedCredit } from "./types";
@@ -17,6 +23,10 @@ export interface ParseResult {
   pageCount: number;
   fullText: string;
   credits: ParsedCredit[];
+  // Per-scope point denominators from the manual's Table 4 (null if none).
+  scopeTotals: Record<string, number> | null;
+  // Reconcile-or-fail self-check against the manual's own totals (null if gated).
+  reconciliation: ReconcileReport | null;
 }
 
 /**
@@ -34,7 +44,7 @@ function dedupeWithinDoc(credits: ParsedCredit[]): ParsedCredit[] {
     }
     const score = (x: ParsedCredit) =>
       x.requirements.length * 10 +
-      x.requirements.reduce((n, r) => n + r.evidenceSpecs.length, 0) +
+      x.requirements.reduce((n, r) => n + r.evidence.length, 0) +
       (x.aim ? 1 : 0);
     // Tie favours the later page (real credits follow the intro example).
     if (score(c) >= score(prev)) best.set(c.code, c);
@@ -66,10 +76,37 @@ export async function parseManual(
       pageCount: ext.pageCount,
       fullText: ext.fullText,
       credits: [],
+      scopeTotals: null,
+      reconciliation: null,
     };
   }
   let credits = splitCredits(ext.pages, gate.scheme!, gate.stage!);
   credits = dedupeWithinDoc(credits);
+
+  // Document-wide overrides: the manual's Keystone Credits table is the
+  // authoritative source for keystone status and category display names.
+  const { keystoneCodes, categoryNames } = parseKeystoneTable(ext.fullText);
+  for (const c of credits) {
+    c.isKeystone = keystoneCodes.has(c.code);
+    const detected = categoryNames.get(c.categoryCode);
+    if (detected) c.categoryName = detected;
+  }
+
+  // Per-scope denominators (Table 4), keyed by the scopes the credit matrices
+  // actually use, in their document order.
+  const scopeOrder: string[] = [];
+  for (const c of credits) {
+    if (!c.applicability) continue;
+    for (const s of Object.keys(c.applicability))
+      if (!scopeOrder.includes(s)) scopeOrder.push(s);
+  }
+  const scopeTotals = parseScopeTotals(ext.fullText, scopeOrder);
+
+  // Reconcile-or-fail: self-validate against the manual's own totals and stamp
+  // each credit with its flag so the reviewer sees where extraction disagrees.
+  const reconciliation = reconcile(credits, scopeTotals);
+  for (const c of credits) c.reconciliation = reconciliation.credits[c.code] ?? null;
+
   if (opts.shape) credits = await shapeCredits(credits);
   return {
     ok: true,
@@ -78,6 +115,8 @@ export async function parseManual(
     pageCount: ext.pageCount,
     fullText: ext.fullText,
     credits,
+    scopeTotals,
+    reconciliation,
   };
 }
 
@@ -148,6 +187,10 @@ export async function parseAndStore(sourceDocumentId: string): Promise<ParseResu
         pointsRaw: c.pointsRaw,
         aim: c.aim,
         references: JSON.stringify(c.references),
+        applicability: c.applicability ? JSON.stringify(c.applicability) : null,
+        supportingGuidance: c.supportingGuidance,
+        toolRef: c.creditTool,
+        reconciliation: c.reconciliation ? JSON.stringify(c.reconciliation) : null,
         pageStart: c.pageStart,
         pageEnd: c.pageEnd,
       });
@@ -162,8 +205,14 @@ export async function parseAndStore(sourceDocumentId: string): Promise<ParseResu
           metricType: r.metricType,
           unit: r.unit,
           pointsRaw: r.pointsRaw,
+          pointsType: r.pointsType,
+          optionGroup: r.optionGroup,
+          keystone: r.keystone,
+          keystoneCondition: r.keystoneCondition,
           numericSpec: r.numericSpec ? JSON.stringify(r.numericSpec) : null,
-          evidenceSpecs: JSON.stringify(r.evidenceSpecs),
+          evidence: JSON.stringify(r.evidence),
+          // Back-compat flat list (deprecated) derived from staged evidence.
+          evidenceSpecs: JSON.stringify(r.evidence.map((e) => e.text)),
           pageStart: r.pageStart,
           pageEnd: r.pageEnd,
         });
@@ -181,6 +230,15 @@ export async function parseAndStore(sourceDocumentId: string): Promise<ParseResu
         rawText: result.fullText.slice(0, 2_000_000),
       })
       .where(eq(sourceDocuments.id, doc.id));
+
+    // Table 4 denominators are a document-wide fact — record them on the version
+    // this parse belongs to, so reconcile/forecast can use them later.
+    if (doc.rsVersionId && result.scopeTotals) {
+      await db
+        .update(rsVersions)
+        .set({ scopeTotals: JSON.stringify(result.scopeTotals) })
+        .where(eq(rsVersions.id, doc.rsVersionId));
+    }
 
     return result;
   } catch (e) {

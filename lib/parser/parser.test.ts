@@ -60,6 +60,71 @@ d("Commercial D+C parser (known-good HC-10 check)", () => {
     // Citations point at the source pages (HC-10 is on pp.182-185 of the PDF).
     expect(hc10!.pageStart).toBeGreaterThanOrEqual(180);
     expect(hc10!.pageStart).toBeLessThanOrEqual(186);
+
+    const typologies = Object.keys(hc10!.applicability?.["Full Scope"] ?? {});
+    expect(typologies.length).toBeGreaterThanOrEqual(4);
+    expect(typologies.every((t) => !/^col\d+$/.test(t))).toBe(true);
+  });
+
+  it("does not split TC-03 at a mid-sentence digit", async () => {
+    const data = new Uint8Array(await readFile(MANUAL));
+    const res = await parseManual(data);
+    const tc03 = res.credits.find((c) => c.code === "TC-03");
+    expect(tc03, "TC-03 must be extracted").toBeDefined();
+    expect(tc03!.requirements).toHaveLength(2);
+    const [r1, r2] = tc03!.requirements;
+    expect(r1.pointsRaw).toBe("1");
+    expect(r2.pointsRaw).toBe("1");
+    expect(r2.text).toMatch(/3 additional amenities/i);
+    expect(r2.text).not.toMatch(/^additional amenities/i);
+    expect(r1.evidence.some((e) => e.stage === "design")).toBe(true);
+    expect(r2.evidence.some((e) => e.stage === "design")).toBe(true);
+    expect(r1.evidence.some((e) => e.stage === "construction")).toBe(true);
+    expect(r2.evidence.some((e) => e.stage === "construction")).toBe(true);
+  });
+
+  it("splits HC-16's empty #2 from the leftover bullet, not from guidance", async () => {
+    const data = new Uint8Array(await readFile(MANUAL));
+    const res = await parseManual(data);
+    const hc16 = res.credits.find((c) => c.code === "HC-16");
+    expect(hc16, "HC-16 must be extracted").toBeDefined();
+    expect(hc16!.requirements).toHaveLength(2);
+    expect(hc16!.reconciliation?.ok).toBe(true);
+    const [r1, r2] = hc16!.requirements;
+    expect(r1.pointsRaw).toBe("1");
+    expect(r2.pointsRaw).toBe("1");
+    expect(r2.text).toMatch(/green walls/i);
+    expect(r2.text).not.toMatch(/2%\s+of the floor area/i);
+  });
+
+  it("reconciles to the manual's own totals and populates staged evidence", async () => {
+    const data = new Uint8Array(await readFile(MANUAL));
+    const res = await parseManual(data);
+
+    // Every credit parses at least one requirement (no silent drop-outs).
+    expect(res.credits.every((c) => c.requirements.length > 0)).toBe(true);
+
+    // Per-scope reconcile matches Table 4 (Full = 130, Shell only = 35, …).
+    expect(res.scopeTotals).toEqual({
+      "Shell Only": 35,
+      "Core & Shell": 130,
+      "Fit Out": 100,
+      "Full Scope": 130,
+    });
+    expect(res.reconciliation?.scopes.every((s) => s.ok)).toBe(true);
+
+    // Evidence is split by submission stage and broadly populated.
+    const hc10 = res.credits.find((c) => c.code === "HC-10")!;
+    const r1 = hc10.requirements[0];
+    expect(r1.evidence.some((e) => e.stage === "design")).toBe(true);
+    expect(r1.evidence.some((e) => e.stage === "construction")).toBe(true);
+
+    const withEvidence = res.credits.reduce(
+      (n, c) => n + c.requirements.filter((r) => r.evidence.length > 0).length,
+      0,
+    );
+    const totalReq = res.credits.reduce((n, c) => n + c.requirements.length, 0);
+    expect(withEvidence / totalReq).toBeGreaterThan(0.7);
   });
 
   it("rejects a non-Mostadam document", async () => {

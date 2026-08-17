@@ -1,0 +1,32 @@
+{
+  "_comment": "Hand-authored expectations verified against the public Mostadam Commercial manuals. Spans D+C AND O+E to prove the extractor generalizes, not overfits. Consumed by lib/parser/ground-truth.test.ts.",
+  "commercial-dc.pdf": {
+    "scheme": "commercial",
+    "stage": "D+C",
+    "pageCount": 269,
+    "keystoneCount": 15,
+    "keystoneCodes": ["SS-01", "SS-02", "E-01", "E-02", "W-01", "W-02", "W-03", "HC-01", "HC-02", "HC-03", "HC-04", "HC-05", "MW-01", "EI-01", "PMM-01"],
+    "scopeTotals": { "Shell Only": 35, "Core & Shell": 130, "Fit Out": 100, "Full Scope": 130 },
+    "scopesReconcile": true,
+    "credits": {
+      "HC-10": { "title": "Indoor Air Quality", "categoryName": "Health and Comfort", "isKeystone": false, "pointsRaw": "3", "requirementCount": 2 },
+      "HC-16": { "title": "Indoor Vegetation", "isKeystone": false, "pointsRaw": "2", "requirementCount": 2 },
+      "TC-03": { "title": "Access to Amenities", "isKeystone": false, "pointsRaw": "2", "requirementCount": 2 },
+      "E-01": { "title": "Energy Performance", "categoryName": "Energy", "isKeystone": true, "pointsRaw": "15", "requirementCount": 2, "optionGroup": "E-01 options" },
+      "W-01": { "title": "Indoor Water Performance", "categoryName": "Water", "isKeystone": true, "pointsRaw": "10", "requirementCount": 2 },
+      "SS-05": { "title": "Heat Island Effect", "categoryName": "Site Sustainability", "isKeystone": false, "pointsRaw": "2", "requirementCount": 2 }
+    }
+  },
+  "commercial-oe.pdf": {
+    "scheme": "commercial",
+    "stage": "O+E",
+    "pageCount": 236,
+    "keystoneCount": 13,
+    "keystoneCodes": ["PMM-01", "PMM-02", "PMM-03", "PMM-04", "E-01", "E-02", "E-03", "W-01", "W-02", "HC-01", "HC-02", "HC-03", "EI-01"],
+    "scopeTotals": null,
+    "credits": {
+      "HC-01": { "categoryName": "Health and Comfort", "isKeystone": true },
+      "PMM-01": { "isKeystone": true }
+    }
+  }
+}
