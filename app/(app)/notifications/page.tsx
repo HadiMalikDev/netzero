@@ -3,7 +3,7 @@ import { NotInSlice } from "@/components/EmptyState";
 
 export default function NotificationsPage() {
   return (
-    <PageChrome crumbs={[{ label: "Home" }, { label: "Notifications" }]}>
+    <PageChrome crumbs={[{ label: "Home", href: "/dashboard" }, { label: "Notifications" }]}>
       <PageHeader title="Notifications" />
       <NotInSlice name="Notifications" />
     </PageChrome>

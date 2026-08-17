@@ -32,7 +32,7 @@ export default async function DashboardPage() {
   );
 
   return (
-    <PageChrome crumbs={[{ label: "Home" }, { label: "Dashboard" }]}>
+    <PageChrome crumbs={[{ label: "Home", href: "/dashboard" }, { label: "Dashboard" }]}>
       <PageHeader
         title="Dashboard"
         subtitle="Real counts across your projects — no placeholder metrics."

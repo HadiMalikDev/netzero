@@ -19,7 +19,12 @@ export default async function CatalogAdminPage() {
   }
 
   return (
-    <PageChrome crumbs={[{ label: "Admin" }, { label: "Catalog" }]}>
+    <PageChrome
+      crumbs={[
+        { label: "Admin", href: "/admin/catalog" },
+        { label: "Catalog" },
+      ]}
+    >
       <PageHeader
         title="Rating-system catalog"
         subtitle="Standardized Mostadam rulebooks, authored once from a manual and reused by every project."

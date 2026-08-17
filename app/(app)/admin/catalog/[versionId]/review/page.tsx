@@ -23,9 +23,9 @@ export default async function VersionReviewPage({
     <PageChrome
       fullBleed
       crumbs={[
-        { label: "Admin" },
-        { label: "Catalog" },
-        { label: `${v.version.scheme} ${v.version.stage}` },
+        { label: "Admin", href: "/admin/catalog" },
+        { label: "Catalog", href: "/admin/catalog" },
+        { label: `${v.version.scheme} ${v.version.stage}`, href: `/admin/catalog/${versionId}` },
         { label: "Parsed drafts" },
       ]}
     >

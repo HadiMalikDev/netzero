@@ -10,7 +10,7 @@ export default async function DocumentsResolverPage() {
   const id = await firstProjectId();
   if (id) redirect(`/projects/${id}/documents`);
   return (
-    <PageChrome crumbs={[{ label: "Home" }, { label: "Documents" }]}>
+    <PageChrome crumbs={[{ label: "Home", href: "/dashboard" }, { label: "Documents" }]}>
       <PageHeader title="Documents" />
       <EmptyState
         title="No project yet"

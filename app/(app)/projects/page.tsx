@@ -13,7 +13,12 @@ export default async function ProjectsPage() {
   );
 
   return (
-    <PageChrome crumbs={[{ label: "Home" }, { label: "Projects" }]}>
+    <PageChrome
+      crumbs={[
+        { label: "Home", href: "/dashboard" },
+        { label: "Projects" },
+      ]}
+    >
       <PageHeader
         title="Projects"
         subtitle="Each project tracks one or more Mostadam manuals."

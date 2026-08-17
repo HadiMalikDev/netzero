@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { logout } from "@/app/(auth)/actions";
 import { BellIcon, SearchIcon } from "@/components/icons";
 
@@ -26,15 +27,24 @@ export function TopBar({
         {crumbs.map((c, i) => (
           <span key={i} className="flex items-center gap-1.5">
             {i > 0 ? <span className="text-slate-300">/</span> : null}
-            <span
-              className={
-                i === crumbs.length - 1
-                  ? "font-medium text-slate-800"
-                  : "text-slate-400"
-              }
-            >
-              {c.label}
-            </span>
+            {c.href && i < crumbs.length - 1 ? (
+              <Link
+                href={c.href}
+                className="text-slate-400 hover:text-slate-700 hover:underline"
+              >
+                {c.label}
+              </Link>
+            ) : (
+              <span
+                className={
+                  i === crumbs.length - 1
+                    ? "font-medium text-slate-800"
+                    : "text-slate-400"
+                }
+              >
+                {c.label}
+              </span>
+            )}
           </span>
         ))}
       </nav>

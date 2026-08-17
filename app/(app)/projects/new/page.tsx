@@ -17,8 +17,8 @@ export default async function NewProjectPage() {
   return (
     <PageChrome
       crumbs={[
-        { label: "Home" },
-        { label: "Projects" },
+        { label: "Home", href: "/dashboard" },
+        { label: "Projects", href: "/projects" },
         { label: "New Project" },
       ]}
     >

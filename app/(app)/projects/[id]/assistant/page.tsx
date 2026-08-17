@@ -14,8 +14,8 @@ export default async function AssistantPage({
   return (
     <PageChrome
       crumbs={[
-        { label: "Projects" },
-        { label: project.name },
+        { label: "Projects", href: "/projects" },
+        { label: project.name, href: `/projects/${id}` },
         { label: "AI Assistant" },
       ]}
     >

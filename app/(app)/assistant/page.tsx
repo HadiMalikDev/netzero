@@ -10,7 +10,7 @@ export default async function AssistantResolverPage() {
   const id = await firstProjectId();
   if (id) redirect(`/projects/${id}/assistant`);
   return (
-    <PageChrome crumbs={[{ label: "Home" }, { label: "AI Assistant" }]}>
+    <PageChrome crumbs={[{ label: "Home", href: "/dashboard" }, { label: "AI Assistant" }]}>
       <PageHeader title="AI Assistant" />
       <EmptyState
         title="No project yet"

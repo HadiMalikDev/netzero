@@ -10,7 +10,7 @@ export default async function CreditsResolverPage() {
   const id = await firstProjectId();
   if (id) redirect(`/projects/${id}/credits`);
   return (
-    <PageChrome crumbs={[{ label: "Home" }, { label: "Credits" }]}>
+    <PageChrome crumbs={[{ label: "Home", href: "/dashboard" }, { label: "Credits" }]}>
       <PageHeader title="Credits" />
       <EmptyState
         title="No project yet"

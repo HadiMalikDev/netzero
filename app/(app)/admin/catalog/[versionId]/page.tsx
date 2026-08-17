@@ -18,8 +18,8 @@ export default async function VersionDetailPage({
   return (
     <PageChrome
       crumbs={[
-        { label: "Admin" },
-        { label: "Catalog" },
+        { label: "Admin", href: "/admin/catalog" },
+        { label: "Catalog", href: "/admin/catalog" },
         { label: `${v.ratingSystemName} ${v.version.scheme} ${v.version.stage}` },
       ]}
     >
