@@ -71,6 +71,8 @@ export interface RequirementView {
   metricType: string;
   unit: string | null;
   pointsRaw: string | null;
+  optionGroup: string | null;
+  pointsType: string | null;
   target: string | null; // human-readable expected value, if the catalog has one
   numericSpec: unknown;
   evidenceSpecs: string[];
@@ -141,6 +143,8 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       metricType: catalogRequirements.metricType,
       unit: catalogRequirements.unit,
       pointsRaw: catalogRequirements.pointsRaw,
+      optionGroup: catalogRequirements.optionGroup,
+      pointsType: catalogRequirements.pointsType,
       numericSpec: catalogRequirements.numericSpec,
       evidenceSpecs: catalogRequirements.evidenceSpecs,
       pageStart: catalogRequirements.sourcePageStart,
@@ -197,6 +201,8 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       metricType: e.metricType,
       unit: e.unit,
       pointsRaw: e.pointsRaw,
+      optionGroup: e.optionGroup,
+      pointsType: e.pointsType,
       target: summarizeSpec(e.numericSpec),
       numericSpec: e.numericSpec ? JSON.parse(e.numericSpec) : null,
       evidenceSpecs,

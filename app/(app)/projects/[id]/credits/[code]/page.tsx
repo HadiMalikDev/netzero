@@ -7,6 +7,8 @@ import { getCreditByCode, getProject } from "@/lib/data";
 import { updateCreditEntries } from "../../../actions";
 import { RequirementItem } from "./RequirementItem";
 import { SaveCreditButton } from "./SaveCreditButton";
+import { groupByOption } from "@/lib/option-group";
+import { OptionGroup } from "@/components/OptionGroup";
 
 export default async function CreditDetailPage({
   params,
@@ -82,15 +84,26 @@ export default async function CreditDetailPage({
           Requirements Checklist
         </h2>
         <div>
-          {credit.requirements.map((req) => (
-            <RequirementItem
-              key={req.entryId}
-              req={req}
-              projectId={id}
-              code={credit.code}
-              rsVersionId={project.rsVersionId}
-            />
-          ))}
+          {groupByOption(credit.requirements).map((block, i) => {
+            const items = block.kind === "xor" ? block.items : [block.item];
+            const body = items.map((req) => (
+              <RequirementItem
+                key={req.entryId}
+                req={req}
+                projectId={id}
+                code={credit.code}
+                rsVersionId={project.rsVersionId}
+                grouped={block.kind === "xor"}
+              />
+            ));
+            if (block.kind === "xor")
+              return (
+                <OptionGroup key={`xor-${block.group}-${i}`} count={items.length}>
+                  {body}
+                </OptionGroup>
+              );
+            return <div key={items[0].entryId}>{body}</div>;
+          })}
         </div>
       </Card>
     </PageChrome>

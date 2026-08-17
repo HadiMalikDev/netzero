@@ -36,11 +36,13 @@ export function RequirementItem({
   projectId,
   code,
   rsVersionId,
+  grouped = false,
 }: {
   req: RequirementView;
   projectId: string;
   code: string;
   rsVersionId: string | null;
+  grouped?: boolean;
 }) {
   const limits =
     (req.numericSpec as { limits?: NumericLimit[] } | null)?.limits ?? [];
@@ -62,6 +64,12 @@ export function RequirementItem({
             {req.pointsRaw ? (
               <span className="text-xs text-slate-400">
                 {req.pointsRaw} pt{req.pointsRaw === "1" ? "" : "s"} ref
+                {req.pointsType === "scaled" ? " (scaled)" : ""}
+              </span>
+            ) : null}
+            {req.optionGroup && !grouped ? (
+              <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
+                Option (either/or)
               </span>
             ) : null}
             {req.target ? (
