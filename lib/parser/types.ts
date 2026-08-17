@@ -1,5 +1,16 @@
 export type MetricType = "BOOLEAN" | "NUMERIC" | "DESCRIPTIVE";
 export type PointsType = "fixed" | "scaled" | "shared";
+
+/** True when `v` is exactly one of the metric-type literals. */
+export function isMetricType(v: unknown): v is MetricType {
+  return v === "BOOLEAN" || v === "NUMERIC" || v === "DESCRIPTIVE";
+}
+
+/** Coerce any model output to a MetricType, defaulting to DESCRIPTIVE. */
+export function normMetricType(v: unknown): MetricType {
+  const s = String(v ?? "").toUpperCase();
+  return isMetricType(s) ? s : "DESCRIPTIVE";
+}
 // The submission stage label as declared by the document (e.g. "design",
 // "construction", or "unknown" for single-stage manuals like O+E). Not a fixed
 // union — stage vocabulary varies across the Mostadam family.

@@ -1,3 +1,4 @@
+import { parseNum } from "./num";
 import { reduceByOption } from "./option-group";
 import type { BandSet, ScoreBand } from "./parser/types";
 import type { Status } from "./status";
@@ -37,8 +38,10 @@ export function creditPointsRange(
     maxBand = maxBand == null ? range.max : Math.max(maxBand, range.max);
   }
   if (min == null) return null;
-  const cap = num(creditMax);
-  return { min, max: cap ?? maxBand! };
+  const cap = parseNum(creditMax);
+  // Never invert the range: a declared credit Total below the smallest band's
+  // min would otherwise yield max < min.
+  return { min, max: Math.max(min, cap ?? maxBand!) };
 }
 
 export function formatPointsSpan(min: number, max: number): string {
@@ -54,12 +57,6 @@ export function pointsForValue(bands: ScoreBand[], value: number): number {
     if (value >= b.min) pts = b.points;
   }
   return pts;
-}
-
-function num(s: string | null | undefined): number | null {
-  if (s == null || s === "") return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
 }
 
 export interface PointsReq {
@@ -87,9 +84,9 @@ export function pointsAwarded(
       const look = pointsForValue(bands, req.valueNumber);
       return mode === "earned" && !completed ? 0 : look;
     }
-    return completed ? (num(req.pointsRaw) ?? 0) : 0;
+    return completed ? (parseNum(req.pointsRaw) ?? 0) : 0;
   }
-  return completed ? (num(req.pointsRaw) ?? 0) : 0;
+  return completed ? (parseNum(req.pointsRaw) ?? 0) : 0;
 }
 
 /** XOR groups contribute MAX; everything else sums; then cap at credit Total. */
@@ -99,6 +96,6 @@ export function creditPointsEarned(
   mode: "earned" | "preview" = "earned",
 ): number {
   const sum = reduceByOption(reqs, (r) => pointsAwarded(r, mode));
-  const cap = num(creditMax);
+  const cap = parseNum(creditMax);
   return cap == null ? sum : Math.min(cap, sum);
 }

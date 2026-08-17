@@ -1,5 +1,5 @@
 import { chatJSON, hasLLM } from "@/lib/ai/openrouter";
-import type { ParsedCredit } from "./types";
+import { isMetricType, type ParsedCredit } from "./types";
 
 /**
  * AI-shape layer. Operates ONLY on already-cut chunks and is forbidden from
@@ -18,10 +18,6 @@ const SYSTEM =
 
 interface ShapeResult {
   items?: { seq: number; metric_type?: string; unit?: string | null }[];
-}
-
-function valid(mt: unknown): mt is "BOOLEAN" | "NUMERIC" | "DESCRIPTIVE" {
-  return mt === "BOOLEAN" || mt === "NUMERIC" || mt === "DESCRIPTIVE";
 }
 
 /** Refine metric types for one credit's requirements in a single call. */
@@ -52,7 +48,7 @@ export async function shapeCredit(credit: ParsedCredit): Promise<ParsedCredit> {
       // Never downgrade a requirement that has a hard limits table.
       if (r.numericSpec?.limits?.length) continue;
       const hit = byseq.get(r.seq);
-      if (hit && valid(hit.metric_type)) {
+      if (hit && isMetricType(hit.metric_type)) {
         r.metricType = hit.metric_type;
         if (hit.metric_type === "NUMERIC" && hit.unit) r.unit = hit.unit;
       }

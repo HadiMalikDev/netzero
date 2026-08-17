@@ -112,7 +112,7 @@ export async function chatJSON<T = unknown>(
   return parseJSON<T>(raw);
 }
 
-export function parseJSON<T = unknown>(raw: string): T {
+function parseJSON<T = unknown>(raw: string): T {
   let s = raw.trim();
   // Strip markdown fences if the model added them despite json mode.
   const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);

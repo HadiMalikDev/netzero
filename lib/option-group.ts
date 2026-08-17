@@ -4,7 +4,13 @@ export type OptionBlock<T> =
   | { kind: "single"; item: T }
   | { kind: "xor"; group: string; items: T[] };
 
-/** Consecutive items sharing a non-null optionGroup become one XOR block. */
+/**
+ * Consecutive items sharing a non-null optionGroup become one XOR block.
+ * INVARIANT: callers must pass requirements in document order (by `seq`) — this
+ * only merges *adjacent* same-group rows, so an unsorted list would split one
+ * XOR group into several, changing both status and points. Every current caller
+ * sorts first (see data.ts:getProjectCredits) or receives split output in order.
+ */
 export function groupByOption<T extends Optioned>(items: T[]): OptionBlock<T>[] {
   const out: OptionBlock<T>[] = [];
   for (const item of items) {

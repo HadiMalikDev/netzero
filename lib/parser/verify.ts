@@ -1,5 +1,6 @@
 import { chatJSON, hasLLM } from "@/lib/ai/openrouter";
 import { cleanText } from "./text";
+import { normMetricType } from "./types";
 
 /**
  * Grounded "verify & complete" pass. Given a credit's ACTUAL source pages plus
@@ -84,11 +85,6 @@ interface RawReq {
   reasoning?: string;
 }
 
-function normType(v: unknown): "BOOLEAN" | "NUMERIC" | "DESCRIPTIVE" {
-  const s = String(v ?? "").toUpperCase();
-  return s === "NUMERIC" || s === "BOOLEAN" ? s : "DESCRIPTIVE";
-}
-
 function normChange(v: unknown): ChangeKind {
   const s = String(v ?? "").toLowerCase();
   return s === "corrected" || s === "added" ? s : "unchanged";
@@ -129,7 +125,7 @@ export async function verifyAndCompleteCredit(
         proposed: {
           title: r.title?.toString().trim() || null,
           text: cleanText(r.text ?? ""),
-          metricType: normType(r.metric_type),
+          metricType: normMetricType(r.metric_type),
           unit: r.unit?.toString().trim() || null,
           pointsRaw: r.points_raw?.toString().trim() || null,
           measurable: r.measurable?.toString().trim() || null,
