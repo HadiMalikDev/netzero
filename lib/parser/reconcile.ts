@@ -1,3 +1,4 @@
+import { reduceByOption } from "@/lib/option-group";
 import type { Applicability, CreditReconcile, ParsedCredit } from "./types";
 
 /**
@@ -32,24 +33,17 @@ const num = (s: string | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+function requirementPoints(r: { pointsRaw: string | null }): number {
+  return num(r.pointsRaw) ?? 0;
+}
+
 /**
- * Recompute a credit's points from its requirements. Requirements sharing an
- * `option_group` are mutually exclusive (XOR) → they contribute their MAX;
- * everything else sums. Requirements with no parsed points contribute 0.
+ * Recompute a credit's points from its requirements. Consecutive rows that
+ * share an `option_group` are mutually exclusive (XOR) → they contribute
+ * their MAX; everything else sums. Rows with no parsed points contribute 0.
  */
 export function expectedCreditPoints(credit: ParsedCredit): number {
-  const groups = new Map<string, number>(); // option_group -> running max
-  let sum = 0;
-  for (const r of credit.requirements) {
-    const p = num(r.pointsRaw) ?? 0;
-    if (r.optionGroup) {
-      groups.set(r.optionGroup, Math.max(groups.get(r.optionGroup) ?? 0, p));
-    } else {
-      sum += p;
-    }
-  }
-  for (const v of groups.values()) sum += v;
-  return sum;
+  return reduceByOption(credit.requirements, requirementPoints);
 }
 
 /**
@@ -61,15 +55,7 @@ export function reconcileFromParts(
   creditPointsRaw: string | null,
   reqs: { pointsRaw: string | null; optionGroup: string | null }[],
 ): CreditReconcile {
-  const groups = new Map<string, number>();
-  let sum = 0;
-  for (const r of reqs) {
-    const p = num(r.pointsRaw) ?? 0;
-    if (r.optionGroup)
-      groups.set(r.optionGroup, Math.max(groups.get(r.optionGroup) ?? 0, p));
-    else sum += p;
-  }
-  for (const v of groups.values()) sum += v;
+  const sum = reduceByOption(reqs, requirementPoints);
   const expected = num(creditPointsRaw);
   if (expected == null)
     return { ok: true, expected: null, got: sum, note: "no credit total in manual; nothing to reconcile against" };
@@ -83,23 +69,7 @@ export function reconcileFromParts(
 }
 
 export function reconcileCredit(credit: ParsedCredit): CreditReconcile {
-  const expected = num(credit.pointsRaw);
-  const got = expectedCreditPoints(credit);
-  if (expected == null) {
-    return {
-      ok: true,
-      expected: null,
-      got,
-      note: "no credit total in manual; nothing to reconcile against",
-    };
-  }
-  const ok = expected === got;
-  return {
-    ok,
-    expected,
-    got,
-    note: ok ? "" : `requirements sum to ${got} but credit Total is ${expected}`,
-  };
+  return reconcileFromParts(credit.pointsRaw, credit.requirements);
 }
 
 /**

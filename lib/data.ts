@@ -10,9 +10,9 @@ import {
   requirementEntries,
 } from "@/db/schema";
 import {
-  blockingRequirements,
   deriveCreditStatus,
   deriveRequirementStatus,
+  missingEvidenceRequirements,
   type Status,
 } from "./status";
 import { summarizeSpec } from "./catalog";
@@ -345,9 +345,7 @@ export async function getProjectOverview(
     const cat = catMap.get(c.categoryCode) ?? { name: c.categoryName, count: 0 };
     cat.count++;
     catMap.set(c.categoryCode, cat);
-    for (const r of blockingRequirements(c.requirements)) {
-      if (r.requiresEvidence && r.evidenceCount === 0) missingEvidence++;
-    }
+    missingEvidence += missingEvidenceRequirements(c.requirements).length;
   }
   return {
     totalCredits: credits.length,

@@ -1,4 +1,4 @@
-import { groupByOption } from "./option-group";
+import { reduceByOption } from "./option-group";
 import type { BandSet, ScoreBand } from "./parser/types";
 import type { Status } from "./status";
 
@@ -98,13 +98,7 @@ export function creditPointsEarned(
   creditMax: string | null,
   mode: "earned" | "preview" = "earned",
 ): number {
-  const blocks = groupByOption(reqs);
-  let sum = 0;
-  for (const b of blocks) {
-    if (b.kind === "xor")
-      sum += Math.max(0, ...b.items.map((r) => pointsAwarded(r, mode)));
-    else sum += pointsAwarded(b.item, mode);
-  }
+  const sum = reduceByOption(reqs, (r) => pointsAwarded(r, mode));
   const cap = num(creditMax);
   return cap == null ? sum : Math.min(cap, sum);
 }

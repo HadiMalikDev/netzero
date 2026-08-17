@@ -13,7 +13,7 @@
  *     otherwise in_progress until every slot is satisfied.
  */
 
-import { groupByOption } from "./option-group";
+import { mapByOption } from "./option-group";
 
 export type Status = "not_started" | "in_progress" | "completed";
 
@@ -62,10 +62,10 @@ function xorBlockStatus(statuses: Status[]): Status {
 
 export function deriveCreditStatus(reqs: CreditStatusReq[]): Status {
   if (reqs.length === 0) return "not_started";
-  const parts = groupByOption(reqs).map((block) =>
-    block.kind === "xor"
-      ? xorBlockStatus(block.items.map((i) => i.status))
-      : block.item.status,
+  const parts = mapByOption(
+    reqs,
+    (items) => xorBlockStatus(items.map((i) => i.status)),
+    (item) => item.status,
   );
   if (parts.every((s) => s === "completed")) return "completed";
   if (parts.every((s) => s === "not_started")) return "not_started";
@@ -74,14 +74,17 @@ export function deriveCreditStatus(reqs: CreditStatusReq[]): Status {
 
 /** Rows that still block credit completion. A satisfied XOR group drops every option. */
 export function blockingRequirements<T extends CreditStatusReq>(reqs: T[]): T[] {
-  const out: T[] = [];
-  for (const block of groupByOption(reqs)) {
-    if (block.kind === "xor") {
-      if (block.items.some((i) => i.status === "completed")) continue;
-      out.push(...block.items);
-    } else if (block.item.status !== "completed") {
-      out.push(block.item);
-    }
-  }
-  return out;
+  return mapByOption(
+    reqs,
+    (items) => (items.some((i) => i.status === "completed") ? [] : items),
+    (item) => (item.status !== "completed" ? [item] : []),
+  ).flat();
+}
+
+export function missingEvidenceRequirements<
+  T extends CreditStatusReq & { requiresEvidence: boolean; evidenceCount: number },
+>(reqs: T[]): T[] {
+  return blockingRequirements(reqs).filter(
+    (r) => r.requiresEvidence && r.evidenceCount === 0,
+  );
 }
