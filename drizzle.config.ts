@@ -1,10 +1,11 @@
 import { defineConfig } from "drizzle-kit";
+import { databaseUrl } from "./db/env";
 
 export default defineConfig({
-  dialect: "sqlite",
+  dialect: "postgresql",
   schema: "./db/schema.ts",
   out: "./db/migrations",
   dbCredentials: {
-    url: process.env.DATABASE_URL || ".data/netzero.db",
+    url: databaseUrl(),
   },
 });

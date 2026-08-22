@@ -22,6 +22,7 @@ import {
   formatPageSpan,
 } from "@/lib/ai/review-notes";
 import { CatalogReport } from "@/lib/pdf/CatalogReport";
+import { describeDb } from "./helpers/postgres";
 
 describe("review-note fallback (deterministic, no LLM)", () => {
   it("formats page spans", () => {
@@ -61,7 +62,7 @@ const TEST_LABEL = `export-test-${Date.now().toString(36)}`;
 let versionId = "";
 const docId = randomUUID();
 
-describe("getVersionForExport + PDF render", () => {
+describeDb("getVersionForExport + PDF render", () => {
   beforeAll(async () => {
     const [ws] = await db
       .select()

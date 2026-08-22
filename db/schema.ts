@@ -1,14 +1,16 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
+  doublePrecision,
   index,
   integer,
-  sqliteTable,
+  pgTable,
   text,
   uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
 /**
- * Schema (SQLite via Drizzle).
+ * Schema (Postgres via Drizzle).
  *
  * Three layers:
  *  1. CANONICAL CATALOG (shared, versioned): rating_system -> rs_version ->
@@ -25,17 +27,20 @@ import {
  *
  * Solo, single workspace: `workspaceId` is kept on every row so multi-tenant can
  * land later, but there is exactly one workspace now.
+ *
+ * Timestamps stay as unix-epoch seconds (integer) so existing app code is
+ * unchanged. JSON blobs stay text; callers parse them.
  */
 
-const now = sql`(unixepoch())`;
+const now = sql`(extract(epoch from now())::integer)`;
 
-export const workspaces = sqliteTable("workspace", {
+export const workspaces = pgTable("workspace", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   createdAt: integer("created_at").notNull().default(now),
 });
 
-export const users = sqliteTable("user", {
+export const users = pgTable("app_user", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id")
     .notNull()
@@ -50,12 +55,12 @@ export const users = sqliteTable("user", {
 // 1. CANONICAL CATALOG (shared, versioned)
 // ============================================================
 
-export const ratingSystems = sqliteTable("rating_system", {
+export const ratingSystems = pgTable("rating_system", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id")
     .notNull()
     .references(() => workspaces.id),
-  key: text("key").notNull(), // e.g. mostadam
+  key: text("key").notNull(),
   name: text("name").notNull(),
   authority: text("authority"),
   country: text("country"),
@@ -63,7 +68,7 @@ export const ratingSystems = sqliteTable("rating_system", {
 });
 
 /** A scheme + stage + version_label is the addressable rating-system version. */
-export const rsVersions = sqliteTable(
+export const rsVersions = pgTable(
   "rs_version",
   {
     id: text("id").primaryKey(),
@@ -73,13 +78,12 @@ export const rsVersions = sqliteTable(
     ratingSystemId: text("rating_system_id")
       .notNull()
       .references(() => ratingSystems.id),
-    scheme: text("scheme").notNull(), // residential | commercial | communities
-    stage: text("stage").notNull(), // D+C | O+E
-    versionLabel: text("version_label").notNull(), // e.g. 2019
-    status: text("status").notNull().default("draft"), // draft | published
-    sourceDocumentId: text("source_document_id"), // the manual it was authored from
-    // Table 4 denominators: { "Shell only": 35, "Core & Shell": 130, ... }
-    scopeTotals: text("scope_totals"), // JSON
+    scheme: text("scheme").notNull(),
+    stage: text("stage").notNull(),
+    versionLabel: text("version_label").notNull(),
+    status: text("status").notNull().default("draft"),
+    sourceDocumentId: text("source_document_id"),
+    scopeTotals: text("scope_totals"),
     notes: text("notes"),
     createdAt: integer("created_at").notNull().default(now),
   },
@@ -93,7 +97,7 @@ export const rsVersions = sqliteTable(
   ],
 );
 
-export const catalogCredits = sqliteTable(
+export const catalogCredits = pgTable(
   "catalog_credit",
   {
     id: text("id").primaryKey(),
@@ -103,25 +107,19 @@ export const catalogCredits = sqliteTable(
     rsVersionId: text("rs_version_id")
       .notNull()
       .references(() => rsVersions.id),
-    code: text("code").notNull(), // e.g. HC-10
+    code: text("code").notNull(),
     title: text("title").notNull(),
-    categoryCode: text("category_code").notNull(), // prefix, e.g. HC
-    categoryName: text("category_name").notNull(), // e.g. Health and Comfort
-    isKeystone: integer("is_keystone", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    categoryCode: text("category_code").notNull(),
+    categoryName: text("category_name").notNull(),
+    isKeystone: boolean("is_keystone").notNull().default(false),
     pointsRaw: text("points_raw"),
     aim: text("aim"),
-    // Plain-language "what to verify on pp.X–Y" note for the extraction-review
-    // PDF, generated once (LLM-backed, deterministic fallback) and cached here.
     reviewNote: text("review_note"),
-    references: text("references"), // JSON string[]
-    // Credit Applicability Conditions: { scope: { typology: points|null } }
-    applicability: text("applicability"), // JSON
+    references: text("references"),
+    applicability: text("applicability"),
     supportingGuidance: text("supporting_guidance"),
     toolRef: text("tool_ref"),
-    // Extractor↔manual reconciliation flags: { ok, expected, got, note }
-    reconciliation: text("reconciliation"), // JSON
+    reconciliation: text("reconciliation"),
     sourcePageStart: integer("source_page_start"),
     sourcePageEnd: integer("source_page_end"),
     createdAt: integer("created_at").notNull().default(now),
@@ -129,7 +127,7 @@ export const catalogCredits = sqliteTable(
   (t) => [uniqueIndex("catalog_credit_unique").on(t.rsVersionId, t.code)],
 );
 
-export const catalogRequirements = sqliteTable("catalog_requirement", {
+export const catalogRequirements = pgTable("catalog_requirement", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id")
     .notNull()
@@ -140,18 +138,16 @@ export const catalogRequirements = sqliteTable("catalog_requirement", {
   seq: integer("seq").notNull(),
   title: text("title"),
   text: text("text").notNull(),
-  metricType: text("metric_type").notNull(), // BOOLEAN | NUMERIC | DESCRIPTIVE
+  metricType: text("metric_type").notNull(),
   unit: text("unit"),
   pointsRaw: text("points_raw"),
-  pointsType: text("points_type"), // fixed | scaled | shared
-  optionGroup: text("option_group"), // XOR grouping label, e.g. "E-01 options"
-  keystone: integer("keystone", { mode: "boolean" }).notNull().default(false),
+  pointsType: text("points_type"),
+  optionGroup: text("option_group"),
+  keystone: boolean("keystone").notNull().default(false),
   keystoneCondition: text("keystone_condition"),
-  // Reference values: { limits?: [...], threshold?: {...}, bands?: [...] }
-  numericSpec: text("numeric_spec"), // JSON
-  // Evidence per stage: [{ stage: "design"|"construction", text }]
-  evidence: text("evidence"), // JSON
-  evidenceSpecs: text("evidence_specs"), // JSON string[] (deprecated; kept for back-compat)
+  numericSpec: text("numeric_spec"),
+  evidence: text("evidence"),
+  evidenceSpecs: text("evidence_specs"),
   sourcePageStart: integer("source_page_start"),
   sourcePageEnd: integer("source_page_end"),
   createdAt: integer("created_at").notNull().default(now),
@@ -161,18 +157,11 @@ export const catalogRequirements = sqliteTable("catalog_requirement", {
 // 2. PARSE STAGING (parser output; promoted into the catalog)
 // ============================================================
 
-/**
- * One uploaded PDF + its parse job. During catalog authoring it belongs to an
- * `rs_version`. `status`: uploaded -> parsing -> parsed -> failed | rejected
- * (rejected = failed the Mostadam-only gate) -> promoted.
- */
-export const sourceDocuments = sqliteTable("source_document", {
+export const sourceDocuments = pgTable("source_document", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id")
     .notNull()
     .references(() => workspaces.id),
-  // Context: catalog authoring uses rsVersionId; projectId retained/nullable
-  // for any legacy per-project ingestion.
   rsVersionId: text("rs_version_id"),
   projectId: text("project_id"),
   fileName: text("file_name").notNull(),
@@ -187,8 +176,7 @@ export const sourceDocuments = sqliteTable("source_document", {
   createdAt: integer("created_at").notNull().default(now),
 });
 
-/** Draft credit produced by the parser; awaits promotion into the catalog. */
-export const parsedCredits = sqliteTable(
+export const parsedCredits = pgTable(
   "parsed_credit",
   {
     id: text("id").primaryKey(),
@@ -204,29 +192,26 @@ export const parsedCredits = sqliteTable(
     categoryCode: text("category_code").notNull(),
     categoryName: text("category_name").notNull(),
     title: text("title").notNull(),
-    isKeystone: integer("is_keystone", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    isKeystone: boolean("is_keystone").notNull().default(false),
     pointsRaw: text("points_raw"),
     aim: text("aim"),
     references: text("references"),
-    applicability: text("applicability"), // JSON
+    applicability: text("applicability"),
     supportingGuidance: text("supporting_guidance"),
     toolRef: text("tool_ref"),
-    reconciliation: text("reconciliation"), // JSON
+    reconciliation: text("reconciliation"),
     pageStart: integer("page_start"),
     pageEnd: integer("page_end"),
-    promoted: integer("promoted", { mode: "boolean" }).notNull().default(false),
-    dropped: integer("dropped", { mode: "boolean" }).notNull().default(false),
-    // AI verify-&-complete proposal (JSON) awaiting human accept/reject.
+    promoted: boolean("promoted").notNull().default(false),
+    dropped: boolean("dropped").notNull().default(false),
     aiProposal: text("ai_proposal"),
-    aiStatus: text("ai_status"), // proposed | applied | rejected
+    aiStatus: text("ai_status"),
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [index("parsed_credit_doc_idx").on(t.sourceDocumentId, t.code)],
 );
 
-export const parsedRequirements = sqliteTable("parsed_requirement", {
+export const parsedRequirements = pgTable("parsed_requirement", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id")
     .notNull()
@@ -242,14 +227,13 @@ export const parsedRequirements = sqliteTable("parsed_requirement", {
   pointsRaw: text("points_raw"),
   pointsType: text("points_type"),
   optionGroup: text("option_group"),
-  keystone: integer("keystone", { mode: "boolean" }).notNull().default(false),
+  keystone: boolean("keystone").notNull().default(false),
   keystoneCondition: text("keystone_condition"),
   numericSpec: text("numeric_spec"),
-  evidence: text("evidence"), // JSON [{stage,text}]
+  evidence: text("evidence"),
   evidenceSpecs: text("evidence_specs"),
   pageStart: integer("page_start"),
   pageEnd: integer("page_end"),
-  // Provenance: deterministic | ai_added | ai_corrected.
   origin: text("origin").notNull().default("deterministic"),
   createdAt: integer("created_at").notNull().default(now),
 });
@@ -258,7 +242,7 @@ export const parsedRequirements = sqliteTable("parsed_requirement", {
 // 3. PROJECT INSTANCE (instantiated from the canonical catalog)
 // ============================================================
 
-export const projects = sqliteTable("project", {
+export const projects = pgTable("project", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id")
     .notNull()
@@ -271,8 +255,7 @@ export const projects = sqliteTable("project", {
   createdAt: integer("created_at").notNull().default(now),
 });
 
-/** Instance of a canonical catalog credit inside a project's live checklist. */
-export const projectCredits = sqliteTable(
+export const projectCredits = pgTable(
   "project_credit",
   {
     id: text("id").primaryKey(),
@@ -293,8 +276,7 @@ export const projectCredits = sqliteTable(
   ],
 );
 
-/** This project's answer to one canonical requirement. */
-export const requirementEntries = sqliteTable("requirement_entry", {
+export const requirementEntries = pgTable("requirement_entry", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id")
     .notNull()
@@ -305,16 +287,15 @@ export const requirementEntries = sqliteTable("requirement_entry", {
   catalogRequirementId: text("catalog_requirement_id")
     .notNull()
     .references(() => catalogRequirements.id),
-  valueBool: integer("value_bool", { mode: "boolean" }),
-  valueNumber: integer("value_number"),
+  valueBool: boolean("value_bool"),
+  valueNumber: doublePrecision("value_number"),
   valueText: text("value_text"),
   status: text("status").notNull().default("not_started"),
   note: text("note"),
   updatedAt: integer("updated_at").notNull().default(now),
 });
 
-/** An uploaded evidence file attached to a requirement entry. */
-export const evidenceDocs = sqliteTable("evidence_doc", {
+export const evidenceDocs = pgTable("evidence_doc", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id")
     .notNull()

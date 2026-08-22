@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it } from "vitest";
+import { describeDb } from "./helpers/postgres";
 import { db } from "@/db";
 import {
   parsedCredits,
@@ -23,7 +24,7 @@ const creditId = randomUUID();
 const req1Id = randomUUID();
 const req2Id = randomUUID();
 
-describe("saveParsedRequirements — replace-set + reconcile", () => {
+describeDb("saveParsedRequirements — replace-set + reconcile", () => {
   beforeAll(async () => {
     const [ws] = await db
       .select()
