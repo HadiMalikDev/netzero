@@ -1,34 +1,32 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { existsSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { databaseUrl } from "./env";
 import * as schema from "./schema";
 
-const dbPath = process.env.DATABASE_URL || ".data/netzero.db";
-
-// Ensure the containing directory exists before better-sqlite3 opens the file.
-const dir = dirname(dbPath);
-if (dir && dir !== "." && !existsSync(dir)) {
-  mkdirSync(dir, { recursive: true });
-}
-
-// Reuse the connection across hot reloads in dev.
 const globalForDb = globalThis as unknown as {
-  __sqlite?: Database.Database;
+  __pg?: ReturnType<typeof postgres>;
+  __db?: ReturnType<typeof makeDb>;
 };
 
-const sqlite =
-  globalForDb.__sqlite ??
-  (() => {
-    const conn = new Database(dbPath);
-    conn.pragma("journal_mode = WAL");
-    conn.pragma("foreign_keys = ON");
-    return conn;
-  })();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.__sqlite = sqlite;
+function makeDb() {
+  const sql =
+    globalForDb.__pg ??
+    postgres(databaseUrl(), {
+      max: 10,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
+  if (process.env.NODE_ENV !== "production") globalForDb.__pg = sql;
+  return drizzle(sql, { schema });
 }
 
-export const db = drizzle(sqlite, { schema });
+/** Lazy so importing this module does not require DATABASE_URL (unit tests). */
+export const db = new Proxy({} as ReturnType<typeof makeDb>, {
+  get(_target, prop, receiver) {
+    const real = (globalForDb.__db ??= makeDb());
+    const value = Reflect.get(real, prop, receiver);
+    return typeof value === "function" ? value.bind(real) : value;
+  },
+});
+
 export { schema };

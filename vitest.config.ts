@@ -9,6 +9,7 @@ export default defineConfig({
   },
   test: {
     include: ["**/*.test.ts"],
+    setupFiles: ["./tests/setup.ts"],
     testTimeout: 30000,
   },
 });
