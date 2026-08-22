@@ -1,0 +1,1 @@
+ALTER TABLE `catalog_credit` ADD `review_note` text;

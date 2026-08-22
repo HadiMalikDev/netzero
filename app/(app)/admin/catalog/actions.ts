@@ -9,12 +9,14 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   catalogCredits,
+  catalogRequirements,
   parsedCredits,
   parsedRequirements,
   rsVersions,
   sourceDocuments,
 } from "@/db/schema";
 import { requireUser } from "@/lib/auth/session";
+import { buildReviewNote } from "@/lib/ai/review-notes";
 import {
   applyStoredProposal,
   ensureRatingSystem,
@@ -185,6 +187,54 @@ export async function updateVersionLabel(formData: FormData): Promise<void> {
     .update(rsVersions)
     .set({ versionLabel: label })
     .where(eq(rsVersions.id, versionId));
+  revalidatePath(`/admin/catalog/${versionId}`);
+}
+
+/**
+ * Generate the AI reviewer note for a version's canonical credits (title + aim +
+ * page span + requirement labels → a "what to verify" blurb, with a
+ * deterministic fallback when no LLM key is set). Skips credits that already
+ * have a note unless `regenerate` is set. Sequential to respect free-tier rate
+ * limits, mirroring the per-credit verify calls.
+ */
+export async function generateReviewNotes(formData: FormData): Promise<void> {
+  await requireUser();
+  const versionId = String(formData.get("versionId") ?? "");
+  const regenerate = String(formData.get("regenerate") ?? "") === "true";
+  if (!versionId) throw new Error("versionId required");
+
+  const credits = await db
+    .select()
+    .from(catalogCredits)
+    .where(eq(catalogCredits.rsVersionId, versionId))
+    .orderBy(catalogCredits.categoryCode, catalogCredits.code);
+
+  for (const c of credits) {
+    if (c.reviewNote && !regenerate) continue;
+    const reqs = await db
+      .select({
+        title: catalogRequirements.title,
+        text: catalogRequirements.text,
+      })
+      .from(catalogRequirements)
+      .where(eq(catalogRequirements.catalogCreditId, c.id))
+      .orderBy(catalogRequirements.seq);
+    const note = await buildReviewNote({
+      code: c.code,
+      title: c.title,
+      aim: c.aim,
+      pageStart: c.sourcePageStart,
+      pageEnd: c.sourcePageEnd,
+      requirementTitles: reqs
+        .map((r) => (r.title || r.text || "").trim())
+        .filter(Boolean),
+    });
+    await db
+      .update(catalogCredits)
+      .set({ reviewNote: note })
+      .where(eq(catalogCredits.id, c.id));
+  }
+
   revalidatePath(`/admin/catalog/${versionId}`);
 }
 

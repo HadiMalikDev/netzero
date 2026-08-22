@@ -112,6 +112,9 @@ export const catalogCredits = sqliteTable(
       .default(false),
     pointsRaw: text("points_raw"),
     aim: text("aim"),
+    // Plain-language "what to verify on pp.X–Y" note for the extraction-review
+    // PDF, generated once (LLM-backed, deterministic fallback) and cached here.
+    reviewNote: text("review_note"),
     references: text("references"), // JSON string[]
     // Credit Applicability Conditions: { scope: { typology: points|null } }
     applicability: text("applicability"), // JSON
