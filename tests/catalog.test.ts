@@ -20,9 +20,10 @@ import {
   WORKSPACE_ID,
 } from "@/lib/catalog";
 import { parseAndStore } from "@/lib/parser";
+import { describeDb } from "./helpers/postgres";
 
 const MANUAL = ".data/manuals/commercial-dc.pdf";
-const d = existsSync(MANUAL) ? describe : describe.skip;
+const d = existsSync(MANUAL) ? describeDb : describe.skip;
 
 // Throwaway version label so the test never collides with the real seed.
 const TEST_LABEL = `test-${Date.now().toString(36)}`;

@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../_components/PageChrome";
-import { Card, Badge } from "@/components/ui";
+import { Card, Badge, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
-import { getVersion, getVersionCredits } from "@/lib/catalog";
-import { updateVersionLabel } from "../actions";
+import {
+  getReviewNoteProgress,
+  getVersion,
+  getVersionCredits,
+} from "@/lib/catalog";
+import { generateReviewNotes, updateVersionLabel } from "../actions";
 
 export default async function VersionDetailPage({
   params,
@@ -14,6 +18,7 @@ export default async function VersionDetailPage({
   if (!v) notFound();
   const groups = await getVersionCredits(versionId);
   const total = groups.reduce((n, g) => n + g.credits.length, 0);
+  const notes = await getReviewNoteProgress(versionId);
 
   return (
     <PageChrome
@@ -27,10 +32,35 @@ export default async function VersionDetailPage({
         title={`${v.ratingSystemName} — ${v.version.scheme} ${v.version.stage}`}
         subtitle={`Detected from the manual · ${total} credits in catalog`}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge tone={v.version.status === "published" ? "brand" : "amber"}>
               {v.version.status}
             </Badge>
+            {total > 0 ? (
+              <form action={generateReviewNotes}>
+                <input type="hidden" name="versionId" value={versionId} />
+                {notes.withNote > 0 ? (
+                  <input type="hidden" name="regenerate" value="true" />
+                ) : null}
+                <button
+                  type="submit"
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                  title="Generate a plain-language 'what to verify' note for each credit (LLM-backed, deterministic fallback)"
+                >
+                  {notes.withNote >= notes.total
+                    ? `Regenerate notes (${notes.withNote}/${notes.total})`
+                    : `Generate reviewer notes (${notes.withNote}/${notes.total})`}
+                </button>
+              </form>
+            ) : null}
+            {total > 0 ? (
+              <a
+                href={`/api/catalog/${versionId}/pdf`}
+                className={primaryButtonClass}
+              >
+                Export review PDF
+              </a>
+            ) : null}
             <Link
               href={`/admin/catalog/${versionId}/review`}
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"

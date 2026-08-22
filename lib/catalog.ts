@@ -12,7 +12,14 @@ import {
   sourceDocuments,
 } from "@/db/schema";
 import { reconcileFromParts } from "@/lib/parser/reconcile";
-import { firstBands, formatPointsSpan } from "@/lib/points";
+import { bandsFromSpec, firstBands, formatPointsSpan } from "@/lib/points";
+import type {
+  Applicability,
+  BandSet,
+  EvidenceItem,
+  NumericSpec,
+} from "@/lib/parser/types";
+import type { RsVersion } from "@/db/schema";
 
 /** Canonical single-tenant workspace id (re-exported by `@/lib/data`). */
 export const WORKSPACE_ID = "ws_default";
@@ -141,6 +148,20 @@ export async function getVersionCredits(
     .map(([code, g]) => ({ code, name: g.name, credits: g.credits }));
 }
 
+/** How many of a version's credits already have an AI reviewer note. */
+export async function getReviewNoteProgress(
+  versionId: string,
+): Promise<{ withNote: number; total: number }> {
+  const rows = await db
+    .select({ reviewNote: catalogCredits.reviewNote })
+    .from(catalogCredits)
+    .where(eq(catalogCredits.rsVersionId, versionId));
+  return {
+    withNote: rows.filter((r) => Boolean(r.reviewNote)).length,
+    total: rows.length,
+  };
+}
+
 export async function getCatalogCredit(versionId: string, code: string) {
   const [credit] = await db
     .select()
@@ -158,6 +179,177 @@ export async function getCatalogCredit(versionId: string, code: string) {
     .where(eq(catalogRequirements.catalogCreditId, credit.id))
     .orderBy(catalogRequirements.seq);
   return { credit, requirements: reqs };
+}
+
+// ---------- whole-version export (extraction-review PDF) ----------
+
+export interface ExportRequirement {
+  seq: number;
+  title: string | null;
+  text: string;
+  metricType: string;
+  unit: string | null;
+  pointsRaw: string | null;
+  pointsType: string | null;
+  optionGroup: string | null;
+  keystone: boolean;
+  keystoneCondition: string | null;
+  measurable: string | null; // summarizeSpec()
+  spec: NumericSpec | null;
+  bands: BandSet[]; // bandsFromSpec()
+  evidence: EvidenceItem[];
+  sourcePageStart: number | null;
+  sourcePageEnd: number | null;
+}
+
+export interface ExportCredit {
+  code: string;
+  title: string;
+  categoryCode: string;
+  categoryName: string;
+  isKeystone: boolean;
+  pointsRaw: string | null;
+  aim: string | null;
+  reviewNote: string | null;
+  references: string[];
+  applicability: Applicability | null;
+  reconciliation: ReconcileView | null;
+  supportingGuidance: string | null;
+  toolRef: string | null;
+  sourcePageStart: number | null;
+  sourcePageEnd: number | null;
+  requirements: ExportRequirement[];
+}
+
+export interface ExportCategory {
+  code: string;
+  name: string;
+  credits: ExportCredit[];
+}
+
+export interface VersionExport {
+  version: RsVersion;
+  ratingSystemName: string;
+  source: { fileName: string; pageCount: number | null } | null;
+  categories: ExportCategory[];
+  totals: { credits: number; requirements: number; reviewNotes: number };
+}
+
+function parseJsonOr<T>(json: string | null, fallback: T): T {
+  if (!json) return fallback;
+  try {
+    return JSON.parse(json) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * The full canonical catalog of a version, grouped by category, with every
+ * requirement and its parsed JSON blobs resolved. Backs the extraction-review
+ * PDF. One credit query + one requirement query — no per-credit round-trips.
+ */
+export async function getVersionForExport(
+  versionId: string,
+): Promise<VersionExport | null> {
+  const v = await getVersion(versionId);
+  if (!v) return null;
+
+  const credits = await db
+    .select()
+    .from(catalogCredits)
+    .where(eq(catalogCredits.rsVersionId, versionId))
+    .orderBy(catalogCredits.categoryCode, catalogCredits.code);
+
+  const reqsByCredit = new Map<string, ExportRequirement[]>();
+  if (credits.length) {
+    const reqs = await db
+      .select()
+      .from(catalogRequirements)
+      .where(
+        inArray(
+          catalogRequirements.catalogCreditId,
+          credits.map((c) => c.id),
+        ),
+      )
+      .orderBy(catalogRequirements.seq);
+    for (const r of reqs) {
+      const spec = parseJsonOr<NumericSpec | null>(r.numericSpec, null);
+      const arr = reqsByCredit.get(r.catalogCreditId) ?? [];
+      arr.push({
+        seq: r.seq,
+        title: r.title,
+        text: r.text,
+        metricType: r.metricType,
+        unit: r.unit,
+        pointsRaw: r.pointsRaw,
+        pointsType: r.pointsType,
+        optionGroup: r.optionGroup,
+        keystone: r.keystone,
+        keystoneCondition: r.keystoneCondition,
+        measurable: summarizeSpec(r.numericSpec),
+        spec,
+        bands: bandsFromSpec(spec),
+        evidence: parseJsonOr<EvidenceItem[]>(r.evidence, []),
+        sourcePageStart: r.sourcePageStart,
+        sourcePageEnd: r.sourcePageEnd,
+      });
+      reqsByCredit.set(r.catalogCreditId, arr);
+    }
+  }
+
+  const groups = new Map<string, ExportCategory>();
+  let requirementCount = 0;
+  let reviewNoteCount = 0;
+  for (const c of credits) {
+    const requirements = reqsByCredit.get(c.id) ?? [];
+    requirementCount += requirements.length;
+    if (c.reviewNote) reviewNoteCount++;
+    const g =
+      groups.get(c.categoryCode) ??
+      ({ code: c.categoryCode, name: c.categoryName, credits: [] } as ExportCategory);
+    g.credits.push({
+      code: c.code,
+      title: c.title,
+      categoryCode: c.categoryCode,
+      categoryName: c.categoryName,
+      isKeystone: c.isKeystone,
+      pointsRaw: c.pointsRaw,
+      aim: c.aim,
+      reviewNote: c.reviewNote,
+      references: parseJsonOr<string[]>(c.references, []),
+      applicability: parseJsonOr<Applicability | null>(c.applicability, null),
+      reconciliation: parseJsonOr<ReconcileView | null>(c.reconciliation, null),
+      supportingGuidance: c.supportingGuidance,
+      toolRef: c.toolRef,
+      sourcePageStart: c.sourcePageStart,
+      sourcePageEnd: c.sourcePageEnd,
+      requirements,
+    });
+    groups.set(c.categoryCode, g);
+  }
+
+  // Source manual: prefer the promoted document, else any parsed one — mirrors
+  // /api/manual so the "compare against the manual" pages line up.
+  const docs = await db
+    .select({ fileName: sourceDocuments.fileName, pageCount: sourceDocuments.pageCount, status: sourceDocuments.status })
+    .from(sourceDocuments)
+    .where(eq(sourceDocuments.rsVersionId, versionId));
+  const chosen = docs.find((d) => d.status === "promoted") ?? docs[0];
+
+  return {
+    version: v.version,
+    ratingSystemName: v.ratingSystemName,
+    source: chosen
+      ? { fileName: chosen.fileName, pageCount: chosen.pageCount }
+      : null,
+    categories: [...groups.values()].sort((a, b) => a.code.localeCompare(b.code)),
+    totals: {
+      credits: credits.length,
+      requirements: requirementCount,
+      reviewNotes: reviewNoteCount,
+    },
+  };
 }
 
 // ---------- parsed drafts (catalog authoring / review) ----------
