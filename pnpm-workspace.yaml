@@ -1,4 +1,18 @@
+# pnpm 11+ (Railway / CI): every package with a lifecycle script must be
+# listed. true = run it; false = skip it without failing the install.
+autoInstallPeers: false
 allowBuilds:
+  better-sqlite3: false
   esbuild: true
   sharp: false
-  unrs-resolver: false
+  unrs-resolver: true
+
+# pnpm 10: same policy as an allow-list (ignored if the builder is on 11).
+onlyBuiltDependencies:
+  - esbuild
+  - unrs-resolver
+
+peerDependencyRules:
+  ignoreMissing:
+    - better-sqlite3
+    - "@types/better-sqlite3"
