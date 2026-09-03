@@ -31,3 +31,17 @@ export function navHref(item: ScopedNavItem, pathname: string): string {
   const id = activeProjectId(pathname);
   return id ? `/projects/${id}${item.href}` : item.href;
 }
+
+/**
+ * Where a dashboard metric tile should drill to. The dashboard counts span every
+ * project, so a filtered credits list is only an honest destination when there
+ * is exactly one project; otherwise the tile opens the projects list.
+ */
+export function dashboardCreditsHref(
+  projectIds: string[],
+  filter: string,
+): string {
+  return projectIds.length === 1
+    ? `/projects/${projectIds[0]}/credits?filter=${filter}`
+    : "/projects";
+}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 /** Shared primary-CTA styling (use on <Link>/<label>; <Button> applies it too). */
@@ -33,18 +34,25 @@ export function Card({
   );
 }
 
+/**
+ * A headline metric. Pass `href` to make the tile a link — it then reads as
+ * clickable (pointer, hover lift, focus ring) and drills into the list the
+ * number came from. Without `href` it stays a plain card.
+ */
 export function KpiTile({
   label,
   value,
   hint,
   icon,
   tone = "brand",
+  href,
 }: {
   label: string;
   value: ReactNode;
   hint?: string;
   icon?: ReactNode;
   tone?: "brand" | "emerald" | "amber" | "slate" | "red";
+  href?: string;
 }) {
   const tones: Record<string, string> = {
     brand: "bg-brand-50 text-brand-600",
@@ -53,8 +61,9 @@ export function KpiTile({
     slate: "bg-slate-100 text-slate-500",
     red: "bg-red-50 text-red-600",
   };
-  return (
-    <Card className="p-5">
+
+  const body = (
+    <>
       <div className="flex items-start justify-between">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
           {label}
@@ -69,7 +78,18 @@ export function KpiTile({
       </div>
       <div className="mt-3 text-3xl font-semibold text-slate-900">{value}</div>
       {hint ? <div className="mt-1 text-sm text-slate-500">{hint}</div> : null}
-    </Card>
+    </>
+  );
+
+  if (!href) return <Card className="p-5">{body}</Card>;
+
+  return (
+    <Link
+      href={href}
+      className="block rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+    >
+      {body}
+    </Link>
   );
 }
 

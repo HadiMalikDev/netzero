@@ -17,29 +17,40 @@ export interface CreditRow {
   pointsEarned: number;
   pointsMax: number | null;
   pointsMin: number | null;
+  /** At least one requirement still blocking the credit has no file attached. */
+  missingEvidence: boolean;
 }
 
-const FILTERS: { key: "all" | Status; label: string }[] = [
+/** "missing_evidence" cuts across status, so it is not one of the Status keys. */
+export type CreditFilter = "all" | Status | "missing_evidence";
+
+const FILTERS: { key: CreditFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "completed", label: "Completed" },
   { key: "in_progress", label: "In Progress" },
   { key: "not_started", label: "Not Started" },
+  { key: "missing_evidence", label: "Missing Evidence" },
 ];
 
 export function CreditsTable({
   projectId,
   credits,
+  initialFilter = "all",
 }: {
   projectId: string;
   credits: CreditRow[];
+  /** Preselected from `?filter=` so the dashboard tiles can drill in here. */
+  initialFilter?: CreditFilter;
 }) {
-  const [filter, setFilter] = useState<"all" | Status>("all");
+  const [filter, setFilter] = useState<CreditFilter>(initialFilter);
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return credits.filter((c) => {
-      if (filter !== "all" && c.status !== filter) return false;
+      if (filter === "missing_evidence" && !c.missingEvidence) return false;
+      if (filter !== "all" && filter !== "missing_evidence" && c.status !== filter)
+        return false;
       if (
         q &&
         !c.code.toLowerCase().includes(q) &&

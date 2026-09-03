@@ -6,12 +6,35 @@ import { KpiTile, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { CreditsIcon, UploadIcon } from "@/components/icons";
 import { getProject, getProjectCredits } from "@/lib/data";
-import { CreditsTable, type CreditRow } from "./CreditsTable";
+import { missingEvidenceRequirements } from "@/lib/status";
+import {
+  CreditsTable,
+  type CreditFilter,
+  type CreditRow,
+} from "./CreditsTable";
+
+const FILTER_KEYS = [
+  "all",
+  "completed",
+  "in_progress",
+  "not_started",
+  "missing_evidence",
+] as const;
+
+/** `?filter=` from a dashboard tile. Anything unrecognised falls back to "all". */
+function parseFilter(raw: string | string[] | undefined): CreditFilter {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return (FILTER_KEYS as readonly string[]).includes(v ?? "")
+    ? (v as CreditFilter)
+    : "all";
+}
 
 export default async function CreditsPage({
   params,
+  searchParams,
 }: PageProps<"/projects/[id]/credits">) {
   const { id } = await params;
+  const initialFilter = parseFilter((await searchParams).filter);
   const project = await getProject(id);
   if (!project) notFound();
 
@@ -27,6 +50,7 @@ export default async function CreditsPage({
     pointsEarned: c.pointsEarned,
     pointsMax: c.pointsMax,
     pointsMin: c.pointsMin,
+    missingEvidence: missingEvidenceRequirements(c.requirements).length > 0,
   }));
 
   const completed = rows.filter((r) => r.status === "completed").length;
@@ -68,12 +92,32 @@ export default async function CreditsPage({
               label="Total Credits"
               value={rows.length}
               icon={<CreditsIcon width={18} height={18} />}
+              href={`/projects/${id}/credits`}
             />
-            <KpiTile label="Completed" value={completed} tone="emerald" />
-            <KpiTile label="In Progress" value={inProgress} tone="amber" />
-            <KpiTile label="Not Started" value={notStarted} tone="slate" />
+            <KpiTile
+              label="Completed"
+              value={completed}
+              tone="emerald"
+              href={`/projects/${id}/credits?filter=completed`}
+            />
+            <KpiTile
+              label="In Progress"
+              value={inProgress}
+              tone="amber"
+              href={`/projects/${id}/credits?filter=in_progress`}
+            />
+            <KpiTile
+              label="Not Started"
+              value={notStarted}
+              tone="slate"
+              href={`/projects/${id}/credits?filter=not_started`}
+            />
           </div>
-          <CreditsTable projectId={id} credits={rows} />
+          <CreditsTable
+            projectId={id}
+            credits={rows}
+            initialFilter={initialFilter}
+          />
         </>
       )}
     </PageChrome>
