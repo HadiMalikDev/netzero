@@ -10,6 +10,7 @@ import {
   ProjectsIcon,
 } from "@/components/icons";
 import { getProjectOverview, listProjects } from "@/lib/data";
+import { dashboardCreditsHref } from "@/lib/nav";
 
 export default async function DashboardPage() {
   const projects = await listProjects();
@@ -19,6 +20,10 @@ export default async function DashboardPage() {
       overview: await getProjectOverview(p.id),
     })),
   );
+
+  // Tiles drill into the list the number came from (see lib/nav).
+  const ids = projects.map((p) => p.id);
+  const creditsHref = (filter: string) => dashboardCreditsHref(ids, filter);
 
   const totals = overviews.reduce(
     (acc, { overview }) => {
@@ -69,6 +74,7 @@ export default async function DashboardPage() {
               hint={`${projects.length} in this workspace`}
               icon={<ProjectsIcon width={18} height={18} />}
               tone="brand"
+              href="/projects"
             />
             <KpiTile
               label="Credits Completed"
@@ -76,6 +82,7 @@ export default async function DashboardPage() {
               hint={`of ${totals.credits} confirmed credits`}
               icon={<CreditsIcon width={18} height={18} />}
               tone="emerald"
+              href={creditsHref("completed")}
             />
             <KpiTile
               label="In Progress"
@@ -83,6 +90,7 @@ export default async function DashboardPage() {
               hint="credits partially satisfied"
               icon={<CreditsIcon width={18} height={18} />}
               tone="amber"
+              href={creditsHref("in_progress")}
             />
             <KpiTile
               label="Missing Evidence"
@@ -90,6 +98,7 @@ export default async function DashboardPage() {
               hint="requirements awaiting a file"
               icon={<FileIcon width={18} height={18} />}
               tone="red"
+              href={creditsHref("missing_evidence")}
             />
           </div>
 

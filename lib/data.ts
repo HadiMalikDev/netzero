@@ -5,6 +5,7 @@ import {
   catalogCredits,
   catalogRequirements,
   evidenceDocs,
+  evidenceReviews,
   projectCredits,
   projects,
   requirementEntries,
@@ -70,7 +71,42 @@ export async function firstProjectId(): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
+/** A stored JSON array of strings, tolerant of null and malformed values. */
+function jsonList(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.map((x) => String(x)) : [];
+  } catch {
+    return [];
+  }
+}
+
 // ---------- credit status computation ----------
+
+/** One uploaded evidence file, as the credit screen shows it. */
+/**
+ * The AI's advisory read of one attachment. Never feeds status or points — see
+ * lib/ai/evidence-review.ts.
+ */
+export interface EvidenceReviewView {
+  state: string; // pending | done | failed
+  verdict: string | null;
+  summary: string | null;
+  quotes: string[];
+  gaps: string[];
+  error: string | null;
+}
+
+export interface EvidenceAttachment {
+  id: string;
+  fileName: string;
+  fileSize: number | null;
+  createdAt: number;
+  /** Index into the requirement's evidenceSpecs, or null if unassigned. */
+  evidenceSpecIndex: number | null;
+  review: EvidenceReviewView | null;
+}
 
 export interface RequirementView {
   entryId: string;
@@ -94,6 +130,8 @@ export interface RequirementView {
   valueText: string | null;
   note: string | null;
   evidenceCount: number;
+  /** Files attached to this requirement, oldest first. */
+  attachments: EvidenceAttachment[];
   status: Status;
   pointsEarned: number;
   pointsPreview: number;
@@ -180,25 +218,64 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
     .select({
       entryId: evidenceDocs.requirementEntryId,
       id: evidenceDocs.id,
+      fileName: evidenceDocs.fileName,
+      fileSize: evidenceDocs.fileSize,
+      createdAt: evidenceDocs.createdAt,
+      evidenceSpecIndex: evidenceDocs.evidenceSpecIndex,
+      reviewState: evidenceReviews.state,
+      reviewVerdict: evidenceReviews.verdict,
+      reviewSummary: evidenceReviews.summary,
+      reviewQuotes: evidenceReviews.quotes,
+      reviewGaps: evidenceReviews.gaps,
+      reviewError: evidenceReviews.error,
     })
     .from(evidenceDocs)
+    .leftJoin(
+      evidenceReviews,
+      eq(evidenceReviews.evidenceDocId, evidenceDocs.id),
+    )
     .where(
       inArray(
         evidenceDocs.requirementEntryId,
         entries.map((e) => e.entryId),
       ),
-    );
-  const evCount = new Map<string, number>();
-  for (const e of evidence)
-    evCount.set(e.entryId, (evCount.get(e.entryId) ?? 0) + 1);
+    )
+    .orderBy(evidenceDocs.createdAt);
+  const evByEntry = new Map<string, EvidenceAttachment[]>();
+  for (const e of evidence) {
+    const arr = evByEntry.get(e.entryId) ?? [];
+    arr.push({
+      id: e.id,
+      fileName: e.fileName,
+      fileSize: e.fileSize,
+      createdAt: e.createdAt,
+      evidenceSpecIndex: e.evidenceSpecIndex,
+      review: e.reviewState
+        ? {
+            state: e.reviewState,
+            verdict: e.reviewVerdict,
+            summary: e.reviewSummary,
+            quotes: jsonList(e.reviewQuotes),
+            gaps: jsonList(e.reviewGaps),
+            error: e.reviewError,
+          }
+        : null,
+    });
+    evByEntry.set(e.entryId, arr);
+  }
 
   const byCredit = new Map<string, RequirementView[]>();
   for (const e of entries) {
     const evidenceSpecs: string[] = e.evidenceSpecs
       ? (JSON.parse(e.evidenceSpecs) as string[])
       : [];
-    const requiresEvidence = evidenceSpecs.length > 0;
-    const evidenceCount = evCount.get(e.entryId) ?? 0;
+    // Evidence is mandatory for every Mostadam credit being claimed. An empty
+    // evidenceSpecs list means the manual's evidence table did not extract, not
+    // that the requirement can be closed without a file — so it must not soften
+    // this flag. `evidenceSpecs` still drives WHICH documents are listed.
+    const requiresEvidence = true;
+    const attachments = evByEntry.get(e.entryId) ?? [];
+    const evidenceCount = attachments.length;
     const status = deriveRequirementStatus({
       metricType: e.metricType,
       requiresEvidence,
@@ -240,6 +317,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       valueText: e.valueText,
       note: e.note,
       evidenceCount,
+      attachments,
       status,
       pointsEarned: pointsAwarded(award, "earned"),
       pointsPreview: pointsAwarded(award, "preview"),

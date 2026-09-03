@@ -18,6 +18,7 @@ import {
   UsersIcon,
 } from "@/components/icons";
 import { initials } from "@/lib/initials";
+import { navHref } from "@/lib/nav";
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -27,6 +28,8 @@ interface NavItem {
   icon: Icon;
   wired: boolean;
   badge?: number;
+  /** Follows the open project rather than the workspace resolver. See lib/nav. */
+  projectScoped?: boolean;
 }
 
 interface NavGroup {
@@ -40,15 +43,33 @@ const GROUPS: NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: DashboardIcon, wired: true },
       { label: "Projects", href: "/projects", icon: ProjectsIcon, wired: true },
-      { label: "Credits", href: "/credits", icon: CreditsIcon, wired: true },
+      {
+        label: "Credits",
+        href: "/credits",
+        icon: CreditsIcon,
+        wired: true,
+        projectScoped: true,
+      },
       { label: "Task Board", href: "/task-board", icon: TaskIcon, wired: false },
-      { label: "Documents", href: "/documents", icon: FileIcon, wired: true },
+      {
+        label: "Documents",
+        href: "/documents",
+        icon: FileIcon,
+        wired: true,
+        projectScoped: true,
+      },
     ],
   },
   {
     title: "Intelligence",
     items: [
-      { label: "AI Assistant", href: "/assistant", icon: BotIcon, wired: true },
+      {
+        label: "AI Assistant",
+        href: "/assistant",
+        icon: BotIcon,
+        wired: true,
+        projectScoped: true,
+      },
       { label: "Reports", href: "/reports", icon: ReportsIcon, wired: false },
     ],
   },
@@ -99,14 +120,14 @@ export function Sidebar({ userName }: { userName: string }) {
             </div>
             <ul className="space-y-0.5">
               {group.items.map((item) => {
+                const href = navHref(item, pathname);
                 const active =
-                  pathname === item.href ||
-                  pathname.startsWith(item.href + "/");
+                  pathname === href || pathname.startsWith(href + "/");
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>
                     <Link
-                      href={item.href}
+                      href={href}
                       className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                         active
                           ? "bg-brand-500/15 font-medium text-brand-200"

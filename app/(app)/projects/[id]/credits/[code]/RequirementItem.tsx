@@ -1,12 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
-import { UploadIcon } from "@/components/icons";
 import { ExpandableText } from "@/components/ExpandableText";
 import { BandTable } from "@/components/BandTable";
 import { MetricBadge, OptionBadge, PointsRange } from "@/components/req";
-import { uploadEvidence } from "../../../actions";
+import { EvidenceChecklist } from "@/components/EvidenceChecklist";
+import {
+  deleteEvidence,
+  rerunEvidenceReview,
+  uploadEvidence,
+} from "../../../actions";
 import type { RequirementView } from "@/lib/data";
 import type { NumericLimit } from "@/lib/parser/types";
 import { bandsFromSpec, firstBands, pointsForValue } from "@/lib/points";
@@ -167,49 +171,32 @@ export function RequirementItem({
         </div>
       ) : null}
 
-      {/* Evidence */}
-      <div className="mt-3 flex flex-wrap items-center gap-3">
+      {/* Evidence. Mandatory on every requirement — see requiresEvidence in
+          lib/data.ts. There is deliberately no "optional" state here. */}
+      <div className="mt-3">
         <span className="text-xs font-semibold text-slate-500">
           Evidence
-          {req.requiresEvidence ? (
-            <span className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-              required · {req.evidenceCount} attached
-            </span>
-          ) : (
-            <span className="ml-1 font-normal text-slate-400">(optional)</span>
-          )}
+          <span
+            className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+              req.evidenceCount > 0
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-amber-50 text-amber-700"
+            }`}
+          >
+            required · {req.evidenceCount} attached
+          </span>
         </span>
-        <EvidenceUpload entryId={req.entryId} projectId={projectId} code={code} />
+        <EvidenceChecklist
+          specs={req.evidenceSpecs}
+          attachments={req.attachments}
+          entryId={req.entryId}
+          projectId={projectId}
+          code={code}
+          uploadAction={uploadEvidence}
+          deleteAction={deleteEvidence}
+          rerunAction={rerunEvidenceReview}
+        />
       </div>
     </div>
-  );
-}
-
-function EvidenceUpload({
-  entryId,
-  projectId,
-  code,
-}: {
-  entryId: string;
-  projectId: string;
-  code: string;
-}) {
-  const ref = useRef<HTMLFormElement>(null);
-  return (
-    <form ref={ref} action={uploadEvidence} className="inline-flex">
-      <input type="hidden" name="entryId" value={entryId} />
-      <input type="hidden" name="projectId" value={projectId} />
-      <input type="hidden" name="code" value={code} />
-      <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
-        <UploadIcon width={15} height={15} />
-        Attach file
-        <input
-          type="file"
-          name="file"
-          className="hidden"
-          onChange={() => ref.current?.requestSubmit()}
-        />
-      </label>
-    </form>
   );
 }

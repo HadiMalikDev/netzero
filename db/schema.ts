@@ -306,7 +306,45 @@ export const evidenceDocs = pgTable("evidence_doc", {
   fileName: text("file_name").notNull(),
   filePath: text("file_path").notNull(),
   fileSize: integer("file_size"),
+  /**
+   * Which of the requirement's extracted evidence documents this file provides,
+   * as an index into catalog_requirement.evidence_specs. Null means the file is
+   * attached to the requirement without claiming a specific document — the case
+   * for supporting material, and for requirements whose evidence list did not
+   * extract. Nullable so it can never block an upload.
+   */
+  evidenceSpecIndex: integer("evidence_spec_index"),
   createdAt: integer("created_at").notNull().default(now),
+});
+
+/**
+ * The AI's read of one uploaded document against the requirement it was
+ * attached to. ADVISORY ONLY — nothing here feeds derived status or points; a
+ * model opinion must never move a compliance state on its own. One row per
+ * evidence file, replaced when a review is re-run.
+ */
+export const evidenceReviews = pgTable("evidence_review", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id")
+    .notNull()
+    .references(() => workspaces.id),
+  evidenceDocId: text("evidence_doc_id")
+    .notNull()
+    .references(() => evidenceDocs.id)
+    .unique(),
+  /** pending | done | failed */
+  state: text("state").notNull().default("pending"),
+  /** met | partially_met | not_met | unreadable | unclear — null while pending */
+  verdict: text("verdict"),
+  summary: text("summary"),
+  /** JSON array of verbatim quotes from the document backing the verdict. */
+  quotes: text("quotes"),
+  /** JSON array of the requirement's expected documents judged missing. */
+  gaps: text("gaps"),
+  model: text("model"),
+  error: text("error"),
+  createdAt: integer("created_at").notNull().default(now),
+  completedAt: integer("completed_at"),
 });
 
 export type Workspace = typeof workspaces.$inferSelect;
@@ -322,3 +360,4 @@ export type Project = typeof projects.$inferSelect;
 export type ProjectCredit = typeof projectCredits.$inferSelect;
 export type RequirementEntry = typeof requirementEntries.$inferSelect;
 export type EvidenceDoc = typeof evidenceDocs.$inferSelect;
+export type EvidenceReview = typeof evidenceReviews.$inferSelect;

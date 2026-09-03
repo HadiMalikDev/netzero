@@ -57,6 +57,7 @@ export default async function ProjectOverviewPage({
               value={overview.totalCredits}
               hint={`${overview.categories.length} categories`}
               icon={<CreditsIcon width={18} height={18} />}
+              href={`/projects/${id}/credits`}
             />
             <KpiTile
               label="Completed"
@@ -64,6 +65,7 @@ export default async function ProjectOverviewPage({
               hint="all requirements satisfied"
               tone="emerald"
               icon={<CreditsIcon width={18} height={18} />}
+              href={`/projects/${id}/credits?filter=completed`}
             />
             <KpiTile
               label="In Progress"
@@ -71,6 +73,7 @@ export default async function ProjectOverviewPage({
               hint="partially satisfied"
               tone="amber"
               icon={<CreditsIcon width={18} height={18} />}
+              href={`/projects/${id}/credits?filter=in_progress`}
             />
             <KpiTile
               label="Missing Evidence"
@@ -78,6 +81,7 @@ export default async function ProjectOverviewPage({
               hint={`${overview.evidenceFiles} files attached`}
               tone="red"
               icon={<FileIcon width={18} height={18} />}
+              href={`/projects/${id}/credits?filter=missing_evidence`}
             />
           </div>
 
