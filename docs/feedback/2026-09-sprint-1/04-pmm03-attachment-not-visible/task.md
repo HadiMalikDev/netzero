@@ -52,3 +52,62 @@ evidence file, so a user cannot open the file to confirm what was stored.
 3. Show a brief confirmation when an upload completes.
 
 Items 2, 3, 5, 10 and 13 are all closed by the same work.
+
+---
+
+## Done — 2026-09-04
+
+The credit screen lists its attachments. The exact scenario from the report was
+replayed: PMM-03 requirement 1, empty, then the Labor Subsistence Plan attached.
+The filename now appears straight away.
+
+Before, empty:
+
+![empty state](./evidence/after-empty-state.png)
+
+Immediately after the upload, with no reload:
+
+![filename appears](./evidence/after-filename-appears.png)
+
+With three files attached, each openable and removable:
+
+![attachment list](./evidence/after-attachment-list.png)
+
+### The shared work
+
+One component, `components/AttachmentList.tsx`, renders the files attached to a
+requirement: name, size, upload date, a link that opens the file, and a Remove
+button, with an add control underneath that stays visible whether or not files
+are present.
+
+Three supporting pieces landed with it:
+
+- **`GET /api/evidence/[docId]`** serves a stored file. Nothing in the product
+  did before, so no attachment could be opened anywhere. It requires a session
+  and matches on the caller's workspace as well as the id. Only known-safe types
+  render inline; everything else downloads, with `X-Content-Type-Options:
+  nosniff`, so an uploaded `.html` or `.svg` cannot execute against this origin.
+- **`uploadEvidence`** accepts several files in one submission instead of one.
+- **`deleteEvidence`** removes the row and then the file on disk, looked up by
+  id and workspace together.
+
+The data layer carries the attachment rows through to the requirement view
+rather than just a count.
+
+This one change closes rows 2, 3, 5, 10 and 13 as well.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| Requirement starts empty, control reads "Attach files" | pass |
+| Filename appears immediately after upload, no reload | pass |
+| It survives a reload | pass |
+| The file downloads with its real content | pass, 200 |
+| Three files listed after a two-file selection | pass |
+| Control changes to "Add attachment" once files exist | pass |
+| Removing one leaves the other two | pass |
+| Badge follows the count throughout | pass, 0 → 1 → 3 → 2 |
+| Unknown evidence id is refused | pass, 404 |
+| Evidence is not served without a session | pass, 401 |
+| Documents tab lists the same files as links | pass |

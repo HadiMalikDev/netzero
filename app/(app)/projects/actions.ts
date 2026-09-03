@@ -1,11 +1,11 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   catalogCredits,
@@ -116,31 +116,78 @@ export async function updateCreditEntries(formData: FormData): Promise<void> {
   revalidatePath(`/projects/${projectId}/credits/${code}`);
 }
 
+/**
+ * Attach one or more files to a requirement. Several files can be picked at
+ * once, and the same requirement can be added to repeatedly — evidence_doc is
+ * a one-to-many on the entry, so uploads accumulate rather than replace.
+ */
 export async function uploadEvidence(formData: FormData): Promise<void> {
   await requireUser();
   const entryId = String(formData.get("entryId") ?? "");
   const projectId = String(formData.get("projectId") ?? "");
   const code = String(formData.get("code") ?? "");
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0)
-    throw new Error("no file provided");
+  if (!entryId || !projectId) throw new Error("missing ids");
+
+  const files = formData
+    .getAll("file")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) throw new Error("no file provided");
 
   const dir = join(UPLOAD_ROOT, projectId, "evidence");
   await mkdir(dir, { recursive: true });
-  const id = randomUUID();
-  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_");
-  const filePath = join(dir, `${id}-${safeName}`);
-  const buf = Buffer.from(await file.arrayBuffer());
-  await writeFile(filePath, buf);
 
-  await db.insert(evidenceDocs).values({
-    id,
-    workspaceId: WORKSPACE_ID,
-    requirementEntryId: entryId,
-    fileName: file.name,
-    filePath,
-    fileSize: buf.length,
-  });
+  for (const file of files) {
+    const id = randomUUID();
+    const safeName = file.name.replace(/[^\w.\-() ]+/g, "_");
+    const filePath = join(dir, `${id}-${safeName}`);
+    const buf = Buffer.from(await file.arrayBuffer());
+    await writeFile(filePath, buf);
+
+    await db.insert(evidenceDocs).values({
+      id,
+      workspaceId: WORKSPACE_ID,
+      requirementEntryId: entryId,
+      fileName: file.name,
+      filePath,
+      fileSize: buf.length,
+    });
+  }
 
   revalidatePath(`/projects/${projectId}/credits/${code}`);
+  revalidatePath(`/projects/${projectId}/documents`);
+}
+
+/**
+ * Detach an evidence file: remove the row, then the file on disk. Superseded
+ * revisions are meant to go away rather than accumulate, so this is a hard
+ * delete (see docs/feedback/2026-09-sprint-1/05-delete-attached-file).
+ *
+ * The row is looked up by id AND workspace, so a crafted POST cannot reach
+ * another workspace's file. A missing file on disk is not an error — the row is
+ * the thing the UI shows, and leaving it behind would strand it forever.
+ */
+export async function deleteEvidence(formData: FormData): Promise<void> {
+  await requireUser();
+  const docId = String(formData.get("docId") ?? "");
+  const projectId = String(formData.get("projectId") ?? "");
+  const code = String(formData.get("code") ?? "");
+  if (!docId || !projectId) throw new Error("missing ids");
+
+  const [doc] = await db
+    .select()
+    .from(evidenceDocs)
+    .where(
+      and(
+        eq(evidenceDocs.id, docId),
+        eq(evidenceDocs.workspaceId, WORKSPACE_ID),
+      ),
+    )
+    .limit(1);
+  if (!doc) throw new Error("evidence not found");
+
+  await db.delete(evidenceDocs).where(eq(evidenceDocs.id, doc.id));
+  await rm(doc.filePath, { force: true });
+
+  revalidatePath(`/projects/${projectId}/credits/${code}`);
+  revalidatePath(`/projects/${projectId}/documents`);
 }

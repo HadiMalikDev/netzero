@@ -39,3 +39,35 @@ items 3, 4, 5, 10 and 13.
 Serving the file back also needs a new route. Nothing in the product currently
 returns an uploaded evidence file to the browser, so a download link has nothing
 to point at yet.
+
+---
+
+## Done — 2026-09-04
+
+Many files per requirement are now visible, and each can be opened or removed.
+Storage always supported this; the screen did not show it.
+
+The file input takes a multiple selection, so two or three documents attach in
+one go rather than one per click. The audit selected two files at once and both
+landed.
+
+![three files listed](./evidence/after-attachment-list.png)
+
+After removing the superseded one:
+
+![after remove](./evidence/after-remove.png)
+
+The "remove" half of this row is documented in
+[row 5](../05-delete-attached-file/task.md); the shared component and the new
+evidence-serving route are described in
+[row 4](../04-pmm03-attachment-not-visible/task.md).
+
+### Verified
+
+| Check | Result |
+|---|---|
+| Two files attach from one selection | pass |
+| All three names, sizes and dates listed | pass |
+| Badge follows the count | pass, 0 → 1 → 3 → 2 |
+| Each filename opens the stored file | pass, 200 |
+| Removing one leaves the others | pass |

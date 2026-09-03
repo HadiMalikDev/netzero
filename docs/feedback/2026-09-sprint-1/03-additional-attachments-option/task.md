@@ -31,3 +31,38 @@ present. Allow selecting several files in one go rather than one per click.
 The client's phrase "Additional Attachments" describes the section heading they
 expect. Naming the block "Attachments" with an "Add attachment" action underneath
 matches the intent without inventing a second, separate upload slot.
+
+---
+
+## Done — 2026-09-04
+
+The add control now sits under the attachment list and stays there at every
+state, so adding more documents to an approved shop drawing or any other
+requirement is always an available action.
+
+Its label changes with the state, which is what makes the affordance readable:
+
+| State | Label |
+|---|---|
+| No files yet | Attach files |
+| One or more attached | Add attachment |
+
+Empty:
+
+![attach files](./evidence/after-empty-attach-files.png)
+
+With files present, the control reads "Add attachment" beneath the list:
+
+![add attachment](./evidence/after-attachment-list.png)
+
+The input also accepts a multiple selection, so "additional attachments" does
+not mean one click per file.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| Control reads "Attach files" when empty | pass |
+| Control reads "Add attachment" once files exist | pass |
+| Control remains visible with files attached | pass |
+| A two-file selection attaches both | pass |

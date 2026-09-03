@@ -44,3 +44,50 @@ Two decisions worth settling before building:
 
 Recommendation: hard delete for now, matching the stated intent, and revisit if
 an audit-trail requirement appears.
+
+---
+
+## Done — 2026-09-04
+
+Every attachment now carries a Remove action. It deletes the database row and
+then the file on disk, so a superseded revision stops consuming storage, which
+was the reason given for the request.
+
+Three files attached, each with its own Remove:
+
+![attachment list with remove](./evidence/after-attachment-list.png)
+
+After removing the superseded plan, the other two are untouched:
+
+![after remove](./evidence/after-remove.png)
+
+The project Evidence Library reflects the same state, since both screens read
+the same rows:
+
+![documents tab in sync](./evidence/after-documents-tab-in-sync.png)
+
+### Decisions taken
+
+- **Hard delete, not soft.** The audit noted the tension: compliance evidence
+  that was already cited may be worth keeping, but the client asked for this
+  specifically to stop files accumulating and consuming storage, and a soft
+  delete would not free anything. Hard delete matches the stated intent. If an
+  audit-trail requirement appears later this is the place to revisit.
+- **Confirm before deleting.** The button asks first, since the file is gone
+  afterwards.
+- **A missing file on disk is not an error.** The row is still removed, because
+  leaving it behind would strand an entry the user cannot get rid of.
+- **Scoped by workspace.** The row is looked up by id *and* workspace, so a
+  crafted request cannot reach another workspace's file.
+- **Anyone in the workspace may delete.** There is one role today. Worth
+  revisiting when roles land.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| Every attachment has a Remove control | pass |
+| Removing one leaves the others intact | pass |
+| Badge drops with the removal | pass, 3 → 2 |
+| The Documents tab drops it too | pass, 2 links |
+| Unknown evidence id is refused | pass, 404 |

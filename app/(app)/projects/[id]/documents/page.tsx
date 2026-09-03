@@ -6,6 +6,7 @@ import { Card, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { FileIcon } from "@/components/icons";
 import { getProject, listProjectEvidence } from "@/lib/data";
+import { formatFileSize, formatUploadedAt } from "@/lib/format";
 
 export default async function DocumentsPage({
   params,
@@ -57,14 +58,24 @@ export default async function DocumentsPage({
                     <FileIcon width={18} height={18} />
                   </span>
                   <div>
-                    <div className="font-medium text-slate-900">
+                    {/* The filename was plain text: nothing in the app served a
+                        stored evidence file back. It is now a link. */}
+                    <a
+                      href={`/api/evidence/${e.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-brand-700 hover:text-brand-800 hover:underline"
+                    >
                       {e.fileName}
-                    </div>
+                    </a>
                     <div className="text-sm text-slate-500">
-                      {e.fileSize
-                        ? `${(e.fileSize / 1024).toFixed(0)} KB · `
-                        : ""}
-                      attached to requirement #{e.requirementSeq}
+                      {[
+                        formatFileSize(e.fileSize),
+                        formatUploadedAt(e.createdAt),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}{" "}
+                      · attached to requirement #{e.requirementSeq}
                     </div>
                   </div>
                 </div>

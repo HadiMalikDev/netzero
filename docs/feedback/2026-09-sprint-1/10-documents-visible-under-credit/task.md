@@ -37,3 +37,31 @@ links to both.
 
 This is the same component as items 2, 3, 4, 5 and 13. Building it once closes
 all six.
+
+---
+
+## Done — 2026-09-04
+
+Evidence is now listed directly under the requirement it belongs to, which is
+where the user is standing when they ask what has been provided.
+
+![attachments under the credit](./evidence/after-attachment-list.png)
+
+The project Evidence Library is kept as the cross-credit roll-up, and its
+filenames are now links too. Previously they were plain text, because no route
+existed to serve a stored file.
+
+![documents tab with links](./evidence/after-documents-tab-links.png)
+
+So traceability now reads in both directions: from the credit to its files, and
+from a file back to its credit.
+
+### Verified
+
+| Check | Result |
+|---|---|
+| Files listed under the requirement, by name | pass |
+| Each name opens the stored file | pass, 200 |
+| Size and upload date shown per file | pass |
+| Documents tab filenames are links | pass |
+| Both screens agree after a removal | pass |

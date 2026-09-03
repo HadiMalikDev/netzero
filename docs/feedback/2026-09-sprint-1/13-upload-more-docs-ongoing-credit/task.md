@@ -29,3 +29,28 @@ None specific to this row. It closes when the attachment list from item 2 ships,
 with the add control staying visible under the list at every credit status.
 
 Kept as its own folder so the client's numbering stays intact.
+
+---
+
+## Done — 2026-09-04
+
+Already functional; now visible. The add control sits under the attachment list
+and stays available at every credit status, and each upload is confirmed by the
+filename appearing in the list rather than by a number changing.
+
+After the first upload on an in-progress credit:
+
+![first upload](./evidence/after-first-upload.png)
+
+After adding two more:
+
+![three files](./evidence/after-attachment-list.png)
+
+### Verified
+
+| Check | Result |
+|---|---|
+| A second and third file attach to an in-progress credit | pass |
+| Earlier files are not replaced | pass, all three listed |
+| Add control stays visible with files present | pass |
+| Badge follows the count | pass, 1 → 3 |

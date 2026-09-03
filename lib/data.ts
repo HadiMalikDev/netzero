@@ -72,6 +72,14 @@ export async function firstProjectId(): Promise<string | null> {
 
 // ---------- credit status computation ----------
 
+/** One uploaded evidence file, as the credit screen shows it. */
+export interface EvidenceAttachment {
+  id: string;
+  fileName: string;
+  fileSize: number | null;
+  createdAt: number;
+}
+
 export interface RequirementView {
   entryId: string;
   requirementId: string;
@@ -94,6 +102,8 @@ export interface RequirementView {
   valueText: string | null;
   note: string | null;
   evidenceCount: number;
+  /** Files attached to this requirement, oldest first. */
+  attachments: EvidenceAttachment[];
   status: Status;
   pointsEarned: number;
   pointsPreview: number;
@@ -180,6 +190,9 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
     .select({
       entryId: evidenceDocs.requirementEntryId,
       id: evidenceDocs.id,
+      fileName: evidenceDocs.fileName,
+      fileSize: evidenceDocs.fileSize,
+      createdAt: evidenceDocs.createdAt,
     })
     .from(evidenceDocs)
     .where(
@@ -187,10 +200,19 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
         evidenceDocs.requirementEntryId,
         entries.map((e) => e.entryId),
       ),
-    );
-  const evCount = new Map<string, number>();
-  for (const e of evidence)
-    evCount.set(e.entryId, (evCount.get(e.entryId) ?? 0) + 1);
+    )
+    .orderBy(evidenceDocs.createdAt);
+  const evByEntry = new Map<string, EvidenceAttachment[]>();
+  for (const e of evidence) {
+    const arr = evByEntry.get(e.entryId) ?? [];
+    arr.push({
+      id: e.id,
+      fileName: e.fileName,
+      fileSize: e.fileSize,
+      createdAt: e.createdAt,
+    });
+    evByEntry.set(e.entryId, arr);
+  }
 
   const byCredit = new Map<string, RequirementView[]>();
   for (const e of entries) {
@@ -202,7 +224,8 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
     // that the requirement can be closed without a file — so it must not soften
     // this flag. `evidenceSpecs` still drives WHICH documents are listed.
     const requiresEvidence = true;
-    const evidenceCount = evCount.get(e.entryId) ?? 0;
+    const attachments = evByEntry.get(e.entryId) ?? [];
+    const evidenceCount = attachments.length;
     const status = deriveRequirementStatus({
       metricType: e.metricType,
       requiresEvidence,
@@ -244,6 +267,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       valueText: e.valueText,
       note: e.note,
       evidenceCount,
+      attachments,
       status,
       pointsEarned: pointsAwarded(award, "earned"),
       pointsPreview: pointsAwarded(award, "preview"),

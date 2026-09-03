@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
-import { UploadIcon } from "@/components/icons";
 import { ExpandableText } from "@/components/ExpandableText";
 import { BandTable } from "@/components/BandTable";
 import { MetricBadge, OptionBadge, PointsRange } from "@/components/req";
-import { uploadEvidence } from "../../../actions";
+import { AttachmentList } from "@/components/AttachmentList";
+import { deleteEvidence, uploadEvidence } from "../../../actions";
 import type { RequirementView } from "@/lib/data";
 import type { NumericLimit } from "@/lib/parser/types";
 import { bandsFromSpec, firstBands, pointsForValue } from "@/lib/points";
@@ -167,10 +167,9 @@ export function RequirementItem({
         </div>
       ) : null}
 
-      {/* Evidence */}
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        {/* Evidence is mandatory on every requirement — see requiresEvidence in
-            lib/data.ts. There is deliberately no "optional" state here. */}
+      {/* Evidence. Mandatory on every requirement — see requiresEvidence in
+          lib/data.ts. There is deliberately no "optional" state here. */}
+      <div className="mt-3">
         <span className="text-xs font-semibold text-slate-500">
           Evidence
           <span
@@ -183,37 +182,15 @@ export function RequirementItem({
             required · {req.evidenceCount} attached
           </span>
         </span>
-        <EvidenceUpload entryId={req.entryId} projectId={projectId} code={code} />
+        <AttachmentList
+          attachments={req.attachments}
+          entryId={req.entryId}
+          projectId={projectId}
+          code={code}
+          uploadAction={uploadEvidence}
+          deleteAction={deleteEvidence}
+        />
       </div>
     </div>
-  );
-}
-
-function EvidenceUpload({
-  entryId,
-  projectId,
-  code,
-}: {
-  entryId: string;
-  projectId: string;
-  code: string;
-}) {
-  const ref = useRef<HTMLFormElement>(null);
-  return (
-    <form ref={ref} action={uploadEvidence} className="inline-flex">
-      <input type="hidden" name="entryId" value={entryId} />
-      <input type="hidden" name="projectId" value={projectId} />
-      <input type="hidden" name="code" value={code} />
-      <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
-        <UploadIcon width={15} height={15} />
-        Attach file
-        <input
-          type="file"
-          name="file"
-          className="hidden"
-          onChange={() => ref.current?.requestSubmit()}
-        />
-      </label>
-    </form>
   );
 }
