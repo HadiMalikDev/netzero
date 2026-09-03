@@ -197,7 +197,11 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
     const evidenceSpecs: string[] = e.evidenceSpecs
       ? (JSON.parse(e.evidenceSpecs) as string[])
       : [];
-    const requiresEvidence = evidenceSpecs.length > 0;
+    // Evidence is mandatory for every Mostadam credit being claimed. An empty
+    // evidenceSpecs list means the manual's evidence table did not extract, not
+    // that the requirement can be closed without a file — so it must not soften
+    // this flag. `evidenceSpecs` still drives WHICH documents are listed.
+    const requiresEvidence = true;
     const evidenceCount = evCount.get(e.entryId) ?? 0;
     const status = deriveRequirementStatus({
       metricType: e.metricType,

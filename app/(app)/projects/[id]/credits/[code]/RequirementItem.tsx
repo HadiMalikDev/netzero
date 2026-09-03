@@ -169,15 +169,19 @@ export function RequirementItem({
 
       {/* Evidence */}
       <div className="mt-3 flex flex-wrap items-center gap-3">
+        {/* Evidence is mandatory on every requirement — see requiresEvidence in
+            lib/data.ts. There is deliberately no "optional" state here. */}
         <span className="text-xs font-semibold text-slate-500">
           Evidence
-          {req.requiresEvidence ? (
-            <span className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-              required · {req.evidenceCount} attached
-            </span>
-          ) : (
-            <span className="ml-1 font-normal text-slate-400">(optional)</span>
-          )}
+          <span
+            className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+              req.evidenceCount > 0
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-amber-50 text-amber-700"
+            }`}
+          >
+            required · {req.evidenceCount} attached
+          </span>
         </span>
         <EvidenceUpload entryId={req.entryId} projectId={projectId} code={code} />
       </div>
