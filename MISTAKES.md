@@ -87,3 +87,20 @@ was underway and reasonably assumed the worst.
 say so before touching the environment, and state plainly that no source files will change. Environment
 setup for reproduction is fine; announce it as reproduction. Present the list and let the client pick
 before writing a line of application code.
+
+
+## 2026-09-04 — Dashboard credit tiles all opened the same page
+
+**What happened:** The clickable-tile fix sent Active Projects, Credits Completed, In Progress
+and Missing Evidence to `/projects` whenever the workspace had more than one project. The
+cards looked clickable but all four landed on the same list.
+
+**Root cause:** Optimised for "the dashboard count is workspace-wide, so one project's
+filtered list would misrepresent the number" and treated a shared fallback as safer than
+distinct destinations. That overrode the original destinations (projects list vs completed /
+in-progress / missing-evidence credits) and ignored the existing Credits nav convention:
+from the dashboard, credits resolve to the first project.
+
+**Prevention:** Drill-downs keep distinct destinations. When a workspace-wide number has no
+workspace-wide list, follow the same first-project resolution the Credits nav already uses,
+with the filter applied — do not collapse every tile onto one page.

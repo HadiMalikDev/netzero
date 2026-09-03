@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { activeProjectId, dashboardCreditsHref, navHref } from "@/lib/nav";
+import {
+  activeProjectId,
+  dashboardCreditsHref,
+  navHref,
+  searchParamsQuery,
+} from "@/lib/nav";
 
 const CREDITS = { href: "/credits", projectScoped: true };
 const DOCUMENTS = { href: "/documents", projectScoped: true };
@@ -47,7 +52,7 @@ describe("navHref", () => {
 });
 
 describe("dashboardCreditsHref", () => {
-  it("drills into the only project's filtered credits", () => {
+  it("drills into the first project's filtered credits", () => {
     expect(dashboardCreditsHref([P], "missing_evidence")).toBe(
       `/projects/${P}/credits?filter=missing_evidence`,
     );
@@ -56,13 +61,37 @@ describe("dashboardCreditsHref", () => {
     );
   });
 
-  it("opens the projects list when the count spans several projects", () => {
-    // The dashboard totals are workspace-wide, so no single project's filtered
-    // list would honestly represent the number on the tile.
-    expect(dashboardCreditsHref([P, "other-id"], "completed")).toBe("/projects");
+  it("keeps the filter when the count spans several projects", () => {
+    // Same convention as the workspace Credits nav: first project, filtered.
+    // Distinct filters must stay distinct — do not collapse onto /projects.
+    expect(dashboardCreditsHref([P, "other-id"], "completed")).toBe(
+      `/projects/${P}/credits?filter=completed`,
+    );
+    expect(dashboardCreditsHref([P, "other-id"], "in_progress")).toBe(
+      `/projects/${P}/credits?filter=in_progress`,
+    );
+    expect(dashboardCreditsHref([P, "other-id"], "missing_evidence")).toBe(
+      `/projects/${P}/credits?filter=missing_evidence`,
+    );
   });
 
-  it("opens the projects list when there are no projects", () => {
-    expect(dashboardCreditsHref([], "completed")).toBe("/projects");
+  it("falls through to the workspace Credits resolver with no projects", () => {
+    expect(dashboardCreditsHref([], "completed")).toBe(
+      "/credits?filter=completed",
+    );
+  });
+});
+
+describe("searchParamsQuery", () => {
+  it("forwards a filter so the workspace Credits URL keeps its meaning", () => {
+    expect(searchParamsQuery({ filter: "in_progress" })).toBe(
+      "?filter=in_progress",
+    );
+  });
+
+  it("is empty when there is nothing to forward", () => {
+    expect(searchParamsQuery()).toBe("");
+    expect(searchParamsQuery({})).toBe("");
+    expect(searchParamsQuery({ filter: undefined })).toBe("");
   });
 });

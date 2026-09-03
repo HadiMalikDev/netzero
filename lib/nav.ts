@@ -33,15 +33,37 @@ export function navHref(item: ScopedNavItem, pathname: string): string {
 }
 
 /**
- * Where a dashboard metric tile should drill to. The dashboard counts span every
- * project, so a filtered credits list is only an honest destination when there
- * is exactly one project; otherwise the tile opens the projects list.
+ * Query string from a Next.js `searchParams` object, including a leading `?`.
+ * Empty / missing values produce an empty string.
+ */
+export function searchParamsQuery(
+  searchParams?: Record<string, string | string[] | undefined>,
+): string {
+  if (!searchParams) return "";
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (value == null) continue;
+    if (Array.isArray(value)) {
+      for (const v of value) params.append(key, v);
+    } else {
+      params.set(key, value);
+    }
+  }
+  const s = params.toString();
+  return s ? `?${s}` : "";
+}
+
+/**
+ * Where a dashboard credits tile should drill to. Same convention as the
+ * workspace Credits nav: the first project, with the requested filter applied.
+ * With no projects yet, the workspace Credits resolver shows the empty state.
  */
 export function dashboardCreditsHref(
   projectIds: string[],
   filter: string,
 ): string {
-  return projectIds.length === 1
-    ? `/projects/${projectIds[0]}/credits?filter=${filter}`
-    : "/projects";
+  const qs = `filter=${encodeURIComponent(filter)}`;
+  return projectIds.length >= 1
+    ? `/projects/${projectIds[0]}/credits?${qs}`
+    : `/credits?${qs}`;
 }

@@ -21,7 +21,7 @@ export default async function DashboardPage() {
     })),
   );
 
-  // Tiles drill into the list the number came from (see lib/nav).
+  // Credits tiles follow the workspace Credits nav: first project, filtered.
   const ids = projects.map((p) => p.id);
   const creditsHref = (filter: string) => dashboardCreditsHref(ids, filter);
 
