@@ -78,6 +78,8 @@ export interface EvidenceAttachment {
   fileName: string;
   fileSize: number | null;
   createdAt: number;
+  /** Index into the requirement's evidenceSpecs, or null if unassigned. */
+  evidenceSpecIndex: number | null;
 }
 
 export interface RequirementView {
@@ -193,6 +195,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       fileName: evidenceDocs.fileName,
       fileSize: evidenceDocs.fileSize,
       createdAt: evidenceDocs.createdAt,
+      evidenceSpecIndex: evidenceDocs.evidenceSpecIndex,
     })
     .from(evidenceDocs)
     .where(
@@ -210,6 +213,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       fileName: e.fileName,
       fileSize: e.fileSize,
       createdAt: e.createdAt,
+      evidenceSpecIndex: e.evidenceSpecIndex,
     });
     evByEntry.set(e.entryId, arr);
   }

@@ -1,0 +1,1 @@
+ALTER TABLE "evidence_doc" ADD COLUMN "evidence_spec_index" integer;

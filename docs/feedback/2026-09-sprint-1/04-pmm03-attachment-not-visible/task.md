@@ -111,3 +111,12 @@ This one change closes rows 2, 3, 5, 10 and 13 as well.
 | Unknown evidence id is refused | pass, 404 |
 | Evidence is not served without a session | pass, 401 |
 | Documents tab lists the same files as links | pass |
+
+### Final shipped appearance
+
+Row 9 landed after this one and folded the attachment list into a
+required-documents checklist, so the screen now looks like this. Files sit under
+the document they provide, with unassigned ones grouped as "Other attachments".
+Everything verified above still holds.
+
+![shipped UI](./evidence/after-shipped-ui.png)

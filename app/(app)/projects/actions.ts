@@ -133,6 +133,11 @@ export async function uploadEvidence(formData: FormData): Promise<void> {
     .filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) throw new Error("no file provided");
 
+  // Which required document these files provide, if the upload came from a
+  // checklist row. Absent or unparseable means "not assigned to a document".
+  const rawSlot = String(formData.get("evidenceSpecIndex") ?? "").trim();
+  const slot = /^\d+$/.test(rawSlot) ? Number(rawSlot) : null;
+
   const dir = join(UPLOAD_ROOT, projectId, "evidence");
   await mkdir(dir, { recursive: true });
 
@@ -150,6 +155,7 @@ export async function uploadEvidence(formData: FormData): Promise<void> {
       fileName: file.name,
       filePath,
       fileSize: buf.length,
+      evidenceSpecIndex: slot,
     });
   }
 

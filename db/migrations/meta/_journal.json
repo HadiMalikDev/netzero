@@ -15,6 +15,13 @@
       "when": 1787433300000,
       "tag": "0001_seed_solo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788469651447,
+      "tag": "0002_overconfident_rockslide",
+      "breakpoints": true
     }
   ]
 }

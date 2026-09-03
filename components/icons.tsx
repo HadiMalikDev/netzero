@@ -119,3 +119,9 @@ export const PlusIcon = (p: P) => (
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
+
+export const CheckIcon = (p: P) => (
+  <svg {...base} strokeWidth={3} {...p}>
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);

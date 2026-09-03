@@ -71,3 +71,12 @@ evidence-serving route are described in
 | Badge follows the count | pass, 0 → 1 → 3 → 2 |
 | Each filename opens the stored file | pass, 200 |
 | Removing one leaves the others | pass |
+
+### Final shipped appearance
+
+Row 9 landed after this one and folded the attachment list into a
+required-documents checklist, so the screen now looks like this. Files sit under
+the document they provide, with unassigned ones grouped as "Other attachments".
+Everything verified above still holds.
+
+![shipped UI](./evidence/after-shipped-ui.png)

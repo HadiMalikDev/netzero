@@ -306,6 +306,14 @@ export const evidenceDocs = pgTable("evidence_doc", {
   fileName: text("file_name").notNull(),
   filePath: text("file_path").notNull(),
   fileSize: integer("file_size"),
+  /**
+   * Which of the requirement's extracted evidence documents this file provides,
+   * as an index into catalog_requirement.evidence_specs. Null means the file is
+   * attached to the requirement without claiming a specific document — the case
+   * for supporting material, and for requirements whose evidence list did not
+   * extract. Nullable so it can never block an upload.
+   */
+  evidenceSpecIndex: integer("evidence_spec_index"),
   createdAt: integer("created_at").notNull().default(now),
 });
 

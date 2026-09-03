@@ -54,3 +54,12 @@ After adding two more:
 | Earlier files are not replaced | pass, all three listed |
 | Add control stays visible with files present | pass |
 | Badge follows the count | pass, 1 → 3 |
+
+### Final shipped appearance
+
+Row 9 landed after this one and folded the attachment list into a
+required-documents checklist, so the screen now looks like this. Files sit under
+the document they provide, with unassigned ones grouped as "Other attachments".
+Everything verified above still holds.
+
+![shipped UI](./evidence/after-shipped-ui.png)

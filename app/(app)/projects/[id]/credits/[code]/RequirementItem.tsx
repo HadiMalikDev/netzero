@@ -5,7 +5,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { ExpandableText } from "@/components/ExpandableText";
 import { BandTable } from "@/components/BandTable";
 import { MetricBadge, OptionBadge, PointsRange } from "@/components/req";
-import { AttachmentList } from "@/components/AttachmentList";
+import { EvidenceChecklist } from "@/components/EvidenceChecklist";
 import { deleteEvidence, uploadEvidence } from "../../../actions";
 import type { RequirementView } from "@/lib/data";
 import type { NumericLimit } from "@/lib/parser/types";
@@ -182,7 +182,8 @@ export function RequirementItem({
             required · {req.evidenceCount} attached
           </span>
         </span>
-        <AttachmentList
+        <EvidenceChecklist
+          specs={req.evidenceSpecs}
           attachments={req.attachments}
           entryId={req.entryId}
           projectId={projectId}

@@ -66,3 +66,12 @@ not mean one click per file.
 | Control reads "Add attachment" once files exist | pass |
 | Control remains visible with files attached | pass |
 | A two-file selection attaches both | pass |
+
+### Final shipped appearance
+
+Row 9 landed after this one and folded the attachment list into a
+required-documents checklist, so the screen now looks like this. Files sit under
+the document they provide, with unassigned ones grouped as "Other attachments".
+Everything verified above still holds.
+
+![shipped UI](./evidence/after-shipped-ui.png)
