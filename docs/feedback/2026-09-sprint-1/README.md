@@ -85,3 +85,22 @@ assume *targeted points* and a *target certification tier*, which the product
 has no concept of — a dial showing "progress toward target" is meaningless
 without one. Row 14 needs a ruling on whether an explicit met/not-met tick may
 override the derived status the whole scoring model rests on.
+
+## Regression check after the sprint
+
+Every screen was re-opened in a browser after the last commit, with console
+errors and 5xx responses treated as failures.
+
+| Screen | Result |
+|---|---|
+| Dashboard, Projects | pass |
+| Project overview, Credits list, Documents, AI Assistant | pass |
+| Credit detail: PMM-03, W-02 (banded points), HC-10 (either/or group) | pass |
+| Second project's credits | pass |
+| Catalog admin | pass |
+| All four credits-list filters | pass |
+| No console errors, no 5xx | pass |
+
+`pnpm build` succeeds, `tsc --noEmit` is clean, ESLint reports no errors (5
+pre-existing warnings, untouched), and the suite is 70 passing with 6 skipped
+database tests.
