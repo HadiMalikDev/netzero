@@ -68,3 +68,22 @@ done. Prefer the LLM for layout-variant normalization over hand-tuned regex.
 **Root cause:** Used test-jargon (fixture) for the *known-good check*, without saying the parser must walk the whole uploaded manual and emit every credit it can find.
 
 **Prevention:** Say it in product language: upload a spec PDF → extract all credits/requirements in that file. HC-10 is one credit we already know, used to *verify* the extract — not the only thing we parse.
+
+
+## 2026-09-04 — Started standing up an implementation environment when the ask was an audit
+
+**What happened:** Asked to study the client feedback PDF, investigate each item in the browser, and
+come back with quick wins, I began by provisioning a full working environment — creating a database,
+seeding the catalog, promoting all 56 credits, creating projects — reading the request as a prelude to
+building. The client interrupted mid-run: "Make sure to not actually do work like this, this is just
+like I want you to audit then come back and give me a list of what we can look to."
+
+**Root cause:** Read "walk me through what changes we can make right now" as authorization to start
+making them. The words "right now" describe the *shortlist*, not the timing of the work. Investigation
+setup and implementation setup look identical from the outside, so the client could not tell which one
+was underway and reasonably assumed the worst.
+
+**Prevention:** When the deliverable is a recommendation — an audit, a quick-wins list, an assessment —
+say so before touching the environment, and state plainly that no source files will change. Environment
+setup for reproduction is fine; announce it as reproduction. Present the list and let the client pick
+before writing a line of application code.
