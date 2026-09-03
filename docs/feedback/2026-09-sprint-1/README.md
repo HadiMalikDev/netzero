@@ -1,7 +1,7 @@
 # Sprint 1 — Client Feedback Log (Jeddah Central Oceanarium)
 
 Source: [`source/NetZero_Platform_Feedback_Log.pdf`](./source/NetZero_Platform_Feedback_Log.pdf)
-Prepared by client: 2026-08-31 · Audited: 2026-09-04 · Status: **10 of 14 shipped**
+Prepared by client: 2026-08-31 · Audited: 2026-09-04 · Status: **11 of 14 shipped**
 
 Project context: Jeddah Central Oceanarium — Mostadam Commercial D+C v1.0-2019, Design Stage.
 
@@ -32,7 +32,7 @@ session via Playwright.
 | 3 | "Additional Attachments" option | Feature | **Shipped** |
 | 4 | PMM-03 attachment not visible | Bug | **Shipped** |
 | 5 | Delete an attached file | Feature | **Shipped** |
-| 6 | AI review of the uploaded document | Feature | Open — large build |
+| 6 | AI review of the uploaded document | Feature | **Shipped** |
 | 7 | Dashboard cards not clickable | Bug | **Shipped** |
 | 8 | Excel scorecard export | Feature | Open — needs your decision |
 | 9 | Required-documents checklist per credit | Feature | **Shipped** |
@@ -72,17 +72,13 @@ Five commits on `feat/feedback-sprint-1`, easiest first:
    stored file, multi-file upload and delete.
 5. **Row 9** — the required-documents checklist, with each attachment linked to
    the document it provides.
+6. **Row 6** — the AI read of an uploaded document against its requirement,
+   advisory only, quoting the document or staying silent.
 
-One additive migration, `0002`, adding a nullable `evidence_spec_index` to
-`evidence_doc`.
+Two additive migrations: `0002` adds a nullable `evidence_spec_index` to
+`evidence_doc`, `0003` adds the `evidence_review` table.
 
 ## What is left, and why
-
-**Row 6, AI review of an uploaded document.** The only genuinely large build.
-The PDF text extractor and the language-model client both already exist, but the
-pipeline, storage and an asynchronous path do not. It also needs a decision on
-whether a verdict may influence credit status; the recommendation in its
-`task.md` is that it must not.
 
 **Rows 8, 11 and 14 need a product decision from you.** Rows 8 and 11 both
 assume *targeted points* and a *target certification tier*, which the product

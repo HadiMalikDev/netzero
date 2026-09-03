@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { CheckIcon, FileIcon, UploadIcon } from "@/components/icons";
+import { ReviewNote } from "@/components/ReviewNote";
 import { formatFileSize, formatUploadedAt } from "@/lib/format";
 import type { EvidenceAttachment } from "@/lib/data";
 
@@ -54,37 +55,48 @@ function AttachmentRow({
   projectId,
   code,
   deleteAction,
+  rerunAction,
 }: {
   file: EvidenceAttachment;
   projectId: string;
   code: string;
   deleteAction: (formData: FormData) => Promise<void>;
+  rerunAction: (formData: FormData) => Promise<void>;
 }) {
   return (
-    <li className="flex items-center gap-2 py-1">
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500">
-        <FileIcon width={12} height={12} />
-      </span>
-      <a
-        href={`/api/evidence/${file.id}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="min-w-0 flex-1 truncate text-sm font-medium text-brand-700 hover:text-brand-800 hover:underline"
-        title={file.fileName}
-      >
-        {file.fileName}
-      </a>
-      <span className="shrink-0 text-xs text-slate-400">
-        {[formatFileSize(file.fileSize), formatUploadedAt(file.createdAt)]
-          .filter(Boolean)
-          .join(" · ")}
-      </span>
-      <form action={deleteAction} className="shrink-0">
-        <input type="hidden" name="docId" value={file.id} />
-        <input type="hidden" name="projectId" value={projectId} />
-        <input type="hidden" name="code" value={code} />
-        <RemoveButton />
-      </form>
+    <li className="py-1">
+      <div className="flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500">
+          <FileIcon width={12} height={12} />
+        </span>
+        <a
+          href={`/api/evidence/${file.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="min-w-0 flex-1 truncate text-sm font-medium text-brand-700 hover:text-brand-800 hover:underline"
+          title={file.fileName}
+        >
+          {file.fileName}
+        </a>
+        <span className="shrink-0 text-xs text-slate-400">
+          {[formatFileSize(file.fileSize), formatUploadedAt(file.createdAt)]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+        <form action={deleteAction} className="shrink-0">
+          <input type="hidden" name="docId" value={file.id} />
+          <input type="hidden" name="projectId" value={projectId} />
+          <input type="hidden" name="code" value={code} />
+          <RemoveButton />
+        </form>
+      </div>
+      <ReviewNote
+        review={file.review}
+        docId={file.id}
+        projectId={projectId}
+        code={code}
+        rerunAction={rerunAction}
+      />
     </li>
   );
 }
@@ -138,6 +150,7 @@ export function EvidenceChecklist({
   code,
   uploadAction,
   deleteAction,
+  rerunAction,
 }: {
   /** The required documents, from the manual's evidence table. */
   specs: string[];
@@ -147,6 +160,7 @@ export function EvidenceChecklist({
   code: string;
   uploadAction: (formData: FormData) => Promise<void>;
   deleteAction: (formData: FormData) => Promise<void>;
+  rerunAction: (formData: FormData) => Promise<void>;
 }) {
   const bySpec = new Map<number, EvidenceAttachment[]>();
   const unassigned: EvidenceAttachment[] = [];
@@ -226,6 +240,7 @@ export function EvidenceChecklist({
                           projectId={projectId}
                           code={code}
                           deleteAction={deleteAction}
+                          rerunAction={rerunAction}
                         />
                       ))}
                     </ul>
@@ -252,6 +267,7 @@ export function EvidenceChecklist({
                 projectId={projectId}
                 code={code}
                 deleteAction={deleteAction}
+                rerunAction={rerunAction}
               />
             ))}
           </ul>

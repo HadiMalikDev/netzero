@@ -5,6 +5,7 @@ import {
   catalogCredits,
   catalogRequirements,
   evidenceDocs,
+  evidenceReviews,
   projectCredits,
   projects,
   requirementEntries,
@@ -70,9 +71,33 @@ export async function firstProjectId(): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
+/** A stored JSON array of strings, tolerant of null and malformed values. */
+function jsonList(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.map((x) => String(x)) : [];
+  } catch {
+    return [];
+  }
+}
+
 // ---------- credit status computation ----------
 
 /** One uploaded evidence file, as the credit screen shows it. */
+/**
+ * The AI's advisory read of one attachment. Never feeds status or points — see
+ * lib/ai/evidence-review.ts.
+ */
+export interface EvidenceReviewView {
+  state: string; // pending | done | failed
+  verdict: string | null;
+  summary: string | null;
+  quotes: string[];
+  gaps: string[];
+  error: string | null;
+}
+
 export interface EvidenceAttachment {
   id: string;
   fileName: string;
@@ -80,6 +105,7 @@ export interface EvidenceAttachment {
   createdAt: number;
   /** Index into the requirement's evidenceSpecs, or null if unassigned. */
   evidenceSpecIndex: number | null;
+  review: EvidenceReviewView | null;
 }
 
 export interface RequirementView {
@@ -196,8 +222,18 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       fileSize: evidenceDocs.fileSize,
       createdAt: evidenceDocs.createdAt,
       evidenceSpecIndex: evidenceDocs.evidenceSpecIndex,
+      reviewState: evidenceReviews.state,
+      reviewVerdict: evidenceReviews.verdict,
+      reviewSummary: evidenceReviews.summary,
+      reviewQuotes: evidenceReviews.quotes,
+      reviewGaps: evidenceReviews.gaps,
+      reviewError: evidenceReviews.error,
     })
     .from(evidenceDocs)
+    .leftJoin(
+      evidenceReviews,
+      eq(evidenceReviews.evidenceDocId, evidenceDocs.id),
+    )
     .where(
       inArray(
         evidenceDocs.requirementEntryId,
@@ -214,6 +250,16 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       fileSize: e.fileSize,
       createdAt: e.createdAt,
       evidenceSpecIndex: e.evidenceSpecIndex,
+      review: e.reviewState
+        ? {
+            state: e.reviewState,
+            verdict: e.reviewVerdict,
+            summary: e.reviewSummary,
+            quotes: jsonList(e.reviewQuotes),
+            gaps: jsonList(e.reviewGaps),
+            error: e.reviewError,
+          }
+        : null,
     });
     evByEntry.set(e.entryId, arr);
   }

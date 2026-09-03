@@ -6,7 +6,11 @@ import { ExpandableText } from "@/components/ExpandableText";
 import { BandTable } from "@/components/BandTable";
 import { MetricBadge, OptionBadge, PointsRange } from "@/components/req";
 import { EvidenceChecklist } from "@/components/EvidenceChecklist";
-import { deleteEvidence, uploadEvidence } from "../../../actions";
+import {
+  deleteEvidence,
+  rerunEvidenceReview,
+  uploadEvidence,
+} from "../../../actions";
 import type { RequirementView } from "@/lib/data";
 import type { NumericLimit } from "@/lib/parser/types";
 import { bandsFromSpec, firstBands, pointsForValue } from "@/lib/points";
@@ -190,6 +194,7 @@ export function RequirementItem({
           code={code}
           uploadAction={uploadEvidence}
           deleteAction={deleteEvidence}
+          rerunAction={rerunEvidenceReview}
         />
       </div>
     </div>
