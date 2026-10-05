@@ -87,6 +87,12 @@ export function CreditsTable({
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [filtered]);
 
+  // The last rows sit at the bottom of the page, where a tooltip opening
+  // downwards would be cut off by the scroll area.
+  const nearBottom = new Set(
+    groups.flatMap(([, g]) => g.rows).slice(-2).map((r) => r.code),
+  );
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -116,8 +122,11 @@ export function CreditsTable({
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <table className="w-full text-sm">
+      {/* No overflow-hidden here: it would clip the Targeted tooltips. The last
+          row's corner cells are rounded instead, so hover backgrounds stay
+          inside the border. */}
+      <div className="rounded-xl border border-slate-200 bg-white">
+        <table className="w-full text-sm [&_tbody_tr:last-child_td:first-child]:rounded-bl-xl [&_tbody_tr:last-child_td:last-child]:rounded-br-xl">
           <thead>
             <tr className="border-b border-slate-100 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <th className="px-5 py-3">Credit</th>
@@ -136,6 +145,7 @@ export function CreditsTable({
                 rows={g.rows}
                 projectId={projectId}
                 targetAction={targetAction}
+                nearBottom={nearBottom}
               />
             ))}
             {filtered.length === 0 ? (
@@ -158,12 +168,14 @@ function CategoryGroup({
   rows,
   projectId,
   targetAction,
+  nearBottom,
 }: {
   code: string;
   name: string;
   rows: CreditRow[];
   projectId: string;
   targetAction: (formData: FormData) => Promise<void>;
+  nearBottom: Set<string>;
 }) {
   return (
     <>
@@ -213,9 +225,11 @@ function CategoryGroup({
             <TargetedToggle
               projectId={projectId}
               projectCreditId={c.projectCreditId}
+              code={c.code}
               targeted={c.targeted}
               action={targetAction}
               compact
+              tooltipAbove={nearBottom.has(c.code)}
             />
           </td>
         </tr>

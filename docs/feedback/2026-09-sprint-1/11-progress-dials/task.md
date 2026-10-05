@@ -172,3 +172,23 @@ drop out (9 do for warehouses). That is not built yet.
   - project sums.
 - 117 passing with the database tests on; `tsc` clean; lint has no errors (the
   5 existing warnings are untouched).
+
+### Follow-up (2026-10-05): the Targeted button
+
+The "Targeted · click to drop" pill next to the category badges was easy to
+misread. It is now a **Targeted / Not targeted** button:
+
+- **Placement.** On the credit page it sits on the right, beside the status and
+  Save all. The credits list's Targeted column uses the same button.
+- **Hover or keyboard focus** shows what the state means: what counts toward
+  the targeted total, how the Excel export labels it, and that anything it
+  earns still counts.
+- **Dropping a credit asks for confirmation** ("Stop targeting W-01? …").
+  Re-targeting goes straight through.
+
+![credit page: Targeted button with its explanation](./evidence/after-targeted-button-hover.png)
+
+![credits list: the same on the last row](./evidence/after-targeted-list-hover.png)
+
+The credits table no longer clips its contents, so the explanation is not cut
+off; on the last two rows it opens upwards.

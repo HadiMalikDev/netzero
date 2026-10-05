@@ -74,12 +74,6 @@ export default async function CreditDetailPage({
                     Keystone
                   </span>
                 ) : null}
-                <TargetedToggle
-                  projectId={id}
-                  projectCreditId={credit.projectCreditId}
-                  targeted={credit.targeted}
-                  action={setCreditTargeted}
-                />
               </div>
               <h1 className="mt-2 text-2xl font-semibold text-slate-900">
                 {credit.code} — {credit.title}
@@ -103,6 +97,13 @@ export default async function CreditDetailPage({
           </div>
           <div className="flex shrink-0 items-center gap-3">
             <StatusPill status={credit.status} />
+            <TargetedToggle
+              projectId={id}
+              projectCreditId={credit.projectCreditId}
+              code={credit.code}
+              targeted={credit.targeted}
+              action={setCreditTargeted}
+            />
             {/* Single per-credit Save form; requirement inputs bind via
                 form="save-credit". */}
             <form id="save-credit" action={updateCreditEntries}>
