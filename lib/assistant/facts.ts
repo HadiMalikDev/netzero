@@ -34,7 +34,8 @@ export interface FactRequirement {
   hasValue: boolean;
   requiresEvidence: boolean;
   evidenceCount: number;
-  /** Listed documents due at the project's stage, and how many are provided. */
+  /** Listed documents (any stage), those due at the project's stage, and those provided. */
+  docsListed: number;
   docsDue: number;
   docsProvided: number;
   text: string;
@@ -158,6 +159,7 @@ export async function buildProjectFacts(
         }),
         requiresEvidence: r.requiresEvidence,
         evidenceCount: r.evidenceCount,
+        docsListed: r.docsListed,
         docsDue: r.docsDue,
         docsProvided: r.docsProvided,
         text: r.text.slice(0, 200),

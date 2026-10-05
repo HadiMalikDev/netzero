@@ -320,18 +320,29 @@ describe("documents due gate completion", () => {
 
   it("one of two due documents provided => in_progress, not completed", () => {
     expect(
-      deriveRequirementStatus({ ...filled, evidenceCount: 3, docsDue: 2, docsProvided: 1 }),
+      deriveRequirementStatus({ ...filled, evidenceCount: 3, docsListed: 2, docsDue: 2, docsProvided: 1 }),
     ).toBe("in_progress");
   });
 
   it("every due document provided => completed", () => {
     expect(
-      deriveRequirementStatus({ ...filled, evidenceCount: 2, docsDue: 2, docsProvided: 2 }),
+      deriveRequirementStatus({ ...filled, evidenceCount: 2, docsListed: 2, docsDue: 2, docsProvided: 2 }),
     ).toBe("completed");
   });
 
   it("files that claim no document do not stand in for a due one", () => {
-    expect(evidenceSatisfied({ requiresEvidence: true, evidenceCount: 4, docsDue: 1, docsProvided: 0 })).toBe(false);
+    expect(evidenceSatisfied({ requiresEvidence: true, evidenceCount: 4, docsListed: 1, docsDue: 1, docsProvided: 0 })).toBe(false);
+  });
+
+  it("documents listed but none due yet (MW-02 at design) => nothing owed", () => {
+    expect(
+      deriveRequirementStatus({ ...filled, evidenceCount: 0, docsListed: 2, docsDue: 0, docsProvided: 0 }),
+    ).toBe("completed");
+    expect(
+      missingEvidenceRequirements([
+        { seq: 1, status: "in_progress" as const, requiresEvidence: true, evidenceCount: 0, docsListed: 2, docsDue: 0, docsProvided: 0 },
+      ]),
+    ).toEqual([]);
   });
 
   it("no listed documents => at least one file, as before", () => {
@@ -341,8 +352,8 @@ describe("documents due gate completion", () => {
 
   it("missing evidence lists a blocking row with a due document outstanding", () => {
     const reqs = [
-      { seq: 1, status: "in_progress" as const, requiresEvidence: true, evidenceCount: 2, docsDue: 3, docsProvided: 2 },
-      { seq: 2, status: "completed" as const, requiresEvidence: true, evidenceCount: 1, docsDue: 1, docsProvided: 1 },
+      { seq: 1, status: "in_progress" as const, requiresEvidence: true, evidenceCount: 2, docsListed: 3, docsDue: 3, docsProvided: 2 },
+      { seq: 2, status: "completed" as const, requiresEvidence: true, evidenceCount: 1, docsListed: 1, docsDue: 1, docsProvided: 1 },
     ];
     expect(missingEvidenceRequirements(reqs).map((r) => r.seq)).toEqual([1]);
   });

@@ -165,7 +165,8 @@ export interface RequirementView {
   evidenceStages: (string | null)[];
   /** Which specs are due at the project's stage, index-aligned. */
   docGates: boolean[];
-  /** Listed documents due now, and how many have a file against them. */
+  /** Listed documents (any stage), those due now, and those provided. */
+  docsListed: number;
   docsDue: number;
   docsProvided: number;
   requiresEvidence: boolean;
@@ -351,6 +352,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       valueNumber: e.valueNumber,
       valueText: e.valueText,
       evidenceCount,
+      docsListed: evidenceSpecs.length,
       docsDue: docs.due,
       docsProvided: docs.provided,
     });
@@ -385,6 +387,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       evidenceSpecs,
       evidenceStages: stages,
       docGates: gates,
+      docsListed: evidenceSpecs.length,
       docsDue: docs.due,
       docsProvided: docs.provided,
       requiresEvidence,

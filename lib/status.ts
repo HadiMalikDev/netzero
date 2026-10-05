@@ -75,6 +75,8 @@ export interface EntryState {
   valueNumber: number | null;
   valueText: string | null;
   evidenceCount: number;
+  /** Documents the manual lists for this requirement, due now or later. */
+  docsListed?: number;
   /** Listed documents due at the project's stage (see lib/evidence.ts docGates). */
   docsDue?: number;
   /** How many of those have at least one file attached against them. */
@@ -83,15 +85,20 @@ export interface EntryState {
 
 /**
  * Evidence is satisfied when every listed document due at the project's stage
- * has a file attached against it. A requirement whose manual entry lists no
- * documents falls back to "at least one file".
+ * has a file attached against it — so when documents are listed but none is
+ * due yet (MW-02 at design stage: construction-only), nothing is owed. Only a
+ * requirement whose manual entry lists no documents at all falls back to "at
+ * least one file".
  */
 export function evidenceSatisfied(
-  e: Pick<EntryState, "requiresEvidence" | "evidenceCount" | "docsDue" | "docsProvided">,
+  e: Pick<
+    EntryState,
+    "requiresEvidence" | "evidenceCount" | "docsListed" | "docsDue" | "docsProvided"
+  >,
 ): boolean {
   if (!e.requiresEvidence) return true;
-  const due = e.docsDue ?? 0;
-  return due > 0 ? (e.docsProvided ?? 0) >= due : e.evidenceCount > 0;
+  if ((e.docsListed ?? 0) > 0) return (e.docsProvided ?? 0) >= (e.docsDue ?? 0);
+  return e.evidenceCount > 0;
 }
 
 export function hasValue(e: EntryState): boolean {
@@ -150,6 +157,7 @@ export function missingEvidenceRequirements<
   T extends CreditStatusReq & {
     requiresEvidence: boolean;
     evidenceCount: number;
+    docsListed?: number;
     docsDue?: number;
     docsProvided?: number;
   },

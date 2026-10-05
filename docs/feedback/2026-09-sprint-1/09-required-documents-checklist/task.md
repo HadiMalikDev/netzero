@@ -196,6 +196,11 @@ overview's Certification progress card. Existing projects start at Design.
   attachments never stand in for a listed document.
 - **No listed documents.** Requirements whose manual entry lists no documents
   (6 of 99) keep the old rule: at least one file.
+- **Listed, but none due yet.** Documents are listed but none is due at the
+  current stage; MW-02 lists construction-stage documents only. At design stage
+  nothing is owed. The requirement can complete on its value, and its chip
+  reads "no documents due at this stage". This was fixed after code review: it
+  had fallen back to the at-least-one-file rule, which forced an early upload.
 - **Counts.** The box and each requirement now count only due documents
   ("0 of 1 due"). The missing-evidence filter, dashboard counts and assistant
   ("1 of 2 documents due provided") all follow the same rule.

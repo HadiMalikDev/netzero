@@ -189,10 +189,13 @@ export function RequirementItem({
                 : "bg-amber-50 text-amber-700"
           }`}
         >
-          {idleOptional ? "required if pursued" : "required"} ·{" "}
-          {req.docsDue > 0
-            ? `${req.docsProvided} of ${req.docsDue} documents due`
-            : `${req.evidenceCount} attached`}
+          {req.docsListed > 0 && req.docsDue === 0
+            ? "no documents due at this stage"
+            : `${idleOptional ? "required if pursued" : "required"} · ${
+                req.docsDue > 0
+                  ? `${req.docsProvided} of ${req.docsDue} documents due`
+                  : `${req.evidenceCount} attached`
+              }`}
         </span>
         {dropped ? null : (
           <a
