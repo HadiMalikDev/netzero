@@ -60,6 +60,7 @@ export function RequirementItem({
       {/* Row header */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
+          {path ? <PathControl entryId={req.entryId} path={path} /> : null}
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500">
               #{req.seq}
@@ -96,10 +97,7 @@ export function RequirementItem({
             ) : null}
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          <StatusPill status={req.status} />
-          {path ? <PathControl entryId={req.entryId} path={path} /> : null}
-        </div>
+        <StatusPill status={req.status} />
       </div>
 
       {/* Value input — associated with the single per-credit Save form */}
@@ -216,32 +214,44 @@ export function RequirementItem({
   );
 }
 
+/** A radio dot: filled for the chosen path. */
+function Dot({ on }: { on: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+        on ? "border-violet-600" : "border-violet-300 bg-white"
+      }`}
+    >
+      {on ? <span className="h-2 w-2 rounded-full bg-violet-600" /> : null}
+    </span>
+  );
+}
+
 /**
- * Pick / show the path for an either/or option. Posts through the credit's Save
- * form (`formAction`), so values typed elsewhere on the page are saved too.
+ * Pick / show the path for an either/or option, as a radio-style control on
+ * the option's first line. Posts through the credit's Save form (`formAction`),
+ * so values typed elsewhere on the page are saved too.
  */
 function PathControl({ entryId, path }: { entryId: string; path: PathState }) {
   if (path === "chosen")
     return (
-      <span className="rounded-full bg-violet-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+      <div className="mb-2 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-semibold text-white">
+        <span className="flex h-4 w-4 items-center justify-center rounded-full border-2 border-white">
+          <span className="h-2 w-2 rounded-full bg-white" />
+        </span>
         Pursuing this path
-      </span>
+      </div>
     );
   return (
-    <div className="flex items-center gap-2">
-      {path === "dropped" ? (
-        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
-          Not pursuing
-        </span>
-      ) : null}
-      <button
-        type="submit"
-        form={SAVE_FORM}
-        formAction={choosePath.bind(null, entryId)}
-        className="rounded-md border border-violet-300 bg-white px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-50"
-      >
-        {path === "dropped" ? "Pursue instead" : "Pursue this path"}
-      </button>
-    </div>
+    <button
+      type="submit"
+      form={SAVE_FORM}
+      formAction={choosePath.bind(null, entryId)}
+      className="mb-2 inline-flex items-center gap-2 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 hover:border-violet-500 hover:bg-violet-50"
+    >
+      <Dot on={false} />
+      {path === "dropped" ? "Not pursuing · switch to this path" : "Pursue this path"}
+    </button>
   );
 }

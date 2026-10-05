@@ -91,8 +91,8 @@ Every option in an either/or group (E-01 Prescriptive vs Performance) now has a
 Picking one does four things:
 
 - marks the choice in the group header ("Pursuing option #1");
-- fades the alternative, which gets a "Not pursuing" pill and a "Pursue instead"
-  button;
+- fades the alternative, whose control reads "Not pursuing · switch to this
+  path";
 - takes the alternative out of the credit's status, its points, the "missing
   evidence" filter and the assistant's answers;
 - adds a "Reset choice" button that brings every option back.
@@ -161,3 +161,17 @@ a set-aside path as remaining.
 - **Made-up link domains.** In LLM mode the assistant sometimes writes absolute
   links on made-up domains (`https://mostadam.sa/projects/…`), although the facts
   only carry relative paths. This was already happening; it is a separate fix.
+
+### Follow-up (2026-10-05): the control moved to the left
+
+Hadi found "Pursue this path" hard to spot in the right-hand column under the
+status pill. It is now a radio-style control on the first line of each option,
+on the left:
+
+- **Not picked:** an empty circle with "Pursue this path".
+- **Chosen:** a filled violet "Pursuing this path".
+- **Set aside:** "Not pursuing · switch to this path".
+
+![open: pick on the left](./evidence/after-v2b-path-control-left-open.png)
+
+![chosen](./evidence/after-v2b-path-control-left-chosen.png)
