@@ -121,3 +121,19 @@ for the requirement. Mixed two problems — path choice and optional-row blockin
 **Prevention:** Restate each feedback row in the client's own terms before offering scope options,
 and keep options inside that statement. When the code reveals an adjacent defect (here, optional
 rows blocking completion), raise it as its own question, not as a wider version of the row.
+
+
+## 2026-10-05 — Target level select snapped back after saving
+
+**What happened:** On production, picking a target level on the project overview appeared to reset
+immediately. The save had gone through (a reload showed it), but the select itself jumped back to
+the level it first rendered with. The stage select had the same bug.
+
+**Root cause:** Both selects were uncontrolled fields inside `<form action={serverAction}>`
+auto-submitted on change. React 19 resets a form's uncontrolled fields when its action completes,
+restoring the original default. My browser check waited for the card text ("Gold at 85 pts") and
+re-read the select only after a reload, so it never saw the snap-back.
+
+**Prevention:** Save-on-change controls hold their value in state and call the action from a
+transition (`AutoSaveSelect`), not via form auto-submit. When verifying a control that saves in
+place, read the control's own value right after the save, without reloading.
