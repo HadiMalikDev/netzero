@@ -113,13 +113,17 @@ Talking this row through also turned up a scoring bug. A row that adds points
 but is not required, such as W-02 #2–#5, still blocked its credit from reaching
 Completed. Hadi ruled that optional rows must never block.
 
-A row counts as **optional** when all three hold:
+A row counts as **optional** when all four hold:
 
 - it sits outside an either/or group;
 - it is not a keystone requirement;
-- it carries points of its own.
+- it carries points of its own;
+- another row in the same credit also earns points.
 
 Rows with no points are prerequisites ("In addition to #1…") and stay mandatory.
+A credit's only point-earning row is the credit itself (PMM-03), so it stays
+mandatory too. That last condition was added the same day, when building row 9
+showed PMM-03 wrongly badged optional.
 
 | Row state | Effect on the credit |
 |---|---|

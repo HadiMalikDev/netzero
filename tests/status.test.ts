@@ -4,7 +4,7 @@ import {
   deriveCreditStatus,
   deriveRequirementStatus,
   hasValue,
-  isOptionalRequirement,
+  optionalFlags,
   missingEvidenceRequirements,
   type EntryState,
 } from "@/lib/status";
@@ -200,33 +200,39 @@ describe("blockingRequirements", () => {
   });
 });
 
-describe("isOptionalRequirement", () => {
-  it("a non-keystone row with its own points is optional (W-02 #2–#5)", () => {
-    expect(
-      isOptionalRequirement({ optionGroup: null, keystone: false, pointsRaw: "2" }),
-    ).toBe(true);
+describe("optionalFlags", () => {
+  const row = (pointsRaw: string | null, keystone = false, optionGroup: string | null = null) => ({
+    pointsRaw,
+    keystone,
+    optionGroup,
   });
-  it("a keystone row is mandatory even when it carries points (W-01 #1)", () => {
+
+  it("W-02: keystone #1 mandatory, the extra point rows optional", () => {
     expect(
-      isOptionalRequirement({ optionGroup: null, keystone: true, pointsRaw: "3" }),
-    ).toBe(false);
+      optionalFlags([row("2", true), row("3"), row("2"), row("2"), row("1")]),
+    ).toEqual([false, true, true, true, true]);
   });
-  it("a row with no points is a prerequisite, so mandatory (E-03 #1)", () => {
-    expect(
-      isOptionalRequirement({ optionGroup: null, keystone: false, pointsRaw: null }),
-    ).toBe(false);
-    expect(
-      isOptionalRequirement({ optionGroup: null, keystone: false, pointsRaw: "0" }),
-    ).toBe(false);
+
+  it("a credit's only point-earning row is the credit itself (PMM-03)", () => {
+    expect(optionalFlags([row("2")])).toEqual([false]);
   });
-  it("an either/or option is governed by its group, not this rule", () => {
+
+  it("a prerequisite with no points keeps the scoring row mandatory (E-03)", () => {
+    expect(optionalFlags([row(null), row("2")])).toEqual([false, false]);
+  });
+
+  it("a keystone row is mandatory even when it carries points (W-01)", () => {
+    expect(optionalFlags([row("3", true), row("7")])).toEqual([false, true]);
+  });
+
+  it("either/or options are governed by their group, not this rule", () => {
     expect(
-      isOptionalRequirement({
-        optionGroup: "E-01 options",
-        keystone: false,
-        pointsRaw: "5",
-      }),
-    ).toBe(false);
+      optionalFlags([row("5", false, "E-01 options"), row("15", false, "E-01 options")]),
+    ).toEqual([false, false]);
+  });
+
+  it("zero points is no points", () => {
+    expect(optionalFlags([row("0"), row("1")])).toEqual([false, false]);
   });
 });
 

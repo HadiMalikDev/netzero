@@ -28,21 +28,30 @@ export interface CreditStatusReq {
   optionGroup?: string | null;
   /** false = an either/or option the project chose not to pursue. */
   planned?: boolean;
-  /** Adds points but is never required — see `isOptionalRequirement`. */
+  /** Adds points but is never required — see `optionalFlags`. */
   optional?: boolean;
 }
 
-/**
- * A row is optional when it sits outside an either/or group, is not a keystone
- * requirement, and earns points of its own (e.g. W-02 #2–#5). Rows without
- * points are prerequisites ("In addition to #1…"), so they stay mandatory.
- */
-export function isOptionalRequirement(r: {
+interface OptionalInput {
   optionGroup?: string | null;
   keystone: boolean;
   pointsRaw: string | null;
-}): boolean {
-  return !r.optionGroup?.trim() && !r.keystone && (parseNum(r.pointsRaw) ?? 0) > 0;
+}
+
+/**
+ * Which rows of ONE credit are optional (index-aligned). A row is optional when
+ * it sits outside an either/or group, is not a keystone requirement, earns
+ * points of its own, and is not the credit's only way to earn points (e.g.
+ * W-02 #2–#5). Rows without points are prerequisites ("In addition to #1…"),
+ * and a credit's sole point-earning row is the credit itself (PMM-03), so both
+ * stay mandatory.
+ */
+export function optionalFlags(reqs: OptionalInput[]): boolean[] {
+  const earns = reqs.map((r) => (parseNum(r.pointsRaw) ?? 0) > 0);
+  const earning = earns.filter(Boolean).length;
+  return reqs.map(
+    (r, i) => !r.optionGroup?.trim() && !r.keystone && earns[i] && earning > 1,
+  );
 }
 
 /** Drop rows the credit does not depend on: unchosen XOR options, untouched optional rows. */

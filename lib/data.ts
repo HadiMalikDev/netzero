@@ -13,7 +13,7 @@ import {
 import {
   deriveCreditStatus,
   deriveRequirementStatus,
-  isOptionalRequirement,
+  optionalFlags,
   missingEvidenceRequirements,
   type Status,
 } from "./status";
@@ -315,7 +315,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       pointsType: e.pointsType,
       keystone: e.keystone,
       planned: e.planned,
-      optional: isOptionalRequirement(e),
+      optional: false, // per credit, below — it depends on the sibling rows
       target: bandsFromSpec(numericSpec).length
         ? null
         : summarizeSpec(e.numericSpec),
@@ -341,6 +341,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
 
   return pcs.map((p) => {
     const reqs = (byCredit.get(p.pcId) ?? []).sort((a, b) => a.seq - b.seq);
+    optionalFlags(reqs).forEach((optional, i) => (reqs[i].optional = optional));
     const cap = parseNum(p.pointsRaw);
     const range = creditPointsRange(reqs, p.pointsRaw);
     return {
