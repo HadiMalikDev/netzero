@@ -1,5 +1,5 @@
 import type { EvidenceAttachment, RequirementView } from "./data";
-import type { PathState } from "./option-group";
+import { groupByOption, type PathState } from "./option-group";
 
 /**
  * Attachments grouped by the required document they provide. An index past
@@ -56,11 +56,13 @@ export function docsDueProvided(
   return { due, provided };
 }
 
-export type DocTag = "pursuing" | "either" | "optional";
+export type DocTag = "pursuing" | "optional";
 
 /**
  * How a requirement's documents appear in the credit's Required documents box.
- *  - a set-aside either/or option is not shown at all;
+ *  - an either/or option shows its documents only once it is the chosen path:
+ *    until then the group is one "pick a path" step, and set-aside options
+ *    are left out;
  *  - an optional row nobody has started is shown but not counted;
  *  - everything else is shown and counted toward "X of N provided".
  */
@@ -68,10 +70,40 @@ export function documentScope(
   req: Pick<RequirementView, "optional" | "status">,
   path?: PathState,
 ): { show: boolean; counted: boolean; tag: DocTag | null } {
-  if (path === "dropped") return { show: false, counted: false, tag: null };
+  if (path === "dropped" || path === "open")
+    return { show: false, counted: false, tag: null };
   if (req.optional)
     return { show: true, counted: req.status !== "not_started", tag: "optional" };
   if (path === "chosen") return { show: true, counted: true, tag: "pursuing" };
-  if (path === "open") return { show: true, counted: true, tag: "either" };
   return { show: true, counted: true, tag: null };
+}
+
+export type DocSection<R = RequirementView> =
+  | { kind: "docs"; req: R; counted: boolean; tag: DocTag | null }
+  /** An either/or group with no path picked: choose first, documents after. */
+  | { kind: "choose"; options: R[] };
+
+/**
+ * The Required documents box, in requirement order: one docs section per
+ * requirement shown, one "choose" section per either/or group still open, and
+ * the set-aside options listed apart.
+ */
+export function documentSections<
+  R extends Pick<RequirementView, "entryId" | "optional" | "status" | "optionGroup">,
+>(reqs: R[], paths: Map<string, PathState>): { sections: DocSection<R>[]; setAside: R[] } {
+  const sections: DocSection<R>[] = [];
+  const setAside: R[] = [];
+  for (const block of groupByOption(reqs)) {
+    const items = block.kind === "xor" ? block.items : [block.item];
+    if (block.kind === "xor" && items.every((r) => paths.get(r.entryId) === "open")) {
+      sections.push({ kind: "choose", options: items });
+      continue;
+    }
+    for (const req of items) {
+      const scope = documentScope(req, paths.get(req.entryId));
+      if (scope.show) sections.push({ kind: "docs", req, counted: scope.counted, tag: scope.tag });
+      else setAside.push(req);
+    }
+  }
+  return { sections, setAside };
 }

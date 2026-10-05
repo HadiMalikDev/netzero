@@ -3,6 +3,7 @@ import {
   docGates,
   docsDueProvided,
   documentScope,
+  documentSections,
   parseStage,
   splitBySpec,
 } from "@/lib/evidence";
@@ -51,9 +52,9 @@ describe("documentScope", () => {
     expect(documentScope({ optional: true, status: "in_progress" }).counted).toBe(true);
   });
 
-  it("either/or: open and chosen count, a set-aside option is hidden", () => {
-    expect(documentScope(mandatory, "open")).toEqual({ show: true, counted: true, tag: "either" });
-    expect(documentScope(mandatory, "chosen").tag).toBe("pursuing");
+  it("either/or: only the chosen path shows its documents", () => {
+    expect(documentScope(mandatory, "open").show).toBe(false);
+    expect(documentScope(mandatory, "chosen")).toEqual({ show: true, counted: true, tag: "pursuing" });
     expect(documentScope(mandatory, "dropped").show).toBe(false);
   });
 });
@@ -78,5 +79,34 @@ describe("docGates", () => {
     const { bySpec } = splitBySpec(["a", "b", "c"], [file("x", 1), file("y", 2)]);
     expect(docsDueProvided(docGates(stages, "design"), bySpec)).toEqual({ due: 2, provided: 1 });
     expect(docsDueProvided(docGates(stages, "construction"), bySpec)).toEqual({ due: 3, provided: 2 });
+  });
+});
+
+describe("documentSections", () => {
+  const r = (entryId: string, optionGroup: string | null = null) => ({
+    entryId,
+    optionGroup,
+    optional: false,
+    status: "not_started" as const,
+  });
+  const reqs = [r("a"), r("x1", "E-01 options"), r("x2", "E-01 options")];
+
+  it("an either/or group with no path picked is one choose step", () => {
+    const { sections, setAside } = documentSections(
+      reqs,
+      new Map([["x1", "open"], ["x2", "open"]] as const),
+    );
+    expect(sections.map((s) => s.kind)).toEqual(["docs", "choose"]);
+    expect(sections[1].kind === "choose" && sections[1].options.map((o) => o.entryId)).toEqual(["x1", "x2"]);
+    expect(setAside).toEqual([]);
+  });
+
+  it("once picked, only the chosen path's documents show", () => {
+    const { sections, setAside } = documentSections(
+      reqs,
+      new Map([["x1", "dropped"], ["x2", "chosen"]] as const),
+    );
+    expect(sections.map((s) => (s.kind === "docs" ? s.req.entryId : "choose"))).toEqual(["a", "x2"]);
+    expect(setAside.map((x) => x.entryId)).toEqual(["x1"]);
   });
 });

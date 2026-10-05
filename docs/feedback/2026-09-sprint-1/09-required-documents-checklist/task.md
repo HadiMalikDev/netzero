@@ -237,3 +237,20 @@ Migration `0007` adds `project.stage`.
 - **Unit tests:** `tests/evidence.test.ts` (document counting and scope) and
   `pathStates`. 98 passing.
 - `tsc` clean; lint has no errors (the 5 existing warnings are untouched).
+
+### Either/or credits: pick the path first (follow-up, 2026-10-05)
+
+Hadi found the box hard to follow on either/or credits. It listed every option's
+documents side by side, each tagged "Either/or option". Now:
+
+- **Until a path is picked,** the group is a single "Choose the path this
+  project will pursue" step, with one button per option (its points and how
+  many documents it lists).
+- **Once picked,** only that path's documents are listed. The other options are
+  named under "Not listed".
+- **The requirement rows** of an unpicked group say "Pick a path above to see
+  its documents" instead of linking to a list that is not there yet.
+
+![choose the path first](./evidence/after-v2b-choose-path-first.png)
+
+![the chosen path's documents](./evidence/after-v2b-chosen-path-documents.png)

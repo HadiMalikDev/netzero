@@ -5,6 +5,7 @@ import { Card } from "@/components/ui";
 import { StatusPill } from "@/components/StatusPill";
 import { getCreditByCode, getProject } from "@/lib/data";
 import {
+  choosePath,
   deleteEvidence,
   rerunEvidenceReview,
   resetPath,
@@ -19,9 +20,8 @@ import { RequirementItem } from "./RequirementItem";
 import {
   AdditionalAttachments,
   RequiredDocuments,
-  type DocSection,
 } from "@/components/EvidenceChecklist";
-import { documentScope, parseStage } from "@/lib/evidence";
+import { documentSections, parseStage } from "@/lib/evidence";
 import { SaveCreditButton } from "./SaveCreditButton";
 import { groupByOption, pathStates, type PathState } from "@/lib/option-group";
 import { OptionGroup } from "@/components/OptionGroup";
@@ -43,13 +43,7 @@ export default async function CreditDetailPage({
     if (block.kind !== "xor") continue;
     pathStates(block.items).forEach((p, i) => paths.set(block.items[i].entryId, p));
   }
-  const sections: DocSection[] = [];
-  const setAside: typeof credit.requirements = [];
-  for (const req of credit.requirements) {
-    const scope = documentScope(req, paths.get(req.entryId));
-    if (scope.show) sections.push({ req, counted: scope.counted, tag: scope.tag });
-    else setAside.push(req);
-  }
+  const { sections, setAside } = documentSections(credit.requirements, paths);
 
   return (
     <PageChrome
@@ -132,6 +126,7 @@ export default async function CreditDetailPage({
           sections={sections}
           setAside={setAside}
           stage={parseStage(project.stage)}
+          chooseAction={choosePath}
           projectId={id}
           code={credit.code}
           uploadAction={uploadEvidence}

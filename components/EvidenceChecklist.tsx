@@ -5,7 +5,13 @@ import { useFormStatus } from "react-dom";
 import { CheckIcon, FileIcon, UploadIcon } from "@/components/icons";
 import { ReviewNote } from "@/components/ReviewNote";
 import { formatFileSize, formatUploadedAt, requirementLabel } from "@/lib/format";
-import { splitBySpec, type DocTag, type ProjectStage } from "@/lib/evidence";
+import {
+  splitBySpec,
+  type DocSection,
+  type DocTag,
+  type ProjectStage,
+} from "@/lib/evidence";
+import { PointsRange } from "@/components/req";
 import type { EvidenceAttachment, RequirementView } from "@/lib/data";
 
 /**
@@ -142,7 +148,6 @@ export function UploadControl({
 
 const TAG: Record<DocTag, { label: string; className: string }> = {
   pursuing: { label: "Pursuing this path", className: "bg-violet-600 text-white" },
-  either: { label: "Either/or option", className: "bg-violet-50 text-violet-700" },
   optional: { label: "Optional · only if pursued", className: "bg-sky-50 text-sky-700" },
 };
 
@@ -151,11 +156,6 @@ function tagLabel(tag: DocTag, counted: boolean): string {
   return tag === "optional" && counted ? "Optional · pursuing" : TAG[tag].label;
 }
 
-export interface DocSection {
-  req: RequirementView;
-  counted: boolean;
-  tag: DocTag | null;
-}
 
 /** One requirement's documents inside the credit-level box. */
 function RequirementDocs({
@@ -166,7 +166,7 @@ function RequirementDocs({
   deleteAction,
   rerunAction,
 }: {
-  section: DocSection;
+  section: Extract<DocSection, { kind: "docs" }>;
   projectId: string;
   code: string;
   uploadAction: Action;
@@ -315,6 +315,54 @@ function RequirementDocs({
 }
 
 /**
+ * An either/or group with no path picked yet. Its documents differ per option,
+ * so the box asks for the choice first and lists that path's documents after.
+ * The buttons post through the credit's Save form (`form="save-credit"`), so
+ * values typed elsewhere on the page are kept.
+ */
+function ChoosePath({
+  options,
+  chooseAction,
+}: {
+  options: RequirementView[];
+  chooseAction: (entryId: string, formData: FormData) => Promise<void>;
+}) {
+  return (
+    <li className="bg-violet-50/40 px-4 py-3">
+      <div className="text-sm font-semibold text-slate-800">
+        Choose the path this project will pursue
+      </div>
+      <p className="mb-2.5 mt-0.5 text-xs text-slate-500">
+        These requirements are either/or: each path needs different documents.
+        Pick one to see what to submit.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((r) => (
+          <button
+            key={r.entryId}
+            type="submit"
+            form="save-credit"
+            formAction={chooseAction.bind(null, r.entryId)}
+            className="flex items-center gap-2 rounded-lg border border-violet-300 bg-white px-3 py-2 text-left text-sm hover:border-violet-500 hover:bg-violet-50"
+          >
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500">
+              #{r.seq}
+            </span>
+            <span className="font-medium text-slate-900">
+              {requirementLabel(r.title, r.text)}
+            </span>
+            <PointsRange spec={r.numericSpec} pointsRaw={r.pointsRaw} />
+            <span className="text-xs text-slate-400">
+              · {r.evidenceSpecs.length || "no"} document{r.evidenceSpecs.length === 1 ? "" : "s"} listed
+            </span>
+          </button>
+        ))}
+      </div>
+    </li>
+  );
+}
+
+/**
  * The credit-level Required documents box: every document the manual asks for,
  * grouped by requirement, with one overall "X of N provided" count. Documents of
  * an optional row nobody has started are listed but not counted; a set-aside
@@ -329,11 +377,14 @@ export function RequiredDocuments({
   uploadAction,
   deleteAction,
   rerunAction,
+  chooseAction,
 }: {
   sections: DocSection[];
   setAside: RequirementView[];
   /** The project's stage: decides which documents are due now. */
   stage: ProjectStage;
+  /** Picks an either/or path (bound to the option's entry id). */
+  chooseAction: (entryId: string, formData: FormData) => Promise<void>;
   projectId: string;
   code: string;
   uploadAction: Action;
@@ -343,7 +394,7 @@ export function RequiredDocuments({
   let total = 0;
   let provided = 0;
   for (const s of sections) {
-    if (!s.counted) continue;
+    if (s.kind !== "docs" || !s.counted) continue;
     total += s.req.docsDue;
     provided += s.req.docsProvided;
   }
@@ -380,17 +431,25 @@ export function RequiredDocuments({
         ) : null}
       </div>
       <ul className="divide-y divide-slate-100 border-t border-slate-100">
-        {sections.map((s) => (
-          <RequirementDocs
-            key={s.req.entryId}
-            section={s}
-            projectId={projectId}
-            code={code}
-            uploadAction={uploadAction}
-            deleteAction={deleteAction}
-            rerunAction={rerunAction}
-          />
-        ))}
+        {sections.map((s) =>
+          s.kind === "choose" ? (
+            <ChoosePath
+              key={`choose-${s.options[0].entryId}`}
+              options={s.options}
+              chooseAction={chooseAction}
+            />
+          ) : (
+            <RequirementDocs
+              key={s.req.entryId}
+              section={s}
+              projectId={projectId}
+              code={code}
+              uploadAction={uploadAction}
+              deleteAction={deleteAction}
+              rerunAction={rerunAction}
+            />
+          ),
+        )}
       </ul>
       {setAside.length > 0 ? (
         <p className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-500">

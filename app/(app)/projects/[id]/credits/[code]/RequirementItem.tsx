@@ -197,7 +197,11 @@ export function RequirementItem({
                   : `${req.evidenceCount} attached`
               }`}
         </span>
-        {dropped ? null : (
+        {dropped ? null : path === "open" ? (
+          <span className="text-slate-500">
+            Pick a path above to see its documents
+          </span>
+        ) : (
           <a
             href={`#docs-req-${req.seq}`}
             className="font-medium text-brand-600 hover:text-brand-700"
