@@ -392,3 +392,68 @@ export function RequiredDocuments({
     </div>
   );
 }
+
+/**
+ * Credit-level "Additional attachments": supporting files for the credit as a
+ * whole (revised shop drawings, approvals, correspondence). They are kept, read
+ * by the AI reviewer and listed in the documents library, but never tick a
+ * required document or move status. See
+ * docs/feedback/2026-09-sprint-1/03-additional-attachments-option.
+ */
+export function AdditionalAttachments({
+  files,
+  projectCreditId,
+  projectId,
+  code,
+  uploadAction,
+  deleteAction,
+  rerunAction,
+}: {
+  files: EvidenceAttachment[];
+  projectCreditId: string;
+  projectId: string;
+  code: string;
+  uploadAction: Action;
+  deleteAction: Action;
+  rerunAction: Action;
+}) {
+  return (
+    <div id="additional-attachments" className="scroll-mt-24 p-4">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-800">
+            Additional attachments
+            {files.length > 0 ? (
+              <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                {files.length}
+              </span>
+            ) : null}
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Supporting files for the whole credit, such as approved shop drawings,
+            revisions or correspondence. They don&apos;t tick a required document.
+          </p>
+        </div>
+        <UploadControl
+          fields={{ projectCreditId, projectId, code }}
+          label={files.length ? "Add attachments" : "Attach files"}
+          uploadAction={uploadAction}
+        />
+      </div>
+      {files.length > 0 ? (
+        <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 px-3">
+          {files.map((f) => (
+            <AttachmentRow
+              key={f.id}
+              file={f}
+              projectId={projectId}
+              code={code}
+              deleteAction={deleteAction}
+              rerunAction={rerunAction}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}

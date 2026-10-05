@@ -302,9 +302,18 @@ export const evidenceDocs = pgTable("evidence_doc", {
   workspaceId: text("workspace_id")
     .notNull()
     .references(() => workspaces.id),
-  requirementEntryId: text("requirement_entry_id")
+  /** The credit the file belongs to. Always set. */
+  projectCreditId: text("project_credit_id")
     .notNull()
-    .references(() => requirementEntries.id),
+    .references(() => projectCredits.id),
+  /**
+   * The requirement the file was attached to. Null for a credit-level
+   * "additional attachment" (revised shop drawings, approvals…) that supports
+   * the credit as a whole rather than one requirement.
+   */
+  requirementEntryId: text("requirement_entry_id").references(
+    () => requirementEntries.id,
+  ),
   fileName: text("file_name").notNull(),
   filePath: text("file_path").notNull(),
   fileSize: integer("file_size"),

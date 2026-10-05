@@ -181,6 +181,12 @@ export interface CreditView {
   pointsMax: number | null;
   pointsMin: number | null;
   requirements: RequirementView[];
+  /**
+   * Credit-level "additional attachments": files supporting the credit as a
+   * whole, not one requirement. They never tick a required document or move
+   * status — only requirement evidence does.
+   */
+  additionalAttachments: EvidenceAttachment[];
 }
 
 /** All confirmed credits of a project, with requirements + derived status. */
@@ -247,6 +253,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
   const evidence = await db
     .select({
       entryId: evidenceDocs.requirementEntryId,
+      projectCreditId: evidenceDocs.projectCreditId,
       id: evidenceDocs.id,
       fileName: evidenceDocs.fileName,
       fileSize: evidenceDocs.fileSize,
@@ -264,16 +271,16 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       evidenceReviews,
       eq(evidenceReviews.evidenceDocId, evidenceDocs.id),
     )
-    .where(
-      inArray(
-        evidenceDocs.requirementEntryId,
-        entries.map((e) => e.entryId),
-      ),
-    )
+    .where(inArray(evidenceDocs.projectCreditId, pcIds))
     .orderBy(evidenceDocs.createdAt);
   const evByEntry = new Map<string, EvidenceAttachment[]>();
+  const evByCredit = new Map<string, EvidenceAttachment[]>();
   for (const e of evidence) {
-    const arr = evByEntry.get(e.entryId) ?? [];
+    // No requirement => a credit-level additional attachment.
+    const [map, key] = e.entryId
+      ? [evByEntry, e.entryId]
+      : [evByCredit, e.projectCreditId];
+    const arr = map.get(key) ?? [];
     arr.push({
       id: e.id,
       fileName: e.fileName,
@@ -291,7 +298,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
           }
         : null,
     });
-    evByEntry.set(e.entryId, arr);
+    map.set(key, arr);
   }
 
   const byCredit = new Map<string, RequirementView[]>();
@@ -384,6 +391,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       pointsMax: cap,
       pointsMin: range?.min ?? null,
       requirements: reqs,
+      additionalAttachments: evByCredit.get(p.pcId) ?? [],
     };
   });
 }
@@ -402,10 +410,11 @@ export interface ProjectEvidence {
   createdAt: number;
   creditCode: string;
   creditTitle: string;
-  requirementSeq: number;
+  /** Null for a credit-level additional attachment. */
+  requirementSeq: number | null;
 }
 
-/** Every evidence file attached across a project's requirements. */
+/** Every evidence file attached across a project's credits. */
 export async function listProjectEvidence(
   projectId: string,
 ): Promise<ProjectEvidence[]> {
@@ -421,16 +430,16 @@ export async function listProjectEvidence(
     })
     .from(evidenceDocs)
     .innerJoin(
+      projectCredits,
+      eq(evidenceDocs.projectCreditId, projectCredits.id),
+    )
+    .leftJoin(
       requirementEntries,
       eq(evidenceDocs.requirementEntryId, requirementEntries.id),
     )
-    .innerJoin(
+    .leftJoin(
       catalogRequirements,
       eq(requirementEntries.catalogRequirementId, catalogRequirements.id),
-    )
-    .innerJoin(
-      projectCredits,
-      eq(requirementEntries.projectCreditId, projectCredits.id),
     )
     .innerJoin(
       catalogCredits,

@@ -75,7 +75,9 @@ export default async function DocumentsPage({
                       ]
                         .filter(Boolean)
                         .join(" · ")}{" "}
-                      · attached to requirement #{e.requirementSeq}
+                      {e.requirementSeq != null
+                        ? ` · attached to requirement #${e.requirementSeq}`
+                        : " · additional attachment for the credit"}
                     </div>
                   </div>
                 </div>

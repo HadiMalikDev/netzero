@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { normalizeReview, VERDICTS } from "@/lib/ai/evidence-review";
+import {
+  creditReviewTarget,
+  normalizeReview,
+  VERDICTS,
+} from "@/lib/ai/evidence-review";
 
 describe("normalizeReview", () => {
   it("keeps a well-formed result", () => {
@@ -58,5 +62,18 @@ describe("normalizeReview", () => {
       "unclear",
       "unreadable",
     ]);
+  });
+});
+
+describe("creditReviewTarget", () => {
+  it("reads an additional attachment against every requirement, documents deduped", () => {
+    const t = creditReviewTarget({ code: "PMM-03", title: "Fair Labor Practices" }, [
+      { seq: 1, title: null, text: "Develop an LSP.", evidenceSpecs: JSON.stringify(["LSP", "Letter"]) },
+      { seq: 2, title: "Audit", text: "Audit the LSP.", evidenceSpecs: JSON.stringify(["Letter", "Logs"]) },
+    ]);
+    expect(t.heading).toContain("CREDIT PMM-03 — Fair Labor Practices");
+    expect(t.heading).toContain("additional attachment");
+    expect(t.text).toBe("#1: Develop an LSP.\n#2 Audit: Audit the LSP.");
+    expect(t.expected).toEqual(["LSP", "Letter", "Logs"]);
   });
 });

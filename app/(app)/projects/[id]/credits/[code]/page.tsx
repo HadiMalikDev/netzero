@@ -13,6 +13,7 @@ import {
 } from "../../../actions";
 import { RequirementItem } from "./RequirementItem";
 import {
+  AdditionalAttachments,
   RequiredDocuments,
   type DocSection,
 } from "@/components/EvidenceChecklist";
@@ -117,6 +118,18 @@ export default async function CreditDetailPage({
         <RequiredDocuments
           sections={sections}
           setAside={setAside}
+          projectId={id}
+          code={credit.code}
+          uploadAction={uploadEvidence}
+          deleteAction={deleteEvidence}
+          rerunAction={rerunEvidenceReview}
+        />
+      </Card>
+
+      <Card className="mb-6">
+        <AdditionalAttachments
+          files={credit.additionalAttachments}
+          projectCreditId={credit.projectCreditId}
           projectId={id}
           code={credit.code}
           uploadAction={uploadEvidence}

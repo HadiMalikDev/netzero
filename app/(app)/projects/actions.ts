@@ -190,16 +190,56 @@ export async function resetPath(
 }
 
 /**
- * Attach one or more files to a requirement. Several files can be picked at
- * once, and the same requirement can be added to repeatedly — evidence_doc is
- * a one-to-many on the entry, so uploads accumulate rather than replace.
+ * Attach one or more files to a requirement (`entryId`), or to the credit as a
+ * whole (`projectCreditId`, the "additional attachments"). Several files can be
+ * picked at once, and the same place can be added to repeatedly — files
+ * accumulate rather than replace.
  */
 export async function uploadEvidence(formData: FormData): Promise<void> {
   await requireUser();
-  const entryId = String(formData.get("entryId") ?? "");
+  const entryId = String(formData.get("entryId") ?? "") || null;
   const projectId = String(formData.get("projectId") ?? "");
   const code = String(formData.get("code") ?? "");
-  if (!entryId || !projectId) throw new Error("missing ids");
+  if (!projectId) throw new Error("missing ids");
+
+  // The credit the files belong to. A requirement upload reads it from the
+  // entry; a credit-level "additional attachment" posts it directly. Either
+  // way it is re-read from the database, scoped to this project.
+  let projectCreditId: string;
+  if (entryId) {
+    const [entry] = await db
+      .select({ projectCreditId: requirementEntries.projectCreditId })
+      .from(requirementEntries)
+      .innerJoin(
+        projectCredits,
+        eq(requirementEntries.projectCreditId, projectCredits.id),
+      )
+      .where(
+        and(
+          eq(requirementEntries.id, entryId),
+          eq(projectCredits.projectId, projectId),
+          eq(requirementEntries.workspaceId, WORKSPACE_ID),
+        ),
+      )
+      .limit(1);
+    if (!entry) throw new Error("requirement not found");
+    projectCreditId = entry.projectCreditId;
+  } else {
+    const posted = String(formData.get("projectCreditId") ?? "");
+    const [pc] = await db
+      .select({ id: projectCredits.id })
+      .from(projectCredits)
+      .where(
+        and(
+          eq(projectCredits.id, posted),
+          eq(projectCredits.projectId, projectId),
+          eq(projectCredits.workspaceId, WORKSPACE_ID),
+        ),
+      )
+      .limit(1);
+    if (!pc) throw new Error("credit not found");
+    projectCreditId = pc.id;
+  }
 
   const files = formData
     .getAll("file")
@@ -208,8 +248,9 @@ export async function uploadEvidence(formData: FormData): Promise<void> {
 
   // Which required document these files provide, if the upload came from a
   // checklist row. Absent or unparseable means "not assigned to a document".
+  // A credit-level attachment never claims one requirement's document.
   const rawSlot = String(formData.get("evidenceSpecIndex") ?? "").trim();
-  const slot = /^\d+$/.test(rawSlot) ? Number(rawSlot) : null;
+  const slot = entryId && /^\d+$/.test(rawSlot) ? Number(rawSlot) : null;
 
   const dir = join(UPLOAD_ROOT, projectId, "evidence");
   await mkdir(dir, { recursive: true });
@@ -225,6 +266,7 @@ export async function uploadEvidence(formData: FormData): Promise<void> {
     await db.insert(evidenceDocs).values({
       id,
       workspaceId: WORKSPACE_ID,
+      projectCreditId,
       requirementEntryId: entryId,
       fileName: file.name,
       filePath,
