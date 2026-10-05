@@ -4,9 +4,12 @@ import { PageChrome, PageHeader } from "../../../_components/PageChrome";
 import { ProjectTabs } from "../_components/ProjectTabs";
 import { KpiTile, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
+import { ExportScorecardLink } from "@/components/ExportScorecardLink";
 import { CreditsIcon, UploadIcon } from "@/components/icons";
 import { getProject, getProjectCredits } from "@/lib/data";
 import { missingEvidenceRequirements } from "@/lib/status";
+import { creditSpan } from "@/lib/tiers";
+import { setCreditTargeted } from "../../actions";
 import {
   CreditsTable,
   type CreditFilter,
@@ -19,6 +22,7 @@ const FILTER_KEYS = [
   "in_progress",
   "not_started",
   "missing_evidence",
+  "not_targeted",
 ] as const;
 
 /** `?filter=` from a dashboard tile. Anything unrecognised falls back to "all". */
@@ -40,6 +44,7 @@ export default async function CreditsPage({
 
   const credits = await getProjectCredits(id);
   const rows: CreditRow[] = credits.map((c) => ({
+    projectCreditId: c.projectCreditId,
     code: c.code,
     title: c.title,
     categoryCode: c.categoryCode,
@@ -48,9 +53,12 @@ export default async function CreditsPage({
     requirementCount: c.requirements.length,
     status: c.status,
     pointsEarned: c.pointsEarned,
-    pointsMax: c.pointsMax,
-    pointsMin: c.pointsMin,
+    // Same span as the credit dial: falls back to requirement points when
+    // the catalog has no credit Total (PMM-03).
+    pointsMax: creditSpan(c).max,
+    pointsMin: creditSpan(c).min,
     missingEvidence: missingEvidenceRequirements(c.requirements).length > 0,
+    targeted: c.targeted,
   }));
 
   const completed = rows.filter((r) => r.status === "completed").length;
@@ -68,6 +76,7 @@ export default async function CreditsPage({
       <PageHeader
         title="Credit Management"
         subtitle={`${project.name} · Mostadam`}
+        action={rows.length ? <ExportScorecardLink projectId={id} /> : undefined}
       />
       <ProjectTabs projectId={id} />
 
@@ -117,6 +126,7 @@ export default async function CreditsPage({
             projectId={id}
             credits={rows}
             initialFilter={initialFilter}
+            targetAction={setCreditTargeted}
           />
         </>
       )}

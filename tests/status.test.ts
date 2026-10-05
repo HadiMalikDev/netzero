@@ -3,7 +3,10 @@ import {
   blockingRequirements,
   deriveCreditStatus,
   deriveRequirementStatus,
+  evidenceSatisfied,
   hasValue,
+  optionalFlags,
+  missingEvidenceRequirements,
   type EntryState,
 } from "@/lib/status";
 
@@ -195,5 +198,163 @@ describe("blockingRequirements", () => {
         { status: "not_started" as const, optionGroup: "opts", seq: 2 },
       ]).map((r) => r.seq),
     ).toEqual([1, 2]);
+  });
+});
+
+describe("optionalFlags", () => {
+  const row = (pointsRaw: string | null, keystone = false, optionGroup: string | null = null) => ({
+    pointsRaw,
+    keystone,
+    optionGroup,
+  });
+
+  it("W-02: keystone #1 mandatory, the extra point rows optional", () => {
+    expect(
+      optionalFlags([row("2", true), row("3"), row("2"), row("2"), row("1")]),
+    ).toEqual([false, true, true, true, true]);
+  });
+
+  it("a credit's only point-earning row is the credit itself (PMM-03)", () => {
+    expect(optionalFlags([row("2")])).toEqual([false]);
+  });
+
+  it("a prerequisite with no points keeps the scoring row mandatory (E-03)", () => {
+    expect(optionalFlags([row(null), row("2")])).toEqual([false, false]);
+  });
+
+  it("a keystone row is mandatory even when it carries points (W-01)", () => {
+    expect(optionalFlags([row("3", true), row("7")])).toEqual([false, true]);
+  });
+
+  it("either/or options are governed by their group, not this rule", () => {
+    expect(
+      optionalFlags([row("5", false, "E-01 options"), row("15", false, "E-01 options")]),
+    ).toEqual([false, false]);
+  });
+
+  it("zero points is no points", () => {
+    expect(optionalFlags([row("0"), row("1")])).toEqual([false, false]);
+  });
+});
+
+describe("optional rows never block", () => {
+  it("mandatory done + optional untouched => completed", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "completed" },
+        { status: "not_started", optional: true },
+        { status: "not_started", optional: true },
+      ]),
+    ).toBe("completed");
+  });
+
+  it("an optional row that was started must be finished", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "completed" },
+        { status: "in_progress", optional: true },
+      ]),
+    ).toBe("in_progress");
+  });
+
+  it("only optional rows: nothing done => not_started", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "not_started", optional: true },
+        { status: "not_started", optional: true },
+      ]),
+    ).toBe("not_started");
+  });
+
+  it("only optional rows: one finished, rest untouched => completed", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "completed", optional: true },
+        { status: "not_started", optional: true },
+      ]),
+    ).toBe("completed");
+  });
+
+  it("untouched optional rows are not blocking", () => {
+    expect(
+      blockingRequirements([
+        { status: "not_started" as const, seq: 1 },
+        { status: "not_started" as const, optional: true, seq: 2 },
+        { status: "in_progress" as const, optional: true, seq: 3 },
+      ]).map((r) => r.seq),
+    ).toEqual([1, 3]);
+  });
+});
+
+describe("a chosen either/or path", () => {
+  it("only the chosen path counts: a set-aside option done does not complete it", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "not_started", optionGroup: "opts", planned: true },
+        { status: "completed", optionGroup: "opts", planned: false },
+      ]),
+    ).toBe("not_started");
+  });
+
+  it("chosen path done => completed", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "completed", optionGroup: "opts", planned: true },
+        { status: "not_started", optionGroup: "opts", planned: false },
+      ]),
+    ).toBe("completed");
+  });
+
+  it("set-aside options never appear as blocking or missing evidence", () => {
+    const reqs = [
+      { status: "in_progress" as const, optionGroup: "opts", planned: true, seq: 1, requiresEvidence: true, evidenceCount: 0 },
+      { status: "not_started" as const, optionGroup: "opts", planned: false, seq: 2, requiresEvidence: true, evidenceCount: 0 },
+    ];
+    expect(blockingRequirements(reqs).map((r) => r.seq)).toEqual([1]);
+    expect(missingEvidenceRequirements(reqs).map((r) => r.seq)).toEqual([1]);
+  });
+});
+
+describe("documents due gate completion", () => {
+  const filled = { ...base, metricType: "DESCRIPTIVE", valueText: "Plan issued.", requiresEvidence: true };
+
+  it("one of two due documents provided => in_progress, not completed", () => {
+    expect(
+      deriveRequirementStatus({ ...filled, evidenceCount: 3, docsListed: 2, docsDue: 2, docsProvided: 1 }),
+    ).toBe("in_progress");
+  });
+
+  it("every due document provided => completed", () => {
+    expect(
+      deriveRequirementStatus({ ...filled, evidenceCount: 2, docsListed: 2, docsDue: 2, docsProvided: 2 }),
+    ).toBe("completed");
+  });
+
+  it("files that claim no document do not stand in for a due one", () => {
+    expect(evidenceSatisfied({ requiresEvidence: true, evidenceCount: 4, docsListed: 1, docsDue: 1, docsProvided: 0 })).toBe(false);
+  });
+
+  it("documents listed but none due yet (MW-02 at design) => nothing owed", () => {
+    expect(
+      deriveRequirementStatus({ ...filled, evidenceCount: 0, docsListed: 2, docsDue: 0, docsProvided: 0 }),
+    ).toBe("completed");
+    expect(
+      missingEvidenceRequirements([
+        { seq: 1, status: "in_progress" as const, requiresEvidence: true, evidenceCount: 0, docsListed: 2, docsDue: 0, docsProvided: 0 },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("no listed documents => at least one file, as before", () => {
+    expect(evidenceSatisfied({ requiresEvidence: true, evidenceCount: 1, docsDue: 0 })).toBe(true);
+    expect(evidenceSatisfied({ requiresEvidence: true, evidenceCount: 0, docsDue: 0 })).toBe(false);
+  });
+
+  it("missing evidence lists a blocking row with a due document outstanding", () => {
+    const reqs = [
+      { seq: 1, status: "in_progress" as const, requiresEvidence: true, evidenceCount: 2, docsListed: 3, docsDue: 3, docsProvided: 2 },
+      { seq: 2, status: "completed" as const, requiresEvidence: true, evidenceCount: 1, docsListed: 1, docsDue: 1, docsProvided: 1 },
+    ];
+    expect(missingEvidenceRequirements(reqs).map((r) => r.seq)).toEqual([1]);
   });
 });

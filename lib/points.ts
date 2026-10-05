@@ -66,6 +66,8 @@ export interface PointsReq {
   numericSpec?: unknown;
   valueNumber?: number | null;
   status: Status;
+  /** false = an either/or option the project chose not to pursue. */
+  planned?: boolean;
 }
 
 /**
@@ -89,13 +91,19 @@ export function pointsAwarded(
   return completed ? (parseNum(req.pointsRaw) ?? 0) : 0;
 }
 
-/** XOR groups contribute MAX; everything else sums; then cap at credit Total. */
+/**
+ * XOR groups contribute MAX; everything else sums; then cap at credit Total.
+ * An option the project chose not to pursue earns nothing.
+ */
 export function creditPointsEarned(
   reqs: PointsReq[],
   creditMax: string | null,
   mode: "earned" | "preview" = "earned",
 ): number {
-  const sum = reduceByOption(reqs, (r) => pointsAwarded(r, mode));
+  const sum = reduceByOption(
+    reqs.filter((r) => r.planned !== false),
+    (r) => pointsAwarded(r, mode),
+  );
   const cap = parseNum(creditMax);
   return cap == null ? sum : Math.min(cap, sum);
 }

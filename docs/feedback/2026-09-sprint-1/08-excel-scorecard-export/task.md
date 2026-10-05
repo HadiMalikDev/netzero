@@ -53,3 +53,73 @@ Recommendation: option 2, because item 11 needs the same concept. A dial showing
 serves both rows.
 
 No spreadsheet library is currently a dependency; one would need adding.
+
+## Done — 2026-10-05 (V2 feedback)
+
+Built on the targeting added for [row 11](../11-progress-dials/task.md), which
+was option 2 above: targeting first, then the export.
+
+### Where
+
+An **Export to Excel** button sits in the header of the project's credits list
+and of its overview. A new project lands on the credits list straight after
+the wizard, so the button is there the moment a project is created.
+
+![export button](./evidence/after-export-button.png)
+
+### What the workbook contains
+
+One sheet, "Scorecard". A downloaded sample is attached:
+[sample-jeddah-central-oceanarium-scorecard.xlsx](./evidence/sample-jeddah-central-oceanarium-scorecard.xlsx).
+
+**Header block:**
+
+- project and rating system;
+- target level;
+- level reached, with the keystone rule applied;
+- earned, targeted and available points;
+- when it was generated.
+
+**One row per credit**, grouped by category under a shaded heading. The
+columns are Code, Credit, Category, Keystone, Available points, Targeted points,
+Earned points and Status.
+
+- **Targeted points copy the credit's available range,** as agreed. A banded
+  credit reads "5–15"; a fixed one stays a plain number, so Excel can still
+  work with it.
+- **Credits not targeted** read **"Not targeted"** in amber, and the rest of
+  the row is greyed.
+- **Totals row:** available and targeted points summed as min–max ranges
+  ("101–131", "97–127"), earned summed, and keystones complete ("1 of 15").
+
+![scorecard excerpt, rendered from the downloaded file](./evidence/after-scorecard-xlsx-excerpt.png)
+
+### Notes
+
+- **The extra point.** Available and targeted totals show 131, one more than
+  the manual's 130. They add up each credit's reference Total, because the
+  project does not yet record its building type. The catalog itself is
+  correct; see row 11's notes.
+- **No file to clean up.** The file is generated per request by
+  `GET /api/projects/[id]/export` (exceljs) and nothing is written to disk.
+  Signed out it returns 401; an unknown or other-workspace project returns 404.
+
+### Checks
+
+- **Browser** (Playwright, project "Jeddah Central Oceanarium"):
+  - clicking the button downloads `jeddah-central-oceanarium-scorecard.xlsx`;
+  - parsed back, it holds all 56 credits, with HC-16 and RC-03 "Not targeted",
+    E-01 "5–15" and Gold as the target;
+  - the totals match the overview dial;
+  - the overview has the button too;
+  - signed out → 401, unknown project → 404;
+  - no console errors, no 5xx.
+- **Unit tests:** `tests/scorecard.test.ts` builds a workbook, writes it, reads
+  it back and checks:
+  - the header block;
+  - range and number cells;
+  - the "Not targeted" label;
+  - the PMM-03 fallback;
+  - category grouping and the range totals.
+- 121 passing with the database tests on; `tsc` clean; lint has no errors (the
+  5 existing warnings are untouched).

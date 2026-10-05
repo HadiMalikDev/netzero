@@ -5,8 +5,10 @@ import Link from "next/link";
 import { StatusPill } from "@/components/StatusPill";
 import type { Status } from "@/lib/status";
 import { formatPointsSpan } from "@/lib/points";
+import { TargetedToggle } from "@/components/TargetedToggle";
 
 export interface CreditRow {
+  projectCreditId: string;
   code: string;
   title: string;
   categoryCode: string;
@@ -19,10 +21,12 @@ export interface CreditRow {
   pointsMin: number | null;
   /** At least one requirement still blocking the credit has no file attached. */
   missingEvidence: boolean;
+  /** Whether the project is pursuing this credit. */
+  targeted: boolean;
 }
 
-/** "missing_evidence" cuts across status, so it is not one of the Status keys. */
-export type CreditFilter = "all" | Status | "missing_evidence";
+/** These cut across status, so they are not Status keys. */
+export type CreditFilter = "all" | Status | "missing_evidence" | "not_targeted";
 
 const FILTERS: { key: CreditFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -30,14 +34,18 @@ const FILTERS: { key: CreditFilter; label: string }[] = [
   { key: "in_progress", label: "In Progress" },
   { key: "not_started", label: "Not Started" },
   { key: "missing_evidence", label: "Missing Evidence" },
+  { key: "not_targeted", label: "Not Targeted" },
 ];
 
 export function CreditsTable({
   projectId,
   credits,
   initialFilter = "all",
+  targetAction,
 }: {
   projectId: string;
+  /** Server action behind the per-row Targeted switch. */
+  targetAction: (formData: FormData) => Promise<void>;
   credits: CreditRow[];
   /** Preselected from `?filter=` so the dashboard tiles can drill in here. */
   initialFilter?: CreditFilter;
@@ -49,7 +57,13 @@ export function CreditsTable({
     const q = query.trim().toLowerCase();
     return credits.filter((c) => {
       if (filter === "missing_evidence" && !c.missingEvidence) return false;
-      if (filter !== "all" && filter !== "missing_evidence" && c.status !== filter)
+      if (filter === "not_targeted" && c.targeted) return false;
+      if (
+        filter !== "all" &&
+        filter !== "missing_evidence" &&
+        filter !== "not_targeted" &&
+        c.status !== filter
+      )
         return false;
       if (
         q &&
@@ -110,6 +124,7 @@ export function CreditsTable({
               <th className="px-5 py-3">Requirements</th>
               <th className="px-5 py-3">Points</th>
               <th className="px-5 py-3">Status</th>
+              <th className="px-5 py-3">Targeted</th>
             </tr>
           </thead>
           <tbody>
@@ -120,11 +135,12 @@ export function CreditsTable({
                 name={g.name}
                 rows={g.rows}
                 projectId={projectId}
+                targetAction={targetAction}
               />
             ))}
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-5 py-10 text-center text-slate-400">
+                <td colSpan={5} className="px-5 py-10 text-center text-slate-400">
                   No credits match this filter.
                 </td>
               </tr>
@@ -141,17 +157,19 @@ function CategoryGroup({
   name,
   rows,
   projectId,
+  targetAction,
 }: {
   code: string;
   name: string;
   rows: CreditRow[];
   projectId: string;
+  targetAction: (formData: FormData) => Promise<void>;
 }) {
   return (
     <>
       <tr className="bg-slate-50/70">
         <td
-          colSpan={4}
+          colSpan={5}
           className="px-5 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500"
         >
           {code} · {name} ({rows.length})
@@ -160,7 +178,9 @@ function CategoryGroup({
       {rows.map((c) => (
         <tr
           key={c.code}
-          className="border-b border-slate-50 last:border-0 hover:bg-slate-50"
+          className={`border-b border-slate-50 last:border-0 hover:bg-slate-50 ${
+            c.targeted ? "" : "text-slate-400 opacity-70"
+          }`}
         >
           <td className="px-5 py-3">
             <Link
@@ -188,6 +208,15 @@ function CategoryGroup({
           </td>
           <td className="px-5 py-3">
             <StatusPill status={c.status} />
+          </td>
+          <td className="px-5 py-3">
+            <TargetedToggle
+              projectId={projectId}
+              projectCreditId={c.projectCreditId}
+              targeted={c.targeted}
+              action={targetAction}
+              compact
+            />
           </td>
         </tr>
       ))}

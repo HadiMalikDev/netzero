@@ -9,15 +9,26 @@ import {
   projectCredits,
   projects,
   requirementEntries,
+  rsVersions,
 } from "@/db/schema";
 import {
   deriveCreditStatus,
   deriveRequirementStatus,
+  optionalFlags,
   missingEvidenceRequirements,
   type Status,
 } from "./status";
 import { summarizeSpec, WORKSPACE_ID } from "./catalog";
+import { docGates, docsDueProvided, parseStage, splitBySpec } from "./evidence";
 import { parseNum } from "./num";
+import {
+  parseThresholds,
+  projectPoints,
+  tierForPoints,
+  tierReached,
+  type ProjectPoints,
+  type TierThreshold,
+} from "./tiers";
 import {
   bandsFromSpec,
   creditPointsEarned,
@@ -52,6 +63,8 @@ export async function createProject(input: {
   type?: string | null;
   location?: string | null;
   rsVersionId?: string | null;
+  targetTier?: string | null;
+  stage?: string;
 }) {
   const id = randomUUID();
   await db.insert(projects).values({
@@ -62,6 +75,8 @@ export async function createProject(input: {
     type: input.type ?? null,
     location: input.location ?? null,
     status: "in_progress",
+    targetTier: input.targetTier ?? null,
+    stage: input.stage ?? "design",
   });
   return id;
 }
@@ -69,6 +84,25 @@ export async function createProject(input: {
 export async function firstProjectId(): Promise<string | null> {
   const rows = await listProjects();
   return rows[0]?.id ?? null;
+}
+
+/**
+ * Stage of each evidence item ("design" / "construction"), index-aligned with
+ * evidence_specs (both are written from the same parsed list). Tolerant of
+ * null and malformed values; a missing stage comes back as null.
+ */
+function evidenceStages(raw: string | null, count: number): (string | null)[] {
+  let items: unknown[] = [];
+  try {
+    const v = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(v)) items = v;
+  } catch {
+    // fall through with no stages
+  }
+  return Array.from({ length: count }, (_, i) => {
+    const stage = (items[i] as { stage?: unknown } | undefined)?.stage;
+    return typeof stage === "string" && stage !== "unknown" ? stage : null;
+  });
 }
 
 /** A stored JSON array of strings, tolerant of null and malformed values. */
@@ -119,9 +153,22 @@ export interface RequirementView {
   pointsRaw: string | null;
   optionGroup: string | null;
   pointsType: string | null;
+  keystone: boolean;
+  /** false = an either/or option the project chose not to pursue. */
+  planned: boolean;
+  /** Adds points, never required (see optionalFlags). */
+  optional: boolean;
   target: string | null; // human-readable expected value, if the catalog has one
   numericSpec: unknown;
   evidenceSpecs: string[];
+  /** Stage of each spec ("design" / "construction"), index-aligned. */
+  evidenceStages: (string | null)[];
+  /** Which specs are due at the project's stage, index-aligned. */
+  docGates: boolean[];
+  /** Listed documents (any stage), those due now, and those provided. */
+  docsListed: number;
+  docsDue: number;
+  docsProvided: number;
   requiresEvidence: boolean;
   pageStart: number | null;
   pageEnd: number | null;
@@ -153,14 +200,29 @@ export interface CreditView {
   pointsEarned: number;
   pointsMax: number | null;
   pointsMin: number | null;
+  /** Whether the project is pursuing this credit (row 11 / row 8 targeting). */
+  targeted: boolean;
   requirements: RequirementView[];
+  /**
+   * Credit-level "additional attachments": files supporting the credit as a
+   * whole, not one requirement. They never tick a required document or move
+   * status — only requirement evidence does.
+   */
+  additionalAttachments: EvidenceAttachment[];
 }
 
 /** All confirmed credits of a project, with requirements + derived status. */
 export async function getProjectCredits(projectId: string): Promise<CreditView[]> {
+  const [proj] = await db
+    .select({ stage: projects.stage })
+    .from(projects)
+    .where(eq(projects.id, projectId));
+  const projectStage = parseStage(proj?.stage);
+
   const pcs = await db
     .select({
       pcId: projectCredits.id,
+      targeted: projectCredits.targeted,
       catalogCreditId: catalogCredits.id,
       code: catalogCredits.code,
       title: catalogCredits.title,
@@ -198,14 +260,17 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       pointsRaw: catalogRequirements.pointsRaw,
       optionGroup: catalogRequirements.optionGroup,
       pointsType: catalogRequirements.pointsType,
+      keystone: catalogRequirements.keystone,
       numericSpec: catalogRequirements.numericSpec,
       evidenceSpecs: catalogRequirements.evidenceSpecs,
+      evidence: catalogRequirements.evidence,
       pageStart: catalogRequirements.sourcePageStart,
       pageEnd: catalogRequirements.sourcePageEnd,
       valueBool: requirementEntries.valueBool,
       valueNumber: requirementEntries.valueNumber,
       valueText: requirementEntries.valueText,
       note: requirementEntries.note,
+      planned: requirementEntries.planned,
     })
     .from(requirementEntries)
     .innerJoin(
@@ -217,6 +282,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
   const evidence = await db
     .select({
       entryId: evidenceDocs.requirementEntryId,
+      projectCreditId: evidenceDocs.projectCreditId,
       id: evidenceDocs.id,
       fileName: evidenceDocs.fileName,
       fileSize: evidenceDocs.fileSize,
@@ -234,16 +300,16 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       evidenceReviews,
       eq(evidenceReviews.evidenceDocId, evidenceDocs.id),
     )
-    .where(
-      inArray(
-        evidenceDocs.requirementEntryId,
-        entries.map((e) => e.entryId),
-      ),
-    )
+    .where(inArray(evidenceDocs.projectCreditId, pcIds))
     .orderBy(evidenceDocs.createdAt);
   const evByEntry = new Map<string, EvidenceAttachment[]>();
+  const evByCredit = new Map<string, EvidenceAttachment[]>();
   for (const e of evidence) {
-    const arr = evByEntry.get(e.entryId) ?? [];
+    // No requirement => a credit-level additional attachment.
+    const [map, key] = e.entryId
+      ? [evByEntry, e.entryId]
+      : [evByCredit, e.projectCreditId];
+    const arr = map.get(key) ?? [];
     arr.push({
       id: e.id,
       fileName: e.fileName,
@@ -261,7 +327,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
           }
         : null,
     });
-    evByEntry.set(e.entryId, arr);
+    map.set(key, arr);
   }
 
   const byCredit = new Map<string, RequirementView[]>();
@@ -276,6 +342,9 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
     const requiresEvidence = true;
     const attachments = evByEntry.get(e.entryId) ?? [];
     const evidenceCount = attachments.length;
+    const stages = evidenceStages(e.evidence, evidenceSpecs.length);
+    const gates = docGates(stages, projectStage);
+    const docs = docsDueProvided(gates, splitBySpec(evidenceSpecs, attachments).bySpec);
     const status = deriveRequirementStatus({
       metricType: e.metricType,
       requiresEvidence,
@@ -283,6 +352,9 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       valueNumber: e.valueNumber,
       valueText: e.valueText,
       evidenceCount,
+      docsListed: evidenceSpecs.length,
+      docsDue: docs.due,
+      docsProvided: docs.provided,
     });
     const numericSpec = e.numericSpec ? JSON.parse(e.numericSpec) : null;
     const award = {
@@ -292,6 +364,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       numericSpec,
       valueNumber: e.valueNumber,
       status,
+      planned: e.planned,
     };
     const view: RequirementView = {
       entryId: e.entryId,
@@ -304,11 +377,19 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       pointsRaw: e.pointsRaw,
       optionGroup: e.optionGroup,
       pointsType: e.pointsType,
+      keystone: e.keystone,
+      planned: e.planned,
+      optional: false, // per credit, below — it depends on the sibling rows
       target: bandsFromSpec(numericSpec).length
         ? null
         : summarizeSpec(e.numericSpec),
       numericSpec,
       evidenceSpecs,
+      evidenceStages: stages,
+      docGates: gates,
+      docsListed: evidenceSpecs.length,
+      docsDue: docs.due,
+      docsProvided: docs.provided,
       requiresEvidence,
       pageStart: e.pageStart,
       pageEnd: e.pageEnd,
@@ -329,6 +410,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
 
   return pcs.map((p) => {
     const reqs = (byCredit.get(p.pcId) ?? []).sort((a, b) => a.seq - b.seq);
+    optionalFlags(reqs).forEach((optional, i) => (reqs[i].optional = optional));
     const cap = parseNum(p.pointsRaw);
     const range = creditPointsRange(reqs, p.pointsRaw);
     return {
@@ -347,7 +429,9 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       pointsEarned: creditPointsEarned(reqs, p.pointsRaw, "earned"),
       pointsMax: cap,
       pointsMin: range?.min ?? null,
+      targeted: p.targeted,
       requirements: reqs,
+      additionalAttachments: evByCredit.get(p.pcId) ?? [],
     };
   });
 }
@@ -366,10 +450,11 @@ export interface ProjectEvidence {
   createdAt: number;
   creditCode: string;
   creditTitle: string;
-  requirementSeq: number;
+  /** Null for a credit-level additional attachment. */
+  requirementSeq: number | null;
 }
 
-/** Every evidence file attached across a project's requirements. */
+/** Every evidence file attached across a project's credits. */
 export async function listProjectEvidence(
   projectId: string,
 ): Promise<ProjectEvidence[]> {
@@ -385,16 +470,16 @@ export async function listProjectEvidence(
     })
     .from(evidenceDocs)
     .innerJoin(
+      projectCredits,
+      eq(evidenceDocs.projectCreditId, projectCredits.id),
+    )
+    .leftJoin(
       requirementEntries,
       eq(evidenceDocs.requirementEntryId, requirementEntries.id),
     )
-    .innerJoin(
+    .leftJoin(
       catalogRequirements,
       eq(requirementEntries.catalogRequirementId, catalogRequirements.id),
-    )
-    .innerJoin(
-      projectCredits,
-      eq(requirementEntries.projectCreditId, projectCredits.id),
     )
     .innerJoin(
       catalogCredits,
@@ -413,6 +498,61 @@ export interface ProjectOverview {
   missingEvidence: number; // requirements that need evidence but have none
   categories: { code: string; name: string; count: number }[];
   evidenceFiles: number;
+  score: ProjectScore;
+}
+
+/** A project's points against its rating levels — what the dial draws. */
+export interface ProjectScore extends ProjectPoints {
+  thresholds: TierThreshold[];
+  /** The level the project is pursuing, if set and known to the version. */
+  target: TierThreshold | null;
+  /** The level awarded now: null while any keystone credit is incomplete. */
+  reached: TierThreshold | null;
+  /** The level the points alone would reach, keystones aside. */
+  byPoints: TierThreshold | null;
+  /**
+   * The dial's full scale: the manual's own Full Scope total when the version
+   * has one (the basis its thresholds use), else the sum of credit points.
+   */
+  scaleMax: number;
+}
+
+export async function getProjectScore(
+  project: { rsVersionId: string | null; targetTier: string | null },
+  credits: CreditView[],
+): Promise<ProjectScore> {
+  const [v] = project.rsVersionId
+    ? await db
+        .select({
+          tierThresholds: rsVersions.tierThresholds,
+          scopeTotals: rsVersions.scopeTotals,
+        })
+        .from(rsVersions)
+        .where(eq(rsVersions.id, project.rsVersionId))
+    : [];
+  const thresholds = parseThresholds(v?.tierThresholds);
+  const points = projectPoints(credits);
+  const keystonesComplete = points.keystones.complete === points.keystones.total;
+  return {
+    ...points,
+    thresholds,
+    target: thresholds.find((t) => t.tier === project.targetTier) ?? null,
+    reached: tierReached(points.earned, thresholds, keystonesComplete),
+    byPoints: tierForPoints(points.earned, thresholds),
+    scaleMax: fullScopeTotal(v?.scopeTotals) ?? points.available.max,
+  };
+}
+
+/** "Full Scope" from rs_version.scope_totals (`{"Full Scope":130,…}`), if any. */
+function fullScopeTotal(raw: string | null | undefined): number | null {
+  try {
+    const totals = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    const key = Object.keys(totals).find((k) => /full\s*scope/i.test(k));
+    const n = key ? Number(totals[key]) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getProjectOverview(
@@ -420,6 +560,7 @@ export async function getProjectOverview(
 ): Promise<ProjectOverview> {
   const credits = await getProjectCredits(projectId);
   const evidence = await listProjectEvidence(projectId);
+  const project = await getProject(projectId);
   let missingEvidence = 0;
   const catMap = new Map<string, { name: string; count: number }>();
   for (const c of credits) {
@@ -440,5 +581,9 @@ export async function getProjectOverview(
       count: v.count,
     })),
     evidenceFiles: evidence.length,
+    score: await getProjectScore(
+      project ?? { rsVersionId: null, targetTier: null },
+      credits,
+    ),
   };
 }

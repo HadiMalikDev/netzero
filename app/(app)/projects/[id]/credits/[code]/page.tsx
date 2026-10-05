@@ -4,10 +4,26 @@ import { PageChrome } from "../../../../_components/PageChrome";
 import { Card } from "@/components/ui";
 import { StatusPill } from "@/components/StatusPill";
 import { getCreditByCode, getProject } from "@/lib/data";
-import { updateCreditEntries } from "../../../actions";
+import {
+  deleteEvidence,
+  rerunEvidenceReview,
+  resetPath,
+  setCreditTargeted,
+  updateCreditEntries,
+  uploadEvidence,
+} from "../../../actions";
+import { CreditRing } from "@/components/ProgressDial";
+import { TargetedToggle } from "@/components/TargetedToggle";
+import { creditSpan } from "@/lib/tiers";
 import { RequirementItem } from "./RequirementItem";
+import {
+  AdditionalAttachments,
+  RequiredDocuments,
+  type DocSection,
+} from "@/components/EvidenceChecklist";
+import { documentScope, parseStage } from "@/lib/evidence";
 import { SaveCreditButton } from "./SaveCreditButton";
-import { groupByOption } from "@/lib/option-group";
+import { groupByOption, pathStates, type PathState } from "@/lib/option-group";
 import { OptionGroup } from "@/components/OptionGroup";
 import { formatPointsSpan } from "@/lib/points";
 
@@ -19,6 +35,21 @@ export default async function CreditDetailPage({
   if (!project) notFound();
   const credit = await getCreditByCode(id, decodeURIComponent(code));
   if (!credit) notFound();
+
+  // Path state of each requirement (either/or options only), shared by the
+  // Required documents box and the checklist below it.
+  const paths = new Map<string, PathState>();
+  for (const block of groupByOption(credit.requirements)) {
+    if (block.kind !== "xor") continue;
+    pathStates(block.items).forEach((p, i) => paths.set(block.items[i].entryId, p));
+  }
+  const sections: DocSection[] = [];
+  const setAside: typeof credit.requirements = [];
+  for (const req of credit.requirements) {
+    const scope = documentScope(req, paths.get(req.entryId));
+    if (scope.show) sections.push({ req, counted: scope.counted, tag: scope.tag });
+    else setAside.push(req);
+  }
 
   return (
     <PageChrome
@@ -37,35 +68,44 @@ export default async function CreditDetailPage({
           ← Back to credits
         </Link>
         <div className="mt-3 flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                {credit.categoryCode} · {credit.categoryName}
-              </span>
-              {credit.isKeystone ? (
-                <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                  Keystone
+          <div className="flex items-start gap-4">
+            <CreditRing earned={credit.pointsEarned} max={creditSpan(credit).max} />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                  {credit.categoryCode} · {credit.categoryName}
                 </span>
+                {credit.isKeystone ? (
+                  <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                    Keystone
+                  </span>
+                ) : null}
+                <TargetedToggle
+                  projectId={id}
+                  projectCreditId={credit.projectCreditId}
+                  targeted={credit.targeted}
+                  action={setCreditTargeted}
+                />
+              </div>
+              <h1 className="mt-2 text-2xl font-semibold text-slate-900">
+                {credit.code} — {credit.title}
+              </h1>
+              {credit.pageStart ? (
+                <p className="mt-1 text-sm text-slate-400">
+                  Source: manual pp.{credit.pageStart}–{credit.pageEnd}
+                  {credit.pointsMax != null
+                    ? ` · ${credit.pointsEarned} / ${
+                        credit.pointsMin != null &&
+                        credit.pointsMin !== credit.pointsMax
+                          ? formatPointsSpan(credit.pointsMin, credit.pointsMax)
+                          : credit.pointsMax
+                      } points`
+                    : credit.pointsRaw
+                      ? ` · ${credit.pointsRaw} points (reference)`
+                      : ""}
+                </p>
               ) : null}
             </div>
-            <h1 className="mt-2 text-2xl font-semibold text-slate-900">
-              {credit.code} — {credit.title}
-            </h1>
-            {credit.pageStart ? (
-              <p className="mt-1 text-sm text-slate-400">
-                Source: manual pp.{credit.pageStart}–{credit.pageEnd}
-                {credit.pointsMax != null
-                  ? ` · ${credit.pointsEarned} / ${
-                      credit.pointsMin != null &&
-                      credit.pointsMin !== credit.pointsMax
-                        ? formatPointsSpan(credit.pointsMin, credit.pointsMax)
-                        : credit.pointsMax
-                    } points`
-                  : credit.pointsRaw
-                    ? ` · ${credit.pointsRaw} points (reference)`
-                    : ""}
-              </p>
-            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-3">
             <StatusPill status={credit.status} />
@@ -87,6 +127,31 @@ export default async function CreditDetailPage({
         </Card>
       ) : null}
 
+      <Card className="mb-6 overflow-hidden">
+        <RequiredDocuments
+          sections={sections}
+          setAside={setAside}
+          stage={parseStage(project.stage)}
+          projectId={id}
+          code={credit.code}
+          uploadAction={uploadEvidence}
+          deleteAction={deleteEvidence}
+          rerunAction={rerunEvidenceReview}
+        />
+      </Card>
+
+      <Card className="mb-6">
+        <AdditionalAttachments
+          files={credit.additionalAttachments}
+          projectCreditId={credit.projectCreditId}
+          projectId={id}
+          code={credit.code}
+          uploadAction={uploadEvidence}
+          deleteAction={deleteEvidence}
+          rerunAction={rerunEvidenceReview}
+        />
+      </Card>
+
       <Card className="p-5">
         <h2 className="mb-2 text-sm font-semibold text-slate-800">
           Requirements Checklist
@@ -94,19 +159,26 @@ export default async function CreditDetailPage({
         <div>
           {groupByOption(credit.requirements).map((block, i) => {
             const items = block.kind === "xor" ? block.items : [block.item];
+            const chosen = items.find((r) => paths.get(r.entryId) === "chosen");
             const body = items.map((req) => (
               <RequirementItem
                 key={req.entryId}
                 req={req}
-                projectId={id}
-                code={credit.code}
                 rsVersionId={project.rsVersionId}
                 grouped={block.kind === "xor"}
+                path={paths.get(req.entryId)}
               />
             ));
             if (block.kind === "xor")
               return (
-                <OptionGroup key={`xor-${block.group}-${i}`} count={items.length}>
+                <OptionGroup
+                  key={`xor-${block.group}-${i}`}
+                  count={items.length}
+                  chosenSeq={chosen?.seq}
+                  resetEntryId={items[0].entryId}
+                  resetAction={resetPath}
+                  form="save-credit"
+                >
                   {body}
                 </OptionGroup>
               );

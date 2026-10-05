@@ -84,6 +84,12 @@ export const rsVersions = pgTable(
     status: text("status").notNull().default("draft"),
     sourceDocumentId: text("source_document_id"),
     scopeTotals: text("scope_totals"),
+    /**
+     * Rating-level thresholds as JSON `[{"tier":"Green","min":25}, …]`, lowest
+     * first. Full Scope only for now (the manual's Table 1). Null until set in
+     * catalog admin; the project dial needs it.
+     */
+    tierThresholds: text("tier_thresholds"),
     notes: text("notes"),
     createdAt: integer("created_at").notNull().default(now),
   },
@@ -252,6 +258,14 @@ export const projects = pgTable("project", {
   type: text("type"),
   location: text("location"),
   status: text("status").notNull().default("in_progress"),
+  /** The rating level being pursued (a tier name from the version's thresholds). */
+  targetTier: text("target_tier"),
+  /**
+   * design | construction. Decides which of the manual's listed documents are
+   * due now: construction-stage documents only gate completion once the
+   * project is at construction stage.
+   */
+  stage: text("stage").notNull().default("design"),
   createdAt: integer("created_at").notNull().default(now),
 });
 
@@ -269,6 +283,8 @@ export const projectCredits = pgTable(
       .notNull()
       .references(() => catalogCredits.id),
     status: text("status").notNull().default("not_started"),
+    /** Whether the project is pursuing this credit. Every credit starts targeted. */
+    targeted: boolean("targeted").notNull().default(true),
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [
@@ -292,6 +308,8 @@ export const requirementEntries = pgTable("requirement_entry", {
   valueText: text("value_text"),
   status: text("status").notNull().default("not_started"),
   note: text("note"),
+  /** false = an either/or option the project chose not to pursue. */
+  planned: boolean("planned").notNull().default(true),
   updatedAt: integer("updated_at").notNull().default(now),
 });
 
@@ -300,9 +318,18 @@ export const evidenceDocs = pgTable("evidence_doc", {
   workspaceId: text("workspace_id")
     .notNull()
     .references(() => workspaces.id),
-  requirementEntryId: text("requirement_entry_id")
+  /** The credit the file belongs to. Always set. */
+  projectCreditId: text("project_credit_id")
     .notNull()
-    .references(() => requirementEntries.id),
+    .references(() => projectCredits.id),
+  /**
+   * The requirement the file was attached to. Null for a credit-level
+   * "additional attachment" (revised shop drawings, approvals…) that supports
+   * the credit as a whole rather than one requirement.
+   */
+  requirementEntryId: text("requirement_entry_id").references(
+    () => requirementEntries.id,
+  ),
   fileName: text("file_name").notNull(),
   filePath: text("file_path").notNull(),
   fileSize: integer("file_size"),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupByOption, reduceByOption } from "@/lib/option-group";
+import { groupByOption, pathStates, reduceByOption } from "@/lib/option-group";
 
 describe("groupByOption", () => {
   it("keeps ungrouped rows as singles", () => {
@@ -45,5 +45,17 @@ describe("reduceByOption", () => {
         (r) => r.n,
       ),
     ).toBe(18);
+  });
+});
+
+describe("pathStates", () => {
+  it("no option set aside => every option still open", () => {
+    expect(pathStates([{ planned: true }, { planned: true }])).toEqual(["open", "open"]);
+  });
+  it("one set aside => the planned one is the chosen path", () => {
+    expect(pathStates([{ planned: false }, { planned: true }])).toEqual([
+      "dropped",
+      "chosen",
+    ]);
   });
 });

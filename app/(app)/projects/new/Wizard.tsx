@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createProjectFromCatalog } from "../actions";
+import type { TierThreshold } from "@/lib/tiers";
 
 const STEPS = [
   "General Info",
@@ -19,6 +20,8 @@ export interface VersionOption {
   label: string;
   versionLabel: string;
   creditCount: number;
+  /** The version's rating levels; empty when not set in catalog admin. */
+  thresholds: TierThreshold[];
 }
 
 function SubmitButton({ disabled }: { disabled: boolean }) {
@@ -38,6 +41,7 @@ export function Wizard({ versions }: { versions: VersionOption[] }) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [versionId, setVersionId] = useState("");
+  const [targetTier, setTargetTier] = useState("");
 
   const canProceedFromGeneral = name.trim().length > 0;
   const selected = versions.find((v) => v.id === versionId);
@@ -45,6 +49,7 @@ export function Wizard({ versions }: { versions: VersionOption[] }) {
   return (
     <form action={createProjectFromCatalog}>
       <input type="hidden" name="rsVersionId" value={versionId} />
+      <input type="hidden" name="targetTier" value={targetTier} />
 
       {/* Stepper */}
       <div className="flex flex-wrap gap-2 border-b border-slate-100 px-6 py-4">
@@ -105,6 +110,14 @@ export function Wizard({ versions }: { versions: VersionOption[] }) {
                 <input name="location" placeholder="Riyadh, KSA" className="input" />
               </Field>
             </div>
+            <Field label="Stage">
+              {/* Decides which of the manual's listed documents are due now;
+                  changeable later from the project overview. */}
+              <select name="stage" defaultValue="design" className="input">
+                <option value="design">Design — design-stage documents due</option>
+                <option value="construction">Construction — all documents due</option>
+              </select>
+            </Field>
           </div>
         </section>
 
@@ -123,7 +136,11 @@ export function Wizard({ versions }: { versions: VersionOption[] }) {
               <button
                 key={v.id}
                 type="button"
-                onClick={() => setVersionId(v.id)}
+                onClick={() => {
+                  setVersionId(v.id);
+                  // Tier names belong to a version; a switch clears the pick.
+                  if (v.id !== versionId) setTargetTier("");
+                }}
                 className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${
                   versionId === v.id
                     ? "border-brand-500 bg-brand-50/60 ring-1 ring-brand-500"
@@ -148,6 +165,40 @@ export function Wizard({ versions }: { versions: VersionOption[] }) {
               </button>
             ))}
           </div>
+
+          {selected && selected.thresholds.length > 0 ? (
+            <div className="mt-6 max-w-2xl">
+              <div className="mb-1 text-sm font-semibold text-slate-800">
+                Target certification level
+              </div>
+              <p className="mb-3 text-sm text-slate-500">
+                The rating level this project is pursuing. It drives the progress
+                dial and can be changed later from the project overview. Every
+                credit starts as targeted; un-target any you won&apos;t pursue
+                from the credits list.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[{ tier: "", min: null as number | null }, ...selected.thresholds].map((t) => (
+                  <button
+                    key={t.tier || "none"}
+                    type="button"
+                    onClick={() => setTargetTier(t.tier)}
+                    aria-pressed={targetTier === t.tier}
+                    className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                      targetTier === t.tier
+                        ? "border-brand-500 bg-brand-50/60 ring-1 ring-brand-500"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="font-medium text-slate-900">{t.tier || "Not set"}</div>
+                    <div className="text-xs text-slate-500">
+                      {t.min != null ? `${t.min}+ points` : "decide later"}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         {/* Steps 3–6 — chrome, skippable */}
@@ -198,6 +249,9 @@ export function Wizard({ versions }: { versions: VersionOption[] }) {
                   : "Not selected"
               }
             />
+            {selected && selected.thresholds.length > 0 ? (
+              <Row label="Target level" value={targetTier || "Not set"} />
+            ) : null}
           </dl>
         </section>
       </div>

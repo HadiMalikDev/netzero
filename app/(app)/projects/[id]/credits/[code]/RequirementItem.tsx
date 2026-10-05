@@ -4,40 +4,34 @@ import { useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
 import { ExpandableText } from "@/components/ExpandableText";
 import { BandTable } from "@/components/BandTable";
-import { MetricBadge, OptionBadge, PointsRange } from "@/components/req";
-import { EvidenceChecklist } from "@/components/EvidenceChecklist";
 import {
-  deleteEvidence,
-  rerunEvidenceReview,
-  uploadEvidence,
-} from "../../../actions";
+  MetricBadge,
+  OptionalBadge,
+  OptionBadge,
+  PointsRange,
+} from "@/components/req";
+import { choosePath } from "../../../actions";
 import type { RequirementView } from "@/lib/data";
+import { requirementLabel } from "@/lib/format";
+import type { PathState } from "@/lib/option-group";
+import { evidenceSatisfied } from "@/lib/status";
 import type { NumericLimit } from "@/lib/parser/types";
 import { bandsFromSpec, firstBands, pointsForValue } from "@/lib/points";
 
 /** id of the single per-credit save form (see the credit detail page header). */
 const SAVE_FORM = "save-credit";
 
-/** A short label when the catalog has no explicit title. */
-function firstClause(text: string): string {
-  const s = text.trim();
-  const dot = s.indexOf(". ");
-  const cut = dot > 8 && dot < 80 ? dot : Math.min(72, s.length);
-  return s.slice(0, cut).replace(/[,;:]\s*$/, "") + (cut < s.length ? "…" : "");
-}
-
 export function RequirementItem({
   req,
-  projectId,
-  code,
   rsVersionId,
   grouped = false,
+  path,
 }: {
   req: RequirementView;
-  projectId: string;
-  code: string;
   rsVersionId: string | null;
   grouped?: boolean;
+  /** Set on either/or options only. */
+  path?: PathState;
 }) {
   const limits =
     (req.numericSpec as { limits?: NumericLimit[] } | null)?.limits ?? [];
@@ -51,12 +45,17 @@ export function RequirementItem({
     lookupBands.length && typedNum != null && Number.isFinite(typedNum)
       ? pointsForValue(lookupBands, typedNum)
       : null;
-  const label = req.title ?? firstClause(req.text);
+  const label = requirementLabel(req.title, req.text);
+  const dropped = path === "dropped";
+  // An optional row nobody has started is not asking for anything yet.
+  const idleOptional = req.optional && req.status === "not_started";
 
   return (
     <div
       id={`req-${req.seq}`}
-      className="scroll-mt-24 border-b border-slate-100 py-4 last:border-0"
+      className={`scroll-mt-24 border-b border-slate-100 py-4 transition-opacity last:border-0 ${
+        dropped ? "opacity-50 hover:opacity-100" : ""
+      }`}
     >
       {/* Row header */}
       <div className="flex items-start justify-between gap-4">
@@ -69,12 +68,13 @@ export function RequirementItem({
             <MetricBadge metricType={req.metricType} />
             <PointsRange spec={req.numericSpec} pointsRaw={req.pointsRaw} />
             {req.optionGroup && !grouped ? <OptionBadge /> : null}
+            {req.optional ? <OptionalBadge /> : null}
             {req.target && bandSets.length === 0 ? (
               <span className="rounded bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700">
                 Should be: {req.target}
               </span>
             ) : null}
-            {req.status === "completed" && req.pointsEarned > 0 ? (
+            {req.status === "completed" && req.pointsEarned > 0 && !dropped ? (
               <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700">
                 {req.pointsEarned} pts earned
               </span>
@@ -96,7 +96,10 @@ export function RequirementItem({
             ) : null}
           </div>
         </div>
-        <StatusPill status={req.status} />
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <StatusPill status={req.status} />
+          {path ? <PathControl entryId={req.entryId} path={path} /> : null}
+        </div>
       </div>
 
       {/* Value input — associated with the single per-credit Save form */}
@@ -171,32 +174,70 @@ export function RequirementItem({
         </div>
       ) : null}
 
-      {/* Evidence. Mandatory on every requirement — see requiresEvidence in
-          lib/data.ts. There is deliberately no "optional" state here. */}
-      <div className="mt-3">
-        <span className="text-xs font-semibold text-slate-500">
-          Evidence
-          <span
-            className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-              req.evidenceCount > 0
-                ? "bg-emerald-50 text-emerald-700"
+      {/* Evidence. Mandatory on every requirement being claimed — see
+          requiresEvidence in lib/data.ts. An optional row is only claimed once
+          it is started, so until then the chip says "if pursued". The files
+          themselves live in the Required documents box at the top. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-semibold text-slate-500">Evidence</span>
+        <span
+          className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+            evidenceSatisfied(req)
+              ? "bg-emerald-50 text-emerald-700"
+              : idleOptional || dropped
+                ? "bg-slate-100 text-slate-500"
                 : "bg-amber-50 text-amber-700"
-            }`}
-          >
-            required · {req.evidenceCount} attached
-          </span>
+          }`}
+        >
+          {req.docsListed > 0 && req.docsDue === 0
+            ? "no documents due at this stage"
+            : `${idleOptional ? "required if pursued" : "required"} · ${
+                req.docsDue > 0
+                  ? `${req.docsProvided} of ${req.docsDue} documents due`
+                  : `${req.evidenceCount} attached`
+              }`}
         </span>
-        <EvidenceChecklist
-          specs={req.evidenceSpecs}
-          attachments={req.attachments}
-          entryId={req.entryId}
-          projectId={projectId}
-          code={code}
-          uploadAction={uploadEvidence}
-          deleteAction={deleteEvidence}
-          rerunAction={rerunEvidenceReview}
-        />
+        {dropped ? null : (
+          <a
+            href={`#docs-req-${req.seq}`}
+            className="font-medium text-brand-600 hover:text-brand-700"
+          >
+            {req.evidenceCount > 0
+              ? `${req.evidenceCount} file${req.evidenceCount === 1 ? "" : "s"} · manage in Required documents ↑`
+              : "Attach in Required documents ↑"}
+          </a>
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Pick / show the path for an either/or option. Posts through the credit's Save
+ * form (`formAction`), so values typed elsewhere on the page are saved too.
+ */
+function PathControl({ entryId, path }: { entryId: string; path: PathState }) {
+  if (path === "chosen")
+    return (
+      <span className="rounded-full bg-violet-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+        Pursuing this path
+      </span>
+    );
+  return (
+    <div className="flex items-center gap-2">
+      {path === "dropped" ? (
+        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
+          Not pursuing
+        </span>
+      ) : null}
+      <button
+        type="submit"
+        form={SAVE_FORM}
+        formAction={choosePath.bind(null, entryId)}
+        className="rounded-md border border-violet-300 bg-white px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-50"
+      >
+        {path === "dropped" ? "Pursue instead" : "Pursue this path"}
+      </button>
     </div>
   );
 }

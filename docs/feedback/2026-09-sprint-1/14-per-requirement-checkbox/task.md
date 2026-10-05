@@ -68,3 +68,96 @@ Decisions to settle first:
 Closely related to item 9. If each expected document becomes a checklist row,
 the natural grain for a tick is the document rather than the requirement. Worth
 designing the two together.
+
+## Done — 2026-10-05 (V2 feedback)
+
+### What the client meant
+
+The V2 log kept this row Pending. Talking it through, the ask is not "tick which
+requirements are met". It is **"mark which path we are pursuing"**: when a credit
+offers either/or options, picking one fades the others, so anyone opening the
+credit sees at a glance which path the project is planning against.
+
+Rows outside an either/or group get no control. The credit's derived status, and
+the derived-status model, are unchanged.
+
+### Choosing a path
+
+Every option in an either/or group (E-01 Prescriptive vs Performance) now has a
+**Pursue this path** button.
+
+![either/or, nothing chosen](./evidence/after-xor-open.png)
+
+Picking one does four things:
+
+- marks the choice in the group header ("Pursuing option #1");
+- fades the alternative, which gets a "Not pursuing" pill and a "Pursue instead"
+  button;
+- takes the alternative out of the credit's status, its points, the "missing
+  evidence" filter and the assistant's answers;
+- adds a "Reset choice" button that brings every option back.
+
+![option #1 chosen, #2 set aside](./evidence/after-xor-chosen.png)
+
+The buttons post through the credit's Save form, so values already typed on the
+page are saved, not lost. With no path chosen, the group behaves exactly as
+before: any finished option satisfies it.
+
+The choice is stored per requirement as `requirement_entry.planned` (migration
+`0004`). Every existing row defaults to planned, so nothing changes for projects
+already in flight.
+
+### Optional rows never block
+
+Talking this row through also turned up a scoring bug. A row that adds points
+but is not required, such as W-02 #2–#5, still blocked its credit from reaching
+Completed. Hadi ruled that optional rows must never block.
+
+A row counts as **optional** when all four hold:
+
+- it sits outside an either/or group;
+- it is not a keystone requirement;
+- it carries points of its own;
+- another row in the same credit also earns points.
+
+Rows with no points are prerequisites ("In addition to #1…") and stay mandatory.
+A credit's only point-earning row is the credit itself (PMM-03), so it stays
+mandatory too. That last condition was added the same day, when building row 9
+showed PMM-03 wrongly badged optional.
+
+| Row state | Effect on the credit |
+|---|---|
+| Optional, not started | Does not block. Shown with an **Optional · adds points** badge; its evidence chip reads "required if pursued". |
+| Optional, started | Must be finished, just like a mandatory row. |
+| Only optional rows in the credit | Completed once one is finished and none is left half-done. |
+
+![W-02 Completed with optional rows untouched](./evidence/after-w02-completed-optional-untouched.png)
+
+### The assistant
+
+Untouched optional rows stay in the assistant's "what's left", but in their own
+**Optional — adds points** block with their points, never mixed in with what
+blocks the credit. The LLM prompt says the same, and also tells it never to list
+a set-aside path as remaining.
+
+![assistant labelling W-02's optional rows](./evidence/after-assistant-optional.png)
+
+### Checks
+
+- **Browser** (Playwright, fresh project "Jeddah Central Oceanarium"):
+  - E-01: choose, reset and switch paths;
+  - W-02: #1 and #4 finished with files attached, the rest untouched, credit reaches Completed;
+  - W-02 is absent from the missing-evidence filter, while E-01's chosen path is listed there;
+  - the assistant labels W-02's optional rows;
+  - no console errors, no 5xx.
+- **Unit tests:** 18 new across status, points and assistant. 88 passing.
+- `tsc` clean; lint has no errors (the 5 existing warnings are untouched).
+
+### Found along the way, not changed here
+
+- **Missed groups.** E-01 is the only either/or group in the current catalog.
+  EI-03 and TC-01 each show a lone "Option 1", which suggests the parser missed
+  their groups. Worth a catalog review.
+- **Made-up link domains.** In LLM mode the assistant sometimes writes absolute
+  links on made-up domains (`https://mostadam.sa/projects/…`), although the facts
+  only carry relative paths. This was already happening; it is a separate fix.

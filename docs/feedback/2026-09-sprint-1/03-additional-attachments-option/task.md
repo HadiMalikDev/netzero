@@ -75,3 +75,70 @@ the document they provide, with unassigned ones grouped as "Other attachments".
 Everything verified above still holds.
 
 ![shipped UI](./evidence/after-shipped-ui.png)
+
+## Done — 2026-10-05 (V2 feedback: a labelled section)
+
+The V2 log left this row unmarked. The Sprint 1 answer, a multi-file control on
+every requirement, did not read as the "Additional Attachments" option the
+client asked for. Hadi's call: a labelled section of its own, at credit level.
+
+### What changed
+
+The credit page now has an **Additional attachments** card, directly under
+Required documents.
+
+![empty](./evidence/after-v2-empty.png)
+
+- **Credit-level.** Files belong to the credit as a whole, not to one
+  requirement: approved shop drawings, revisions, correspondence. Several files
+  can be picked at once.
+- **Never counts toward completion.** These files never tick a required
+  document and never move a requirement's status. In the check below,
+  Required documents stayed at "1 of 5" after two additional files were added.
+- **Reviewed against the whole credit.** The AI reviewer has no single
+  requirement to read them against, so it reads them against all the credit's
+  requirements, with their expected documents combined.
+- **Same file handling as requirement evidence.** Download, remove and re-run
+  review all work as they do for requirement files.
+- **Documents library.** These files are listed as "additional attachment for
+  the credit".
+
+![two attached, each reviewed](./evidence/after-v2-two-attached-with-review.png)
+
+![documents library](./evidence/after-v2-documents-library.png)
+
+The per-requirement "Other files" slot from Sprint 1 is still there, for a file
+that supports one requirement without being a listed document.
+
+### Data
+
+Migration `0005` makes two changes to `evidence_doc`:
+
+- adds `project_credit_id`, added nullable, backfilled from each file's
+  requirement entry, then set NOT NULL;
+- makes `requirement_entry_id` nullable. A null value now means "credit-level".
+
+On the test database all 3 existing files backfilled to the right credit.
+
+Uploads re-read the credit from the database, scoped to the project, rather than
+trusting the posted id. A credit-level upload can never claim a requirement's
+document slot.
+
+### Checks
+
+- **Browser** (PMM-03, project "Jeddah Central Oceanarium"):
+  - the card sits between Required documents and the checklist;
+  - a two-file upload attaches both;
+  - the AI review rendered: "partially meets" for the plan, "could not read"
+    for the photo;
+  - download returns 200;
+  - the documents library shows both files labelled as the credit's;
+  - remove deletes one and leaves the other;
+  - no console errors, no 5xx.
+- **Database tests:** `tests/evidence-credit-level.test.ts` covers three things:
+  - credit-level files stay apart from requirement evidence;
+  - they never satisfy a requirement;
+  - the library lists them with no requirement.
+- **Unit test** for the credit-level review prompt.
+- 108 passing with the database tests on; `tsc` clean; lint has no errors (the
+  5 existing warnings are untouched).

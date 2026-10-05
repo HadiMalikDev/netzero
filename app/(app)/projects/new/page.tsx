@@ -3,6 +3,7 @@ import { PageChrome, PageHeader } from "../../_components/PageChrome";
 import { Card, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { listPublishedVersions } from "@/lib/catalog";
+import { parseThresholds } from "@/lib/tiers";
 import { Wizard } from "./Wizard";
 
 export default async function NewProjectPage() {
@@ -12,6 +13,7 @@ export default async function NewProjectPage() {
     label: `${v.ratingSystemName} — ${v.version.scheme} ${v.version.stage}`,
     versionLabel: v.version.versionLabel,
     creditCount: v.creditCount,
+    thresholds: parseThresholds(v.version.tierThresholds),
   }));
 
   return (

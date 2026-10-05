@@ -51,3 +51,15 @@ export function reduceByOption<T extends Optioned>(
     sum += n;
   return sum;
 }
+
+/**
+ * Where an either/or option stands: no path picked yet, the picked path, or an
+ * alternative the project set aside. A path counts as picked once any option
+ * in the block has been set aside (`planned === false`).
+ */
+export type PathState = "open" | "chosen" | "dropped";
+
+export function pathStates(items: { planned: boolean }[]): PathState[] {
+  const picked = items.some((r) => !r.planned);
+  return items.map((r) => (!picked ? "open" : r.planned ? "chosen" : "dropped"));
+}

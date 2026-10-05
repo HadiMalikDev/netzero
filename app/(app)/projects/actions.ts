@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   catalogCredits,
@@ -14,11 +14,22 @@ import {
   evidenceDocs,
   evidenceReviews,
   projectCredits,
+  projects,
   requirementEntries,
+  rsVersions,
 } from "@/db/schema";
 import { requireUser } from "@/lib/auth/session";
 import { runEvidenceReview } from "@/lib/ai/evidence-review";
-import { createProject, getCreditByCode, WORKSPACE_ID } from "@/lib/data";
+import {
+  createProject,
+  getCreditByCode,
+  getProject,
+  WORKSPACE_ID,
+  type CreditView,
+} from "@/lib/data";
+import { parseThresholds } from "@/lib/tiers";
+import { parseStage } from "@/lib/evidence";
+import { groupByOption } from "@/lib/option-group";
 
 const UPLOAD_ROOT = ".data/uploads";
 
@@ -40,6 +51,8 @@ export async function createProjectFromCatalog(formData: FormData): Promise<void
     location:
       (String(formData.get("location") ?? "").trim() || null) as string | null,
     rsVersionId,
+    targetTier: await validTier(rsVersionId, formData.get("targetTier")),
+    stage: parseStage(formData.get("stage")),
   });
 
   const credits = await db
@@ -55,6 +68,7 @@ export async function createProjectFromCatalog(formData: FormData): Promise<void
       projectId,
       catalogCreditId: c.id,
       status: "not_started",
+      targeted: true,
     });
     const reqs = await db
       .select({ id: catalogRequirements.id })
@@ -75,14 +89,88 @@ export async function createProjectFromCatalog(formData: FormData): Promise<void
   redirect(`/projects/${projectId}/credits`);
 }
 
+// ---------- targeting (V2 rows 8 and 11) ----------
+
+/** A posted tier name, kept only if the version defines it; else null. */
+async function validTier(
+  rsVersionId: string | null,
+  raw: FormDataEntryValue | null,
+): Promise<string | null> {
+  const tier = String(raw ?? "").trim();
+  if (!tier || !rsVersionId) return null;
+  const [v] = await db
+    .select({ tierThresholds: rsVersions.tierThresholds })
+    .from(rsVersions)
+    .where(eq(rsVersions.id, rsVersionId));
+  return parseThresholds(v?.tierThresholds).some((t) => t.tier === tier)
+    ? tier
+    : null;
+}
+
+/** Targeting shows on the overview, the credits list and every credit page. */
+function revalidateProject(projectId: string) {
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/credits`);
+  revalidatePath("/projects/[id]/credits/[code]", "page");
+}
+
+/** Set (or clear) the rating level a project is pursuing. */
+export async function setProjectTargetTier(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  const project = await getProject(projectId);
+  if (!project) throw new Error("project not found");
+  await db
+    .update(projects)
+    .set({ targetTier: await validTier(project.rsVersionId, formData.get("targetTier")) })
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, WORKSPACE_ID)));
+  revalidateProject(projectId);
+}
+
+/**
+ * Set the project's stage. It decides which listed documents are due, so it
+ * moves requirement and credit status: at construction stage the
+ * construction-stage documents start to gate completion.
+ */
+export async function setProjectStage(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  if (!projectId) throw new Error("missing ids");
+  await db
+    .update(projects)
+    .set({ stage: parseStage(formData.get("stage")) })
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, WORKSPACE_ID)));
+  revalidateProject(projectId);
+}
+
+/** Mark a credit as targeted or not targeted. */
+export async function setCreditTargeted(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  const projectCreditId = String(formData.get("projectCreditId") ?? "");
+  if (!projectId || !projectCreditId) throw new Error("missing ids");
+  const targeted = formData.get("targeted") === "true";
+  await db
+    .update(projectCredits)
+    .set({ targeted })
+    .where(
+      and(
+        eq(projectCredits.id, projectCreditId),
+        eq(projectCredits.projectId, projectId),
+        eq(projectCredits.workspaceId, WORKSPACE_ID),
+      ),
+    );
+  revalidateProject(projectId);
+}
+
 // ---------- checklist entry updates ----------
 
 /**
- * Save ALL requirement values for a credit at once (one Save button per credit).
- * Reads each entry's value from `bool-/num-/text-<entryId>` fields; the metric
- * type comes from the catalog, so the form only needs the value inputs.
+ * Write every requirement value posted with the credit's Save form. Reads each
+ * entry's value from `bool-/num-/text-<entryId>` fields; the metric type comes
+ * from the catalog, so the form only needs the value inputs.
  */
-export async function updateCreditEntries(formData: FormData): Promise<void> {
+async function saveCreditValues(formData: FormData) {
   await requireUser();
   const projectId = String(formData.get("projectId") ?? "");
   const code = String(formData.get("code") ?? "");
@@ -116,20 +204,124 @@ export async function updateCreditEntries(formData: FormData): Promise<void> {
       .where(eq(requirementEntries.id, r.entryId));
   }
 
+  return { projectId, code, credit };
+}
+
+/** Save ALL requirement values for a credit at once (one Save button per credit). */
+export async function updateCreditEntries(formData: FormData): Promise<void> {
+  const { projectId, code } = await saveCreditValues(formData);
+  revalidatePath(`/projects/${projectId}/credits/${code}`);
+}
+
+/** The either/or block containing `entryId`, or throw if it is not an option. */
+function optionBlockOf(credit: CreditView, entryId: string) {
+  const block = groupByOption(credit.requirements).find(
+    (b) => b.kind === "xor" && b.items.some((r) => r.entryId === entryId),
+  );
+  if (!block || block.kind !== "xor") throw new Error("not an either/or option");
+  return block.items;
+}
+
+async function setPlanned(entryIds: string[], planned: boolean) {
+  if (entryIds.length === 0) return;
+  await db
+    .update(requirementEntries)
+    .set({ planned })
+    .where(
+      and(
+        inArray(requirementEntries.id, entryIds),
+        eq(requirementEntries.workspaceId, WORKSPACE_ID),
+      ),
+    );
+}
+
+/**
+ * Pick the path the project is pursuing in an either/or group: the chosen
+ * option stays planned, its alternatives are set aside (faded, and no longer
+ * counted toward status, missing evidence or points). Submitted through the
+ * credit's Save form via `formAction`, so values typed elsewhere are kept.
+ * The option is bound in (`choosePath.bind(null, entryId)`): React does not
+ * post a submitter's name/value for a function `formAction`.
+ */
+export async function choosePath(
+  entryId: string,
+  formData: FormData,
+): Promise<void> {
+  const { projectId, code, credit } = await saveCreditValues(formData);
+  const options = optionBlockOf(credit, entryId);
+  await setPlanned([entryId], true);
+  await setPlanned(
+    options.filter((r) => r.entryId !== entryId).map((r) => r.entryId),
+    false,
+  );
+  revalidatePath(`/projects/${projectId}/credits/${code}`);
+}
+
+/** Undo a path choice: every option in the group is back in play. */
+export async function resetPath(
+  entryId: string,
+  formData: FormData,
+): Promise<void> {
+  const { projectId, code, credit } = await saveCreditValues(formData);
+  const options = optionBlockOf(credit, entryId);
+  await setPlanned(
+    options.map((r) => r.entryId),
+    true,
+  );
   revalidatePath(`/projects/${projectId}/credits/${code}`);
 }
 
 /**
- * Attach one or more files to a requirement. Several files can be picked at
- * once, and the same requirement can be added to repeatedly — evidence_doc is
- * a one-to-many on the entry, so uploads accumulate rather than replace.
+ * Attach one or more files to a requirement (`entryId`), or to the credit as a
+ * whole (`projectCreditId`, the "additional attachments"). Several files can be
+ * picked at once, and the same place can be added to repeatedly — files
+ * accumulate rather than replace.
  */
 export async function uploadEvidence(formData: FormData): Promise<void> {
   await requireUser();
-  const entryId = String(formData.get("entryId") ?? "");
+  const entryId = String(formData.get("entryId") ?? "") || null;
   const projectId = String(formData.get("projectId") ?? "");
   const code = String(formData.get("code") ?? "");
-  if (!entryId || !projectId) throw new Error("missing ids");
+  if (!projectId) throw new Error("missing ids");
+
+  // The credit the files belong to. A requirement upload reads it from the
+  // entry; a credit-level "additional attachment" posts it directly. Either
+  // way it is re-read from the database, scoped to this project.
+  let projectCreditId: string;
+  if (entryId) {
+    const [entry] = await db
+      .select({ projectCreditId: requirementEntries.projectCreditId })
+      .from(requirementEntries)
+      .innerJoin(
+        projectCredits,
+        eq(requirementEntries.projectCreditId, projectCredits.id),
+      )
+      .where(
+        and(
+          eq(requirementEntries.id, entryId),
+          eq(projectCredits.projectId, projectId),
+          eq(requirementEntries.workspaceId, WORKSPACE_ID),
+        ),
+      )
+      .limit(1);
+    if (!entry) throw new Error("requirement not found");
+    projectCreditId = entry.projectCreditId;
+  } else {
+    const posted = String(formData.get("projectCreditId") ?? "");
+    const [pc] = await db
+      .select({ id: projectCredits.id })
+      .from(projectCredits)
+      .where(
+        and(
+          eq(projectCredits.id, posted),
+          eq(projectCredits.projectId, projectId),
+          eq(projectCredits.workspaceId, WORKSPACE_ID),
+        ),
+      )
+      .limit(1);
+    if (!pc) throw new Error("credit not found");
+    projectCreditId = pc.id;
+  }
 
   const files = formData
     .getAll("file")
@@ -138,8 +330,9 @@ export async function uploadEvidence(formData: FormData): Promise<void> {
 
   // Which required document these files provide, if the upload came from a
   // checklist row. Absent or unparseable means "not assigned to a document".
+  // A credit-level attachment never claims one requirement's document.
   const rawSlot = String(formData.get("evidenceSpecIndex") ?? "").trim();
-  const slot = /^\d+$/.test(rawSlot) ? Number(rawSlot) : null;
+  const slot = entryId && /^\d+$/.test(rawSlot) ? Number(rawSlot) : null;
 
   const dir = join(UPLOAD_ROOT, projectId, "evidence");
   await mkdir(dir, { recursive: true });
@@ -155,6 +348,7 @@ export async function uploadEvidence(formData: FormData): Promise<void> {
     await db.insert(evidenceDocs).values({
       id,
       workspaceId: WORKSPACE_ID,
+      projectCreditId,
       requirementEntryId: entryId,
       fileName: file.name,
       filePath,

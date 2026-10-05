@@ -18,3 +18,12 @@ export function formatUploadedAt(unixSeconds: number): string {
     day: "numeric",
   });
 }
+
+/** A requirement's display label: its catalog title, else its first clause. */
+export function requirementLabel(title: string | null, text: string): string {
+  if (title) return title;
+  const s = text.trim();
+  const dot = s.indexOf(". ");
+  const cut = dot > 8 && dot < 80 ? dot : Math.min(72, s.length);
+  return s.slice(0, cut).replace(/[,;:]\s*$/, "") + (cut < s.length ? "…" : "");
+}

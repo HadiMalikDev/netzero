@@ -4,9 +4,16 @@ import { PageChrome, PageHeader } from "../../_components/PageChrome";
 import { ProjectTabs } from "./_components/ProjectTabs";
 import { Card, KpiTile, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
+import { ExportScorecardLink } from "@/components/ExportScorecardLink";
 import { StatusPill } from "@/components/StatusPill";
 import { CreditsIcon, FileIcon, UploadIcon } from "@/components/icons";
 import { getProject, getProjectCredits, getProjectOverview } from "@/lib/data";
+import { TierGauge } from "@/components/ProgressDial";
+import { formatSpan } from "@/lib/tiers";
+import { setProjectStage, setProjectTargetTier } from "../actions";
+import { TargetTierForm } from "./_components/TargetTierForm";
+import { StageForm } from "./_components/StageForm";
+import { parseStage, type ProjectStage } from "@/lib/evidence";
 
 export default async function ProjectOverviewPage({
   params,
@@ -31,6 +38,9 @@ export default async function ProjectOverviewPage({
         subtitle={
           [project.type, project.location].filter(Boolean).join(" · ") ||
           "Mostadam certification tracking"
+        }
+        action={
+          overview.totalCredits ? <ExportScorecardLink projectId={id} /> : undefined
         }
       />
       <ProjectTabs projectId={id} />
@@ -84,6 +94,14 @@ export default async function ProjectOverviewPage({
               href={`/projects/${id}/credits?filter=missing_evidence`}
             />
           </div>
+
+          <CertificationProgress
+            projectId={id}
+            stage={parseStage(project.stage)}
+            score={overview.score}
+            targetedCredits={credits.filter((c) => c.targeted).length}
+            totalCredits={credits.length}
+          />
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
             <Card className="p-5">
@@ -142,5 +160,112 @@ export default async function ProjectOverviewPage({
         </>
       )}
     </PageChrome>
+  );
+}
+
+/** The project dial (V2 feedback row 11): points against rating levels. */
+function CertificationProgress({
+  projectId,
+  stage,
+  score,
+  targetedCredits,
+  totalCredits,
+}: {
+  projectId: string;
+  stage: ProjectStage;
+  score: Awaited<ReturnType<typeof getProjectOverview>>["score"];
+  targetedCredits: number;
+  totalCredits: number;
+}) {
+  const { earned, thresholds, target, reached, byPoints, keystones } = score;
+  const toGo = target ? Math.max(0, target.min - earned) : null;
+  const keystonesOpen = keystones.total - keystones.complete;
+
+  return (
+    <Card className="mt-6 p-5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-slate-800">
+          Certification progress
+        </h2>
+        <div className="flex flex-wrap items-center gap-4">
+          <StageForm projectId={projectId} stage={stage} action={setProjectStage} />
+          {thresholds.length > 0 ? (
+            <TargetTierForm
+              projectId={projectId}
+              thresholds={thresholds}
+              current={target?.tier ?? null}
+              action={setProjectTargetTier}
+            />
+          ) : null}
+        </div>
+      </div>
+
+      {thresholds.length === 0 ? (
+        <p className="text-sm text-slate-500">
+          {earned} points earned. Rating levels are not set for this rating
+          system yet. Add them in{" "}
+          <Link href="/admin/catalog" className="font-medium text-brand-600 hover:text-brand-700">
+            Catalog
+          </Link>{" "}
+          to see progress toward a certification level.
+        </p>
+      ) : (
+        <div className="grid items-center gap-6 md:grid-cols-[minmax(0,20rem)_1fr]">
+          <TierGauge
+            earned={earned}
+            scaleMax={score.scaleMax}
+            thresholds={thresholds}
+            target={target}
+            reached={reached}
+          />
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs text-slate-500">Target</dt>
+              <dd className="font-medium text-slate-900">
+                {target ? (
+                  toGo === 0 ? (
+                    <span className="text-emerald-700">
+                      {target.tier} — points threshold met
+                    </span>
+                  ) : (
+                    <>
+                      {target.tier} at {target.min} pts ·{" "}
+                      <span className="text-brand-700">{toGo} to go</span>
+                    </>
+                  )
+                ) : (
+                  <span className="text-slate-500">Not set</span>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Targeted credits</dt>
+              <dd className="font-medium text-slate-900">
+                {formatSpan(score.targeted)} pts · {targetedCredits} of {totalCredits} credits
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Level reached</dt>
+              <dd className="font-medium text-slate-900">
+                {reached?.tier ??
+                  (byPoints ? `None yet (points reach ${byPoints.tier})` : "None yet")}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Keystone credits</dt>
+              <dd className="font-medium text-slate-900">
+                {keystones.complete} of {keystones.total} complete
+              </dd>
+            </div>
+            {keystonesOpen > 0 ? (
+              <p className="text-xs text-amber-700 sm:col-span-2">
+                No level is awarded until all {keystones.total} keystone credits
+                are achieved, whatever the points total (Mostadam §2.5).
+              </p>
+            ) : null}
+          </dl>
+        </div>
+      )}
+    </Card>
   );
 }

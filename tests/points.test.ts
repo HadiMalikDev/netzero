@@ -88,6 +88,27 @@ describe("creditPointsEarned", () => {
     expect(creditPointsEarned(reqs, "15")).toBe(15);
   });
 
+  it("a path the project set aside earns nothing, even if filled in", () => {
+    const reqs = [
+      {
+        metricType: "BOOLEAN",
+        pointsRaw: "5",
+        optionGroup: "E-01 options",
+        status: "completed" as const,
+      },
+      {
+        metricType: "NUMERIC",
+        pointsRaw: "15",
+        optionGroup: "E-01 options",
+        numericSpec: { bands: [{ label: null, bands: E01 }] },
+        valueNumber: 40,
+        status: "completed" as const,
+        planned: false,
+      },
+    ];
+    expect(creditPointsEarned(reqs, "15")).toBe(5);
+  });
+
   it("caps W-01 keystone + table so 45% is 10 not 13", () => {
     const reqs = [
       {

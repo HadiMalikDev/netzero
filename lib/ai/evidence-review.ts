@@ -1,11 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  catalogCredits,
   catalogRequirements,
   evidenceDocs,
   evidenceReviews,
+  projectCredits,
   requirementEntries,
 } from "@/db/schema";
 import { chatJSON, hasLLM } from "@/lib/ai/openrouter";
@@ -13,7 +15,9 @@ import { extractPdf } from "@/lib/parser/extract";
 
 /**
  * Reads one uploaded document against the requirement it was attached to, and
- * says whether it appears to meet that requirement.
+ * says whether it appears to meet that requirement. A credit-level "additional
+ * attachment" has no single requirement, so it is read against the credit's
+ * requirements and their combined expected-documents list.
  *
  * ADVISORY ONLY. The verdict is never written to requirement or credit status:
  * status stays derived from the values the user entered and the files present
@@ -107,6 +111,78 @@ export function normalizeReview(raw: unknown): ReviewResult {
   };
 }
 
+interface ReviewTarget {
+  heading: string;
+  text: string;
+  expected: string[];
+}
+
+function specList(raw: string | null): string[] {
+  return raw ? (JSON.parse(raw) as string[]) : [];
+}
+
+/** A file attached to one requirement: judged against that requirement. */
+function requirementTarget(row: {
+  reqTitle: string | null;
+  reqText: string | null;
+  evidenceSpecs: string | null;
+  specIndex: number | null;
+}): ReviewTarget {
+  const specs = specList(row.evidenceSpecs);
+  // When the upload claimed a specific expected document, judge against that
+  // one; otherwise against the whole list.
+  const expected =
+    row.specIndex != null && row.specIndex < specs.length
+      ? [specs[row.specIndex]]
+      : specs;
+  return {
+    heading: `REQUIREMENT${row.reqTitle ? ` — ${row.reqTitle}` : ""}:`,
+    text: row.reqText ?? "",
+    expected,
+  };
+}
+
+/**
+ * A credit-level additional attachment: judged against every requirement of
+ * the credit, with their expected documents combined (duplicates dropped).
+ */
+export function creditReviewTarget(
+  credit: { code: string; title: string },
+  reqs: {
+    seq: number;
+    title: string | null;
+    text: string;
+    evidenceSpecs: string | null;
+  }[],
+): ReviewTarget {
+  return {
+    heading: `CREDIT ${credit.code} — ${credit.title} (the file was attached to the credit as a whole, as an additional attachment; judge whether it supports any of these requirements):`,
+    text: reqs
+      .map((r) => `#${r.seq}${r.title ? ` ${r.title}` : ""}: ${r.text}`)
+      .join("\n"),
+    expected: [...new Set(reqs.flatMap((r) => specList(r.evidenceSpecs)))],
+  };
+}
+
+async function creditTarget(catalogCreditId: string): Promise<ReviewTarget> {
+  const [credit] = await db
+    .select({ code: catalogCredits.code, title: catalogCredits.title })
+    .from(catalogCredits)
+    .where(eq(catalogCredits.id, catalogCreditId))
+    .limit(1);
+  const reqs = await db
+    .select({
+      seq: catalogRequirements.seq,
+      title: catalogRequirements.title,
+      text: catalogRequirements.text,
+      evidenceSpecs: catalogRequirements.evidenceSpecs,
+    })
+    .from(catalogRequirements)
+    .where(eq(catalogRequirements.catalogCreditId, catalogCreditId))
+    .orderBy(asc(catalogRequirements.seq));
+  return creditReviewTarget(credit ?? { code: "", title: "" }, reqs);
+}
+
 /**
  * Run the review for one evidence file and store the outcome. Safe to call in
  * the background: it never throws, and records a failure row instead.
@@ -128,13 +204,18 @@ export async function runEvidenceReview(evidenceDocId: string): Promise<void> {
         reqTitle: catalogRequirements.title,
         evidenceSpecs: catalogRequirements.evidenceSpecs,
         specIndex: evidenceDocs.evidenceSpecIndex,
+        catalogCreditId: projectCredits.catalogCreditId,
       })
       .from(evidenceDocs)
       .innerJoin(
+        projectCredits,
+        eq(evidenceDocs.projectCreditId, projectCredits.id),
+      )
+      .leftJoin(
         requirementEntries,
         eq(evidenceDocs.requirementEntryId, requirementEntries.id),
       )
-      .innerJoin(
+      .leftJoin(
         catalogRequirements,
         eq(requirementEntries.catalogRequirementId, catalogRequirements.id),
       )
@@ -167,23 +248,17 @@ export async function runEvidenceReview(evidenceDocId: string): Promise<void> {
       return;
     }
 
-    const specs: string[] = row.evidenceSpecs
-      ? (JSON.parse(row.evidenceSpecs) as string[])
-      : [];
-    // When the upload claimed a specific expected document, judge against that
-    // one; otherwise against the whole list.
-    const claimed =
-      row.specIndex != null && row.specIndex < specs.length
-        ? [specs[row.specIndex]]
-        : specs;
+    const target = row.reqText != null
+      ? requirementTarget(row)
+      : await creditTarget(row.catalogCreditId);
 
     const truncated = text.length > MAX_CHARS;
     const user = [
-      `REQUIREMENT${row.reqTitle ? ` — ${row.reqTitle}` : ""}:`,
-      row.reqText,
+      target.heading,
+      target.text,
       "",
-      claimed.length
-        ? `EXPECTED DOCUMENTS:\n${claimed.map((s, i) => `${i + 1}. ${s}`).join("\n")}`
+      target.expected.length
+        ? `EXPECTED DOCUMENTS:\n${target.expected.map((s, i) => `${i + 1}. ${s}`).join("\n")}`
         : "EXPECTED DOCUMENTS: (none listed in the manual)",
       "",
       `DOCUMENT "${row.fileName}"${truncated ? " (truncated)" : ""}:`,

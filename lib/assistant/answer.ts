@@ -1,13 +1,19 @@
 import { chatJSON, hasLLM } from "@/lib/ai/openrouter";
-import { blockingRequirements } from "@/lib/status";
+import {
+  blockingRequirements,
+  evidenceSatisfied,
+  untouchedOptional,
+} from "@/lib/status";
 import {
   buildProjectFacts,
   citationFor,
   creditMd,
   findScope,
   missingEvidenceCredits,
+  optionalOpportunities,
   remaining,
   type Citation,
+  type FactRequirement,
   type ProjectFacts,
 } from "./facts";
 
@@ -26,6 +32,10 @@ Rules you must never break:
 - "Overdue"/"at risk" means incomplete or missing evidence, NOT a calendar date (there are no due dates).
 - Always cite the specific credit codes you used.
 - When you mention a credit or requirement, link it with markdown [label](href) using the href from the facts. Never invent a URL.
+- A requirement with "optional": true adds points but never blocks its credit. When you list it, label it "optional" with its points — never present it as required.
+- A requirement with "planned": false is an either/or path the project chose not to pursue. Do not list it as remaining or missing.
+- "docsDue" counts the manual's listed documents due at the project's current stage and "docsProvided" how many have a file. A requirement is not complete until every due document is provided.
+- A credit with "targeted": false is one the project is not pursuing. If you mention it, say it is not targeted.
 Respond ONLY as JSON: {"answer": "<concise markdown answer>", "citations": ["<CODE>", ...]}.
 Use credit codes exactly as they appear in the facts (e.g. "HC-10").`;
 
@@ -87,6 +97,30 @@ export async function answerQuestion(
   return deterministicAnswer(facts, question, projectId);
 }
 
+/** ", 1 of 3 documents due provided" / ", evidence missing" — or nothing. */
+function evidenceNote(r: FactRequirement): string {
+  if (evidenceSatisfied(r)) return "";
+  return r.docsDue > 0
+    ? `, ${r.docsProvided} of ${r.docsDue} documents due provided`
+    : ", evidence missing";
+}
+
+/** "Optional — adds points" block: never mixed in with the blockers above it. */
+function optionalList<T extends FactRequirement>(
+  reqs: T[],
+  link: (r: T) => string,
+  limit = Infinity,
+): string {
+  const shown = reqs.slice(0, limit);
+  return (
+    "**Optional — adds points** (not required to complete the credit):\n" +
+    shown
+      .map((r) => `- ${link(r)} — optional${r.points ? `, +${r.points} pts` : ""}`)
+      .join("\n") +
+    (reqs.length > shown.length ? `\n…and ${reqs.length - shown.length} more.` : "")
+  );
+}
+
 /** Deterministic guardrail answerer — also the no-key fallback. */
 export function deterministicAnswer(
   facts: ProjectFacts,
@@ -100,6 +134,7 @@ export function deterministicAnswer(
   if (scope?.type === "credit") {
     const c = scope.credit;
     const open = blockingRequirements(c.requirements);
+    const extra = untouchedOptional(c.requirements);
     const body =
       `${creditMd(projectId, c.code, c.title)} (${c.category}) is **${c.status.replace("_", " ")}**. ` +
       `${c.requirements.length} requirement(s); ${open.length} still open.` +
@@ -109,11 +144,13 @@ export function deterministicAnswer(
             .map(
               (r) =>
                 `- [${c.code} #${r.seq}](${r.href}) (${r.metricType}) — ${r.status.replace("_", " ")}` +
-                (r.requiresEvidence && r.evidenceCount === 0
-                  ? ", evidence missing"
-                  : ""),
+                (r.optional ? ", optional" : "") +
+                evidenceNote(r),
             )
             .join("\n")
+        : "") +
+      (extra.length
+        ? "\n\n" + optionalList(extra, (r) => `[${c.code} #${r.seq}](${r.href})`)
         : "");
     return {
       answer: body,
@@ -153,7 +190,7 @@ export function deterministicAnswer(
     if (list.length === 0)
       return {
         answer:
-          "No required evidence is missing — every requirement that asks for evidence has at least one file attached.",
+          "No required evidence is missing — every open requirement has the documents due at this stage.",
         citations: [],
         grounded: true,
         via: "deterministic",
@@ -201,6 +238,7 @@ export function deterministicAnswer(
 
   // Default: what's remaining / what's left.
   const open = remaining(facts);
+  const extra = optionalOpportunities(facts);
   return {
     answer:
       `**${open.length} of ${facts.totals.credits} credits are not yet complete.** ` +
@@ -213,7 +251,17 @@ export function deterministicAnswer(
             `- ${creditMd(projectId, c.code, c.title)} — ${c.status.replace("_", " ")}`,
         )
         .join("\n") +
-      (open.length > 15 ? `\n…and ${open.length - 15} more.` : ""),
+      (open.length > 15 ? `\n…and ${open.length - 15} more.` : "") +
+      (extra.length
+        ? "\n\n" +
+          optionalList(
+            extra.flatMap((c) =>
+              c.requirements.map((r) => ({ ...r, code: c.code })),
+            ),
+            (r) => `[${r.code} #${r.seq}](${r.href})`,
+            15,
+          )
+        : ""),
     citations: open
       .slice(0, 12)
       .map((c) =>

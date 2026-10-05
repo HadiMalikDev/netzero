@@ -1,0 +1,1 @@
+ALTER TABLE "requirement_entry" ADD COLUMN "planned" boolean DEFAULT true NOT NULL;
