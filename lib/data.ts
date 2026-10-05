@@ -9,6 +9,7 @@ import {
   projectCredits,
   projects,
   requirementEntries,
+  rsVersions,
 } from "@/db/schema";
 import {
   deriveCreditStatus,
@@ -19,6 +20,14 @@ import {
 } from "./status";
 import { summarizeSpec, WORKSPACE_ID } from "./catalog";
 import { parseNum } from "./num";
+import {
+  parseThresholds,
+  projectPoints,
+  tierForPoints,
+  tierReached,
+  type ProjectPoints,
+  type TierThreshold,
+} from "./tiers";
 import {
   bandsFromSpec,
   creditPointsEarned,
@@ -53,6 +62,7 @@ export async function createProject(input: {
   type?: string | null;
   location?: string | null;
   rsVersionId?: string | null;
+  targetTier?: string | null;
 }) {
   const id = randomUUID();
   await db.insert(projects).values({
@@ -63,6 +73,7 @@ export async function createProject(input: {
     type: input.type ?? null,
     location: input.location ?? null,
     status: "in_progress",
+    targetTier: input.targetTier ?? null,
   });
   return id;
 }
@@ -180,6 +191,8 @@ export interface CreditView {
   pointsEarned: number;
   pointsMax: number | null;
   pointsMin: number | null;
+  /** Whether the project is pursuing this credit (row 11 / row 8 targeting). */
+  targeted: boolean;
   requirements: RequirementView[];
   /**
    * Credit-level "additional attachments": files supporting the credit as a
@@ -194,6 +207,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
   const pcs = await db
     .select({
       pcId: projectCredits.id,
+      targeted: projectCredits.targeted,
       catalogCreditId: catalogCredits.id,
       code: catalogCredits.code,
       title: catalogCredits.title,
@@ -390,6 +404,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       pointsEarned: creditPointsEarned(reqs, p.pointsRaw, "earned"),
       pointsMax: cap,
       pointsMin: range?.min ?? null,
+      targeted: p.targeted,
       requirements: reqs,
       additionalAttachments: evByCredit.get(p.pcId) ?? [],
     };
@@ -458,6 +473,61 @@ export interface ProjectOverview {
   missingEvidence: number; // requirements that need evidence but have none
   categories: { code: string; name: string; count: number }[];
   evidenceFiles: number;
+  score: ProjectScore;
+}
+
+/** A project's points against its rating levels — what the dial draws. */
+export interface ProjectScore extends ProjectPoints {
+  thresholds: TierThreshold[];
+  /** The level the project is pursuing, if set and known to the version. */
+  target: TierThreshold | null;
+  /** The level awarded now: null while any keystone credit is incomplete. */
+  reached: TierThreshold | null;
+  /** The level the points alone would reach, keystones aside. */
+  byPoints: TierThreshold | null;
+  /**
+   * The dial's full scale: the manual's own Full Scope total when the version
+   * has one (the basis its thresholds use), else the sum of credit points.
+   */
+  scaleMax: number;
+}
+
+export async function getProjectScore(
+  project: { rsVersionId: string | null; targetTier: string | null },
+  credits: CreditView[],
+): Promise<ProjectScore> {
+  const [v] = project.rsVersionId
+    ? await db
+        .select({
+          tierThresholds: rsVersions.tierThresholds,
+          scopeTotals: rsVersions.scopeTotals,
+        })
+        .from(rsVersions)
+        .where(eq(rsVersions.id, project.rsVersionId))
+    : [];
+  const thresholds = parseThresholds(v?.tierThresholds);
+  const points = projectPoints(credits);
+  const keystonesComplete = points.keystones.complete === points.keystones.total;
+  return {
+    ...points,
+    thresholds,
+    target: thresholds.find((t) => t.tier === project.targetTier) ?? null,
+    reached: tierReached(points.earned, thresholds, keystonesComplete),
+    byPoints: tierForPoints(points.earned, thresholds),
+    scaleMax: fullScopeTotal(v?.scopeTotals) ?? points.available.max,
+  };
+}
+
+/** "Full Scope" from rs_version.scope_totals (`{"Full Scope":130,…}`), if any. */
+function fullScopeTotal(raw: string | null | undefined): number | null {
+  try {
+    const totals = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    const key = Object.keys(totals).find((k) => /full\s*scope/i.test(k));
+    const n = key ? Number(totals[key]) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getProjectOverview(
@@ -465,6 +535,7 @@ export async function getProjectOverview(
 ): Promise<ProjectOverview> {
   const credits = await getProjectCredits(projectId);
   const evidence = await listProjectEvidence(projectId);
+  const project = await getProject(projectId);
   let missingEvidence = 0;
   const catMap = new Map<string, { name: string; count: number }>();
   for (const c of credits) {
@@ -485,5 +556,9 @@ export async function getProjectOverview(
       count: v.count,
     })),
     evidenceFiles: evidence.length,
+    score: await getProjectScore(
+      project ?? { rsVersionId: null, targetTier: null },
+      credits,
+    ),
   };
 }

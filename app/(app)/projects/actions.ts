@@ -14,16 +14,20 @@ import {
   evidenceDocs,
   evidenceReviews,
   projectCredits,
+  projects,
   requirementEntries,
+  rsVersions,
 } from "@/db/schema";
 import { requireUser } from "@/lib/auth/session";
 import { runEvidenceReview } from "@/lib/ai/evidence-review";
 import {
   createProject,
   getCreditByCode,
+  getProject,
   WORKSPACE_ID,
   type CreditView,
 } from "@/lib/data";
+import { parseThresholds } from "@/lib/tiers";
 import { groupByOption } from "@/lib/option-group";
 
 const UPLOAD_ROOT = ".data/uploads";
@@ -46,6 +50,7 @@ export async function createProjectFromCatalog(formData: FormData): Promise<void
     location:
       (String(formData.get("location") ?? "").trim() || null) as string | null,
     rsVersionId,
+    targetTier: await validTier(rsVersionId, formData.get("targetTier")),
   });
 
   const credits = await db
@@ -61,6 +66,7 @@ export async function createProjectFromCatalog(formData: FormData): Promise<void
       projectId,
       catalogCreditId: c.id,
       status: "not_started",
+      targeted: true,
     });
     const reqs = await db
       .select({ id: catalogRequirements.id })
@@ -79,6 +85,64 @@ export async function createProjectFromCatalog(formData: FormData): Promise<void
 
   revalidatePath("/projects");
   redirect(`/projects/${projectId}/credits`);
+}
+
+// ---------- targeting (V2 rows 8 and 11) ----------
+
+/** A posted tier name, kept only if the version defines it; else null. */
+async function validTier(
+  rsVersionId: string | null,
+  raw: FormDataEntryValue | null,
+): Promise<string | null> {
+  const tier = String(raw ?? "").trim();
+  if (!tier || !rsVersionId) return null;
+  const [v] = await db
+    .select({ tierThresholds: rsVersions.tierThresholds })
+    .from(rsVersions)
+    .where(eq(rsVersions.id, rsVersionId));
+  return parseThresholds(v?.tierThresholds).some((t) => t.tier === tier)
+    ? tier
+    : null;
+}
+
+/** Targeting shows on the overview, the credits list and every credit page. */
+function revalidateProject(projectId: string) {
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/credits`);
+  revalidatePath("/projects/[id]/credits/[code]", "page");
+}
+
+/** Set (or clear) the rating level a project is pursuing. */
+export async function setProjectTargetTier(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  const project = await getProject(projectId);
+  if (!project) throw new Error("project not found");
+  await db
+    .update(projects)
+    .set({ targetTier: await validTier(project.rsVersionId, formData.get("targetTier")) })
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, WORKSPACE_ID)));
+  revalidateProject(projectId);
+}
+
+/** Mark a credit as targeted or not targeted. */
+export async function setCreditTargeted(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  const projectCreditId = String(formData.get("projectCreditId") ?? "");
+  if (!projectId || !projectCreditId) throw new Error("missing ids");
+  const targeted = formData.get("targeted") === "true";
+  await db
+    .update(projectCredits)
+    .set({ targeted })
+    .where(
+      and(
+        eq(projectCredits.id, projectCreditId),
+        eq(projectCredits.projectId, projectId),
+        eq(projectCredits.workspaceId, WORKSPACE_ID),
+      ),
+    );
+  revalidateProject(projectId);
 }
 
 // ---------- checklist entry updates ----------

@@ -84,6 +84,12 @@ export const rsVersions = pgTable(
     status: text("status").notNull().default("draft"),
     sourceDocumentId: text("source_document_id"),
     scopeTotals: text("scope_totals"),
+    /**
+     * Rating-level thresholds as JSON `[{"tier":"Green","min":25}, …]`, lowest
+     * first. Full Scope only for now (the manual's Table 1). Null until set in
+     * catalog admin; the project dial needs it.
+     */
+    tierThresholds: text("tier_thresholds"),
     notes: text("notes"),
     createdAt: integer("created_at").notNull().default(now),
   },
@@ -252,6 +258,8 @@ export const projects = pgTable("project", {
   type: text("type"),
   location: text("location"),
   status: text("status").notNull().default("in_progress"),
+  /** The rating level being pursued (a tier name from the version's thresholds). */
+  targetTier: text("target_tier"),
   createdAt: integer("created_at").notNull().default(now),
 });
 
@@ -269,6 +277,8 @@ export const projectCredits = pgTable(
       .notNull()
       .references(() => catalogCredits.id),
     status: text("status").notNull().default("not_started"),
+    /** Whether the project is pursuing this credit. Every credit starts targeted. */
+    targeted: boolean("targeted").notNull().default(true),
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [

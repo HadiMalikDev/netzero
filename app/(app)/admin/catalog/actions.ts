@@ -190,6 +190,42 @@ export async function updateVersionLabel(formData: FormData): Promise<void> {
   revalidatePath(`/admin/catalog/${versionId}`);
 }
 
+/** Rows offered by the rating-levels editor (Mostadam has five). */
+const TIER_ROWS = 6;
+
+/**
+ * Set a version's rating-level thresholds (Full Scope), as read from the
+ * manual's rating-levels table. Blank rows are dropped; the remaining minimums
+ * must be whole numbers that strictly increase, so a typo cannot reorder the
+ * levels a project dial is drawn against.
+ */
+export async function updateTierThresholds(formData: FormData): Promise<void> {
+  await requireUser();
+  const versionId = String(formData.get("versionId") ?? "");
+  if (!versionId) throw new Error("missing version");
+  const rows: { tier: string; min: number }[] = [];
+  for (let i = 0; i < TIER_ROWS; i++) {
+    const tier = String(formData.get(`tier-${i}`) ?? "").trim();
+    const rawMin = String(formData.get(`min-${i}`) ?? "").trim();
+    if (!tier && !rawMin) continue;
+    const min = Number(rawMin);
+    if (!tier || !Number.isInteger(min) || min < 0)
+      throw new Error(`Rating level ${i + 1}: give a name and a whole-number minimum`);
+    rows.push({ tier, min });
+  }
+  for (let i = 1; i < rows.length; i++)
+    if (rows[i].min <= rows[i - 1].min)
+      throw new Error("Rating level minimums must increase from top to bottom");
+  await db
+    .update(rsVersions)
+    .set({ tierThresholds: rows.length ? JSON.stringify(rows) : null })
+    .where(
+      and(eq(rsVersions.id, versionId), eq(rsVersions.workspaceId, WORKSPACE_ID)),
+    );
+  revalidatePath(`/admin/catalog/${versionId}`);
+  revalidatePath("/projects/[id]", "page");
+}
+
 /**
  * Generate the AI reviewer note for a version's canonical credits (title + aim +
  * page span + requirement labels → a "what to verify" blurb, with a

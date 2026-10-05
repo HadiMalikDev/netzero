@@ -43,6 +43,13 @@
       "when": 1791185876754,
       "tag": "0005_tan_invaders",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791186144147,
+      "tag": "0006_ordinary_iron_monger",
+      "breakpoints": true
     }
   ]
 }

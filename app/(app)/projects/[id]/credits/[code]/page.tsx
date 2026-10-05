@@ -8,9 +8,13 @@ import {
   deleteEvidence,
   rerunEvidenceReview,
   resetPath,
+  setCreditTargeted,
   updateCreditEntries,
   uploadEvidence,
 } from "../../../actions";
+import { CreditRing } from "@/components/ProgressDial";
+import { TargetedToggle } from "@/components/TargetedToggle";
+import { creditSpan } from "@/lib/tiers";
 import { RequirementItem } from "./RequirementItem";
 import {
   AdditionalAttachments,
@@ -64,35 +68,44 @@ export default async function CreditDetailPage({
           ← Back to credits
         </Link>
         <div className="mt-3 flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                {credit.categoryCode} · {credit.categoryName}
-              </span>
-              {credit.isKeystone ? (
-                <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                  Keystone
+          <div className="flex items-start gap-4">
+            <CreditRing earned={credit.pointsEarned} max={creditSpan(credit).max} />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                  {credit.categoryCode} · {credit.categoryName}
                 </span>
+                {credit.isKeystone ? (
+                  <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                    Keystone
+                  </span>
+                ) : null}
+                <TargetedToggle
+                  projectId={id}
+                  projectCreditId={credit.projectCreditId}
+                  targeted={credit.targeted}
+                  action={setCreditTargeted}
+                />
+              </div>
+              <h1 className="mt-2 text-2xl font-semibold text-slate-900">
+                {credit.code} — {credit.title}
+              </h1>
+              {credit.pageStart ? (
+                <p className="mt-1 text-sm text-slate-400">
+                  Source: manual pp.{credit.pageStart}–{credit.pageEnd}
+                  {credit.pointsMax != null
+                    ? ` · ${credit.pointsEarned} / ${
+                        credit.pointsMin != null &&
+                        credit.pointsMin !== credit.pointsMax
+                          ? formatPointsSpan(credit.pointsMin, credit.pointsMax)
+                          : credit.pointsMax
+                      } points`
+                    : credit.pointsRaw
+                      ? ` · ${credit.pointsRaw} points (reference)`
+                      : ""}
+                </p>
               ) : null}
             </div>
-            <h1 className="mt-2 text-2xl font-semibold text-slate-900">
-              {credit.code} — {credit.title}
-            </h1>
-            {credit.pageStart ? (
-              <p className="mt-1 text-sm text-slate-400">
-                Source: manual pp.{credit.pageStart}–{credit.pageEnd}
-                {credit.pointsMax != null
-                  ? ` · ${credit.pointsEarned} / ${
-                      credit.pointsMin != null &&
-                      credit.pointsMin !== credit.pointsMax
-                        ? formatPointsSpan(credit.pointsMin, credit.pointsMax)
-                        : credit.pointsMax
-                    } points`
-                  : credit.pointsRaw
-                    ? ` · ${credit.pointsRaw} points (reference)`
-                    : ""}
-              </p>
-            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-3">
             <StatusPill status={credit.status} />

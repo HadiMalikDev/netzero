@@ -19,6 +19,7 @@ const facts: ProjectFacts = {
       title: "Energy Performance",
       category: "E Energy",
       status: "in_progress",
+      targeted: true,
       page: 100,
       href: creditHref("p1", "E-01"),
       requirements: [
@@ -102,6 +103,7 @@ describe("optional rows and set-aside paths", () => {
         title: "Outdoor Water Use",
         category: "W Water",
         status: "completed",
+        targeted: true,
         page: 120,
         href: creditHref("p1", "W-02"),
         requirements: [
@@ -114,6 +116,7 @@ describe("optional rows and set-aside paths", () => {
         title: "Energy Performance",
         category: "E Energy",
         status: "in_progress",
+        targeted: true,
         page: 100,
         href: creditHref("p1", "E-01"),
         requirements: [

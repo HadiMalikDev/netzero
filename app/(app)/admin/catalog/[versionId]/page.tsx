@@ -8,7 +8,12 @@ import {
   getVersion,
   getVersionCredits,
 } from "@/lib/catalog";
-import { generateReviewNotes, updateVersionLabel } from "../actions";
+import {
+  generateReviewNotes,
+  updateTierThresholds,
+  updateVersionLabel,
+} from "../actions";
+import { parseThresholds } from "@/lib/tiers";
 
 export default async function VersionDetailPage({
   params,
@@ -106,6 +111,11 @@ export default async function VersionDetailPage({
         </p>
       </Card>
 
+      <RatingLevels
+        versionId={versionId}
+        current={parseThresholds(v.version.tierThresholds)}
+      />
+
       {total === 0 ? (
         <EmptyState
           title="No promoted credits yet"
@@ -164,5 +174,68 @@ function Meta({ label, value }: { label: string; value: string }) {
         {value}
       </div>
     </div>
+  );
+}
+
+/**
+ * Rating-level thresholds for this version (Full Scope). Projects draw their
+ * progress dial against these; a project's target level is picked from them.
+ */
+function RatingLevels({
+  versionId,
+  current,
+}: {
+  versionId: string;
+  current: { tier: string; min: number }[];
+}) {
+  const rows = Array.from({ length: 6 }, (_, i) => current[i] ?? null);
+  return (
+    <Card className="mb-6 p-5">
+      <div className="mb-1 text-sm font-semibold text-slate-800">
+        Rating levels · Full Scope
+      </div>
+      <p className="mb-4 text-xs text-slate-500">
+        Points needed for each certification level, lowest first, from the
+        manual&apos;s rating-levels table (Commercial D+C: Table 1, p.15). Projects
+        on this version draw their progress dial against these.
+        {current.length === 0 ? " Not set yet." : ""}
+      </p>
+      <form action={updateTierThresholds} className="space-y-2">
+        <input type="hidden" name="versionId" value={versionId} />
+        {rows.map((t, i) => (
+          <div key={i} className="flex items-center gap-2">
+            {/* Widths on wrappers: the shared .input class is full-width. */}
+            <div className="w-40">
+              <input
+                name={`tier-${i}`}
+                defaultValue={t?.tier ?? ""}
+                placeholder={i < 5 ? "Level name" : "(optional)"}
+                aria-label={`Level ${i + 1} name`}
+                className="input h-8 py-1 text-sm"
+              />
+            </div>
+            <span className="text-xs text-slate-400">≥</span>
+            <div className="w-24">
+              <input
+                name={`min-${i}`}
+                type="number"
+                min={0}
+                step={1}
+                defaultValue={t?.min ?? ""}
+                aria-label={`Level ${i + 1} minimum points`}
+                className="input h-8 py-1 text-sm"
+              />
+            </div>
+            <span className="text-xs text-slate-400">points</span>
+          </div>
+        ))}
+        <button
+          type="submit"
+          className="mt-2 rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+        >
+          Save rating levels
+        </button>
+      </form>
+    </Card>
   );
 }

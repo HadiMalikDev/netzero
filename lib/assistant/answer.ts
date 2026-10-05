@@ -30,6 +30,7 @@ Rules you must never break:
 - When you mention a credit or requirement, link it with markdown [label](href) using the href from the facts. Never invent a URL.
 - A requirement with "optional": true adds points but never blocks its credit. When you list it, label it "optional" with its points — never present it as required.
 - A requirement with "planned": false is an either/or path the project chose not to pursue. Do not list it as remaining or missing.
+- A credit with "targeted": false is one the project is not pursuing. If you mention it, say it is not targeted.
 Respond ONLY as JSON: {"answer": "<concise markdown answer>", "citations": ["<CODE>", ...]}.
 Use credit codes exactly as they appear in the facts (e.g. "HC-10").`;
 

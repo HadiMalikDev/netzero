@@ -55,6 +55,8 @@ export interface ProjectFacts {
     title: string;
     category: string;
     status: Status;
+    /** false = the project is not pursuing this credit. */
+    targeted: boolean;
     page: number | null;
     href: string;
     requirements: FactRequirement[];
@@ -131,6 +133,7 @@ export async function buildProjectFacts(
       title: c.title,
       category: `${c.categoryCode} ${c.categoryName}`,
       status: c.status,
+      targeted: c.targeted,
       page: c.pageStart,
       href: creditHref(projectId, c.code),
       requirements: c.requirements.map((r) => ({
