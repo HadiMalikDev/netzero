@@ -134,3 +134,64 @@ The "provided" count is not wired into credit scoring: a credit does not yet
 require every listed document before it can complete. That is a scoring change
 and belongs with [row 14](../14-per-requirement-checkbox/task.md), which raises
 the same modelling question and is yours to decide.
+
+## Done — 2026-10-05 (V2 feedback: make it prominent)
+
+The V2 log still marked this row Pending, even though the checklist shipped in
+Sprint 1. The likely reason is that it sat under each requirement, below the
+value inputs and band tables, so on a long credit it was easy to miss. Hadi's
+call: make it prominent.
+
+### One box at the top of the credit
+
+**Required documents** is now its own card, directly under the Aim and above
+the Requirements Checklist. It is the first thing on the credit after the aim.
+
+![PMM-03, Required documents at the top](./evidence/after-v2-pmm03-box-at-top.png)
+
+- **One overall count** with a progress bar, "1 of 5 provided", across the
+  whole credit.
+- **Grouped by requirement** (#1, #2 …), each group with its own count. Every
+  upload still lands against exactly one requirement and one document slot, so
+  nothing about how files are stored changed.
+- **Stage tags.** Each document carries the stage it belongs to (DESIGN STAGE /
+  CONSTRUCTION STAGE). The manual extract already held it, and it explains
+  lists like E-01's, where "Prescriptive Energy Tool" appears once per stage.
+- **The AI review** still sits under each attached file.
+
+![PMM-03 after attaching the Labor Subsistence Plan](./evidence/after-v2-pmm03-one-provided.png)
+
+Each requirement row in the checklist now carries a compact chip ("required ·
+1 of 5 documents") with a link that jumps up to its group in the box.
+
+### How it follows row 14's planning
+
+- **A set-aside either/or path** is left out of the box and named at the
+  bottom ("Not listed: #2 Performance Option").
+- **An optional row nobody has started** is listed with an "Optional · only if
+  pursued" tag but not counted. Once started it reads "Optional · pursuing" and
+  counts.
+
+![E-01 with option #1 chosen](./evidence/after-v2-e01-set-aside-path.png)
+
+![W-02: optional rows listed, not counted](./evidence/after-v2-w02-optional-not-counted.png)
+
+### Still not wired into scoring
+
+As before, a credit can reach Completed without every listed document being
+provided: requirement status needs a value plus at least one file. W-02 above is
+Completed while its box shows 0 of 2. Making the document count gate completion
+is a scoring change that needs its own decision.
+
+### Checks
+
+- **Browser** (Playwright, project "Jeddah Central Oceanarium"):
+  - section order is Aim > Required documents > Requirements Checklist;
+  - PMM-03 goes 0 → 1 of 5 after uploading the Labor Subsistence Plan to slot 1;
+  - the AI review rendered "appears to meet";
+  - the chip jumps to the box;
+  - W-02 and E-01 counts are correct;
+  - no console errors, no 5xx.
+- **Unit tests:** `tests/evidence.test.ts` (document counting and scope) and
+  `pathStates`. 98 passing.
+- `tsc` clean; lint has no errors (the 5 existing warnings are untouched).

@@ -4,10 +4,21 @@ import { PageChrome } from "../../../../_components/PageChrome";
 import { Card } from "@/components/ui";
 import { StatusPill } from "@/components/StatusPill";
 import { getCreditByCode, getProject } from "@/lib/data";
-import { resetPath, updateCreditEntries } from "../../../actions";
-import { RequirementItem, type PathState } from "./RequirementItem";
+import {
+  deleteEvidence,
+  rerunEvidenceReview,
+  resetPath,
+  updateCreditEntries,
+  uploadEvidence,
+} from "../../../actions";
+import { RequirementItem } from "./RequirementItem";
+import {
+  RequiredDocuments,
+  type DocSection,
+} from "@/components/EvidenceChecklist";
+import { documentScope } from "@/lib/evidence";
 import { SaveCreditButton } from "./SaveCreditButton";
-import { groupByOption } from "@/lib/option-group";
+import { groupByOption, pathStates, type PathState } from "@/lib/option-group";
 import { OptionGroup } from "@/components/OptionGroup";
 import { formatPointsSpan } from "@/lib/points";
 
@@ -19,6 +30,21 @@ export default async function CreditDetailPage({
   if (!project) notFound();
   const credit = await getCreditByCode(id, decodeURIComponent(code));
   if (!credit) notFound();
+
+  // Path state of each requirement (either/or options only), shared by the
+  // Required documents box and the checklist below it.
+  const paths = new Map<string, PathState>();
+  for (const block of groupByOption(credit.requirements)) {
+    if (block.kind !== "xor") continue;
+    pathStates(block.items).forEach((p, i) => paths.set(block.items[i].entryId, p));
+  }
+  const sections: DocSection[] = [];
+  const setAside: typeof credit.requirements = [];
+  for (const req of credit.requirements) {
+    const scope = documentScope(req, paths.get(req.entryId));
+    if (scope.show) sections.push({ req, counted: scope.counted, tag: scope.tag });
+    else setAside.push(req);
+  }
 
   return (
     <PageChrome
@@ -87,6 +113,18 @@ export default async function CreditDetailPage({
         </Card>
       ) : null}
 
+      <Card className="mb-6 overflow-hidden">
+        <RequiredDocuments
+          sections={sections}
+          setAside={setAside}
+          projectId={id}
+          code={credit.code}
+          uploadAction={uploadEvidence}
+          deleteAction={deleteEvidence}
+          rerunAction={rerunEvidenceReview}
+        />
+      </Card>
+
       <Card className="p-5">
         <h2 className="mb-2 text-sm font-semibold text-slate-800">
           Requirements Checklist
@@ -94,26 +132,14 @@ export default async function CreditDetailPage({
         <div>
           {groupByOption(credit.requirements).map((block, i) => {
             const items = block.kind === "xor" ? block.items : [block.item];
-            // A path is picked once any option has been set aside.
-            const chosen = items.find((r) => r.planned);
-            const picked = block.kind === "xor" && items.some((r) => !r.planned);
-            const pathOf = (planned: boolean): PathState | undefined =>
-              block.kind !== "xor"
-                ? undefined
-                : !picked
-                  ? "open"
-                  : planned
-                    ? "chosen"
-                    : "dropped";
+            const chosen = items.find((r) => paths.get(r.entryId) === "chosen");
             const body = items.map((req) => (
               <RequirementItem
                 key={req.entryId}
                 req={req}
-                projectId={id}
-                code={credit.code}
                 rsVersionId={project.rsVersionId}
                 grouped={block.kind === "xor"}
-                path={pathOf(req.planned)}
+                path={paths.get(req.entryId)}
               />
             ));
             if (block.kind === "xor")
@@ -121,7 +147,7 @@ export default async function CreditDetailPage({
                 <OptionGroup
                   key={`xor-${block.group}-${i}`}
                   count={items.length}
-                  chosenSeq={picked ? chosen?.seq : undefined}
+                  chosenSeq={chosen?.seq}
                   resetEntryId={items[0].entryId}
                   resetAction={resetPath}
                   form="save-credit"

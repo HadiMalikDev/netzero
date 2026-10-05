@@ -10,45 +10,24 @@ import {
   OptionBadge,
   PointsRange,
 } from "@/components/req";
-import { EvidenceChecklist } from "@/components/EvidenceChecklist";
-import {
-  choosePath,
-  deleteEvidence,
-  rerunEvidenceReview,
-  uploadEvidence,
-} from "../../../actions";
+import { choosePath } from "../../../actions";
 import type { RequirementView } from "@/lib/data";
+import { splitBySpec } from "@/lib/evidence";
+import { requirementLabel } from "@/lib/format";
+import type { PathState } from "@/lib/option-group";
 import type { NumericLimit } from "@/lib/parser/types";
 import { bandsFromSpec, firstBands, pointsForValue } from "@/lib/points";
 
 /** id of the single per-credit save form (see the credit detail page header). */
 const SAVE_FORM = "save-credit";
 
-/**
- * Where an either/or option stands: no path picked yet, the picked path, or an
- * alternative the project set aside.
- */
-export type PathState = "open" | "chosen" | "dropped";
-
-/** A short label when the catalog has no explicit title. */
-function firstClause(text: string): string {
-  const s = text.trim();
-  const dot = s.indexOf(". ");
-  const cut = dot > 8 && dot < 80 ? dot : Math.min(72, s.length);
-  return s.slice(0, cut).replace(/[,;:]\s*$/, "") + (cut < s.length ? "…" : "");
-}
-
 export function RequirementItem({
   req,
-  projectId,
-  code,
   rsVersionId,
   grouped = false,
   path,
 }: {
   req: RequirementView;
-  projectId: string;
-  code: string;
   rsVersionId: string | null;
   grouped?: boolean;
   /** Set on either/or options only. */
@@ -66,7 +45,8 @@ export function RequirementItem({
     lookupBands.length && typedNum != null && Number.isFinite(typedNum)
       ? pointsForValue(lookupBands, typedNum)
       : null;
-  const label = req.title ?? firstClause(req.text);
+  const label = requirementLabel(req.title, req.text);
+  const docs = splitBySpec(req.evidenceSpecs, req.attachments);
   const dropped = path === "dropped";
   // An optional row nobody has started is not asking for anything yet.
   const idleOptional = req.optional && req.status === "not_started";
@@ -197,33 +177,34 @@ export function RequirementItem({
 
       {/* Evidence. Mandatory on every requirement being claimed — see
           requiresEvidence in lib/data.ts. An optional row is only claimed once
-          it is started, so until then the chip says "if pursued". */}
-      <div className="mt-3">
-        <span className="text-xs font-semibold text-slate-500">
-          Evidence
-          <span
-            className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-              req.evidenceCount > 0
-                ? "bg-emerald-50 text-emerald-700"
-                : idleOptional || dropped
-                  ? "bg-slate-100 text-slate-500"
-                  : "bg-amber-50 text-amber-700"
-            }`}
-          >
-            {idleOptional ? "required if pursued" : "required"} ·{" "}
-            {req.evidenceCount} attached
-          </span>
+          it is started, so until then the chip says "if pursued". The files
+          themselves live in the Required documents box at the top. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-semibold text-slate-500">Evidence</span>
+        <span
+          className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+            req.evidenceCount > 0
+              ? "bg-emerald-50 text-emerald-700"
+              : idleOptional || dropped
+                ? "bg-slate-100 text-slate-500"
+                : "bg-amber-50 text-amber-700"
+          }`}
+        >
+          {idleOptional ? "required if pursued" : "required"} ·{" "}
+          {req.evidenceSpecs.length > 0
+            ? `${docs.provided} of ${req.evidenceSpecs.length} documents`
+            : `${req.evidenceCount} attached`}
         </span>
-        <EvidenceChecklist
-          specs={req.evidenceSpecs}
-          attachments={req.attachments}
-          entryId={req.entryId}
-          projectId={projectId}
-          code={code}
-          uploadAction={uploadEvidence}
-          deleteAction={deleteEvidence}
-          rerunAction={rerunEvidenceReview}
-        />
+        {dropped ? null : (
+          <a
+            href={`#docs-req-${req.seq}`}
+            className="font-medium text-brand-600 hover:text-brand-700"
+          >
+            {req.evidenceCount > 0
+              ? `${req.evidenceCount} file${req.evidenceCount === 1 ? "" : "s"} · manage in Required documents ↑`
+              : "Attach in Required documents ↑"}
+          </a>
+        )}
       </div>
     </div>
   );

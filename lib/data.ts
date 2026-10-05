@@ -72,6 +72,25 @@ export async function firstProjectId(): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
+/**
+ * Stage of each evidence item ("design" / "construction"), index-aligned with
+ * evidence_specs (both are written from the same parsed list). Tolerant of
+ * null and malformed values; a missing stage comes back as null.
+ */
+function evidenceStages(raw: string | null, count: number): (string | null)[] {
+  let items: unknown[] = [];
+  try {
+    const v = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(v)) items = v;
+  } catch {
+    // fall through with no stages
+  }
+  return Array.from({ length: count }, (_, i) => {
+    const stage = (items[i] as { stage?: unknown } | undefined)?.stage;
+    return typeof stage === "string" && stage !== "unknown" ? stage : null;
+  });
+}
+
 /** A stored JSON array of strings, tolerant of null and malformed values. */
 function jsonList(raw: string | null): string[] {
   if (!raw) return [];
@@ -123,11 +142,13 @@ export interface RequirementView {
   keystone: boolean;
   /** false = an either/or option the project chose not to pursue. */
   planned: boolean;
-  /** Adds points, never required (see isOptionalRequirement). */
+  /** Adds points, never required (see optionalFlags). */
   optional: boolean;
   target: string | null; // human-readable expected value, if the catalog has one
   numericSpec: unknown;
   evidenceSpecs: string[];
+  /** Stage of each spec ("design" / "construction"), index-aligned. */
+  evidenceStages: (string | null)[];
   requiresEvidence: boolean;
   pageStart: number | null;
   pageEnd: number | null;
@@ -207,6 +228,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       keystone: catalogRequirements.keystone,
       numericSpec: catalogRequirements.numericSpec,
       evidenceSpecs: catalogRequirements.evidenceSpecs,
+      evidence: catalogRequirements.evidence,
       pageStart: catalogRequirements.sourcePageStart,
       pageEnd: catalogRequirements.sourcePageEnd,
       valueBool: requirementEntries.valueBool,
@@ -321,6 +343,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
         : summarizeSpec(e.numericSpec),
       numericSpec,
       evidenceSpecs,
+      evidenceStages: evidenceStages(e.evidence, evidenceSpecs.length),
       requiresEvidence,
       pageStart: e.pageStart,
       pageEnd: e.pageEnd,
