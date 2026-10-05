@@ -4,6 +4,7 @@ import { PageChrome, PageHeader } from "../../_components/PageChrome";
 import { ProjectTabs } from "./_components/ProjectTabs";
 import { Card, KpiTile, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
+import { ExportScorecardLink } from "@/components/ExportScorecardLink";
 import { StatusPill } from "@/components/StatusPill";
 import { CreditsIcon, FileIcon, UploadIcon } from "@/components/icons";
 import { getProject, getProjectCredits, getProjectOverview } from "@/lib/data";
@@ -35,6 +36,9 @@ export default async function ProjectOverviewPage({
         subtitle={
           [project.type, project.location].filter(Boolean).join(" · ") ||
           "Mostadam certification tracking"
+        }
+        action={
+          overview.totalCredits ? <ExportScorecardLink projectId={id} /> : undefined
         }
       />
       <ProjectTabs projectId={id} />

@@ -4,6 +4,7 @@ import { PageChrome, PageHeader } from "../../../_components/PageChrome";
 import { ProjectTabs } from "../_components/ProjectTabs";
 import { KpiTile, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
+import { ExportScorecardLink } from "@/components/ExportScorecardLink";
 import { CreditsIcon, UploadIcon } from "@/components/icons";
 import { getProject, getProjectCredits } from "@/lib/data";
 import { missingEvidenceRequirements } from "@/lib/status";
@@ -75,6 +76,7 @@ export default async function CreditsPage({
       <PageHeader
         title="Credit Management"
         subtitle={`${project.name} · Mostadam`}
+        action={rows.length ? <ExportScorecardLink projectId={id} /> : undefined}
       />
       <ProjectTabs projectId={id} />
 
