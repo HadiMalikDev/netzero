@@ -8,11 +8,17 @@
  *     not_started  — no value and no evidence
  *     in_progress  — some value and/or evidence, but not satisfied
  *     completed    — has a value AND (if the extract listed evidence) >=1 file
- *   credit: each ungrouped requirement must be completed; each XOR group
+ *   credit: each mandatory requirement must be completed; each XOR group
  *     needs ANY one option completed. not_started if nothing is touched;
  *     otherwise in_progress until every slot is satisfied.
+ *
+ * Two kinds of row are out of scope for the credit (see `inScope`):
+ *   - an XOR option the project chose not to pursue (`planned === false`);
+ *   - an optional row (adds points, never required) nobody has started. Once
+ *     started it must be finished, so a half-done optional row still blocks.
  */
 
+import { parseNum } from "./num";
 import { mapByOption } from "./option-group";
 
 export type Status = "not_started" | "in_progress" | "completed";
@@ -20,6 +26,35 @@ export type Status = "not_started" | "in_progress" | "completed";
 export interface CreditStatusReq {
   status: Status;
   optionGroup?: string | null;
+  /** false = an either/or option the project chose not to pursue. */
+  planned?: boolean;
+  /** Adds points but is never required — see `isOptionalRequirement`. */
+  optional?: boolean;
+}
+
+/**
+ * A row is optional when it sits outside an either/or group, is not a keystone
+ * requirement, and earns points of its own (e.g. W-02 #2–#5). Rows without
+ * points are prerequisites ("In addition to #1…"), so they stay mandatory.
+ */
+export function isOptionalRequirement(r: {
+  optionGroup?: string | null;
+  keystone: boolean;
+  pointsRaw: string | null;
+}): boolean {
+  return !r.optionGroup?.trim() && !r.keystone && (parseNum(r.pointsRaw) ?? 0) > 0;
+}
+
+/** Drop rows the credit does not depend on: unchosen XOR options, untouched optional rows. */
+export function inScope<T extends CreditStatusReq>(reqs: T[]): T[] {
+  return reqs.filter(
+    (r) => r.planned !== false && !(r.optional && r.status === "not_started"),
+  );
+}
+
+/** Optional rows nobody has started — open points, never blockers. */
+export function untouchedOptional<T extends CreditStatusReq>(reqs: T[]): T[] {
+  return reqs.filter((r) => r.optional && r.status === "not_started");
 }
 
 export interface EntryState {
@@ -61,12 +96,13 @@ function xorBlockStatus(statuses: Status[]): Status {
 }
 
 export function deriveCreditStatus(reqs: CreditStatusReq[]): Status {
-  if (reqs.length === 0) return "not_started";
   const parts = mapByOption(
-    reqs,
+    inScope(reqs),
     (items) => xorBlockStatus(items.map((i) => i.status)),
     (item) => item.status,
   );
+  // Nothing in scope means only untouched optional rows: nothing done yet.
+  if (parts.length === 0) return "not_started";
   if (parts.every((s) => s === "completed")) return "completed";
   if (parts.every((s) => s === "not_started")) return "not_started";
   return "in_progress";
@@ -75,7 +111,7 @@ export function deriveCreditStatus(reqs: CreditStatusReq[]): Status {
 /** Rows that still block credit completion. A satisfied XOR group drops every option. */
 export function blockingRequirements<T extends CreditStatusReq>(reqs: T[]): T[] {
   return mapByOption(
-    reqs,
+    inScope(reqs),
     (items) => (items.some((i) => i.status === "completed") ? [] : items),
     (item) => (item.status !== "completed" ? [item] : []),
   ).flat();

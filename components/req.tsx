@@ -36,6 +36,15 @@ export function OptionBadge() {
   );
 }
 
+/** Sky "Optional" pill: the row adds points but never blocks the credit. */
+export function OptionalBadge() {
+  return (
+    <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-700">
+      Optional · adds points
+    </span>
+  );
+}
+
 /** Amber "Keystone" pill (compact 10px variant). */
 export function KeystoneBadge() {
   return (

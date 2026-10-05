@@ -292,6 +292,8 @@ export const requirementEntries = pgTable("requirement_entry", {
   valueText: text("value_text"),
   status: text("status").notNull().default("not_started"),
   note: text("note"),
+  /** false = an either/or option the project chose not to pursue. */
+  planned: boolean("planned").notNull().default(true),
   updatedAt: integer("updated_at").notNull().default(now),
 });
 

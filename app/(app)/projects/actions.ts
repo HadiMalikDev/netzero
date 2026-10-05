@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   catalogCredits,
@@ -18,7 +18,13 @@ import {
 } from "@/db/schema";
 import { requireUser } from "@/lib/auth/session";
 import { runEvidenceReview } from "@/lib/ai/evidence-review";
-import { createProject, getCreditByCode, WORKSPACE_ID } from "@/lib/data";
+import {
+  createProject,
+  getCreditByCode,
+  WORKSPACE_ID,
+  type CreditView,
+} from "@/lib/data";
+import { groupByOption } from "@/lib/option-group";
 
 const UPLOAD_ROOT = ".data/uploads";
 
@@ -78,11 +84,11 @@ export async function createProjectFromCatalog(formData: FormData): Promise<void
 // ---------- checklist entry updates ----------
 
 /**
- * Save ALL requirement values for a credit at once (one Save button per credit).
- * Reads each entry's value from `bool-/num-/text-<entryId>` fields; the metric
- * type comes from the catalog, so the form only needs the value inputs.
+ * Write every requirement value posted with the credit's Save form. Reads each
+ * entry's value from `bool-/num-/text-<entryId>` fields; the metric type comes
+ * from the catalog, so the form only needs the value inputs.
  */
-export async function updateCreditEntries(formData: FormData): Promise<void> {
+async function saveCreditValues(formData: FormData) {
   await requireUser();
   const projectId = String(formData.get("projectId") ?? "");
   const code = String(formData.get("code") ?? "");
@@ -116,6 +122,70 @@ export async function updateCreditEntries(formData: FormData): Promise<void> {
       .where(eq(requirementEntries.id, r.entryId));
   }
 
+  return { projectId, code, credit };
+}
+
+/** Save ALL requirement values for a credit at once (one Save button per credit). */
+export async function updateCreditEntries(formData: FormData): Promise<void> {
+  const { projectId, code } = await saveCreditValues(formData);
+  revalidatePath(`/projects/${projectId}/credits/${code}`);
+}
+
+/** The either/or block containing `entryId`, or throw if it is not an option. */
+function optionBlockOf(credit: CreditView, entryId: string) {
+  const block = groupByOption(credit.requirements).find(
+    (b) => b.kind === "xor" && b.items.some((r) => r.entryId === entryId),
+  );
+  if (!block || block.kind !== "xor") throw new Error("not an either/or option");
+  return block.items;
+}
+
+async function setPlanned(entryIds: string[], planned: boolean) {
+  if (entryIds.length === 0) return;
+  await db
+    .update(requirementEntries)
+    .set({ planned })
+    .where(
+      and(
+        inArray(requirementEntries.id, entryIds),
+        eq(requirementEntries.workspaceId, WORKSPACE_ID),
+      ),
+    );
+}
+
+/**
+ * Pick the path the project is pursuing in an either/or group: the chosen
+ * option stays planned, its alternatives are set aside (faded, and no longer
+ * counted toward status, missing evidence or points). Submitted through the
+ * credit's Save form via `formAction`, so values typed elsewhere are kept.
+ * The option is bound in (`choosePath.bind(null, entryId)`): React does not
+ * post a submitter's name/value for a function `formAction`.
+ */
+export async function choosePath(
+  entryId: string,
+  formData: FormData,
+): Promise<void> {
+  const { projectId, code, credit } = await saveCreditValues(formData);
+  const options = optionBlockOf(credit, entryId);
+  await setPlanned([entryId], true);
+  await setPlanned(
+    options.filter((r) => r.entryId !== entryId).map((r) => r.entryId),
+    false,
+  );
+  revalidatePath(`/projects/${projectId}/credits/${code}`);
+}
+
+/** Undo a path choice: every option in the group is back in play. */
+export async function resetPath(
+  entryId: string,
+  formData: FormData,
+): Promise<void> {
+  const { projectId, code, credit } = await saveCreditValues(formData);
+  const options = optionBlockOf(credit, entryId);
+  await setPlanned(
+    options.map((r) => r.entryId),
+    true,
+  );
   revalidatePath(`/projects/${projectId}/credits/${code}`);
 }
 

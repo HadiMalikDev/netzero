@@ -2,6 +2,7 @@ import { getProjectCredits, type CreditView } from "@/lib/data";
 import {
   hasValue,
   missingEvidenceRequirements,
+  untouchedOptional,
   type Status,
 } from "@/lib/status";
 
@@ -24,6 +25,12 @@ export interface FactRequirement {
   metricType: string;
   status: Status;
   optionGroup: string | null;
+  keystone: boolean;
+  /** false = an either/or option the project chose not to pursue. */
+  planned: boolean;
+  /** Adds points but never blocks the credit. */
+  optional: boolean;
+  points: string | null;
   hasValue: boolean;
   requiresEvidence: boolean;
   evidenceCount: number;
@@ -131,6 +138,10 @@ export async function buildProjectFacts(
         metricType: r.metricType,
         status: r.status,
         optionGroup: r.optionGroup,
+        keystone: r.keystone,
+        planned: r.planned,
+        optional: r.optional,
+        points: r.pointsRaw,
         hasValue: hasValue({
           metricType: r.metricType,
           requiresEvidence: r.requiresEvidence,
@@ -155,6 +166,16 @@ export async function buildProjectFacts(
 
 export function remaining(facts: ProjectFacts) {
   return facts.credits.filter((c) => c.status !== "completed");
+}
+
+/**
+ * Optional rows nobody has started, across every credit (complete or not).
+ * They are open points, not blockers — answers must label them optional.
+ */
+export function optionalOpportunities(facts: ProjectFacts) {
+  return facts.credits
+    .map((c) => ({ ...c, requirements: untouchedOptional(c.requirements) }))
+    .filter((c) => c.requirements.length > 0);
 }
 
 export function missingEvidenceCredits(facts: ProjectFacts) {

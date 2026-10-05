@@ -13,6 +13,7 @@ import {
 import {
   deriveCreditStatus,
   deriveRequirementStatus,
+  isOptionalRequirement,
   missingEvidenceRequirements,
   type Status,
 } from "./status";
@@ -119,6 +120,11 @@ export interface RequirementView {
   pointsRaw: string | null;
   optionGroup: string | null;
   pointsType: string | null;
+  keystone: boolean;
+  /** false = an either/or option the project chose not to pursue. */
+  planned: boolean;
+  /** Adds points, never required (see isOptionalRequirement). */
+  optional: boolean;
   target: string | null; // human-readable expected value, if the catalog has one
   numericSpec: unknown;
   evidenceSpecs: string[];
@@ -198,6 +204,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       pointsRaw: catalogRequirements.pointsRaw,
       optionGroup: catalogRequirements.optionGroup,
       pointsType: catalogRequirements.pointsType,
+      keystone: catalogRequirements.keystone,
       numericSpec: catalogRequirements.numericSpec,
       evidenceSpecs: catalogRequirements.evidenceSpecs,
       pageStart: catalogRequirements.sourcePageStart,
@@ -206,6 +213,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       valueNumber: requirementEntries.valueNumber,
       valueText: requirementEntries.valueText,
       note: requirementEntries.note,
+      planned: requirementEntries.planned,
     })
     .from(requirementEntries)
     .innerJoin(
@@ -292,6 +300,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       numericSpec,
       valueNumber: e.valueNumber,
       status,
+      planned: e.planned,
     };
     const view: RequirementView = {
       entryId: e.entryId,
@@ -304,6 +313,9 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       pointsRaw: e.pointsRaw,
       optionGroup: e.optionGroup,
       pointsType: e.pointsType,
+      keystone: e.keystone,
+      planned: e.planned,
+      optional: isOptionalRequirement(e),
       target: bandsFromSpec(numericSpec).length
         ? null
         : summarizeSpec(e.numericSpec),

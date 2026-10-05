@@ -4,6 +4,8 @@ import {
   deriveCreditStatus,
   deriveRequirementStatus,
   hasValue,
+  isOptionalRequirement,
+  missingEvidenceRequirements,
   type EntryState,
 } from "@/lib/status";
 
@@ -195,5 +197,113 @@ describe("blockingRequirements", () => {
         { status: "not_started" as const, optionGroup: "opts", seq: 2 },
       ]).map((r) => r.seq),
     ).toEqual([1, 2]);
+  });
+});
+
+describe("isOptionalRequirement", () => {
+  it("a non-keystone row with its own points is optional (W-02 #2–#5)", () => {
+    expect(
+      isOptionalRequirement({ optionGroup: null, keystone: false, pointsRaw: "2" }),
+    ).toBe(true);
+  });
+  it("a keystone row is mandatory even when it carries points (W-01 #1)", () => {
+    expect(
+      isOptionalRequirement({ optionGroup: null, keystone: true, pointsRaw: "3" }),
+    ).toBe(false);
+  });
+  it("a row with no points is a prerequisite, so mandatory (E-03 #1)", () => {
+    expect(
+      isOptionalRequirement({ optionGroup: null, keystone: false, pointsRaw: null }),
+    ).toBe(false);
+    expect(
+      isOptionalRequirement({ optionGroup: null, keystone: false, pointsRaw: "0" }),
+    ).toBe(false);
+  });
+  it("an either/or option is governed by its group, not this rule", () => {
+    expect(
+      isOptionalRequirement({
+        optionGroup: "E-01 options",
+        keystone: false,
+        pointsRaw: "5",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("optional rows never block", () => {
+  it("mandatory done + optional untouched => completed", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "completed" },
+        { status: "not_started", optional: true },
+        { status: "not_started", optional: true },
+      ]),
+    ).toBe("completed");
+  });
+
+  it("an optional row that was started must be finished", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "completed" },
+        { status: "in_progress", optional: true },
+      ]),
+    ).toBe("in_progress");
+  });
+
+  it("only optional rows: nothing done => not_started", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "not_started", optional: true },
+        { status: "not_started", optional: true },
+      ]),
+    ).toBe("not_started");
+  });
+
+  it("only optional rows: one finished, rest untouched => completed", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "completed", optional: true },
+        { status: "not_started", optional: true },
+      ]),
+    ).toBe("completed");
+  });
+
+  it("untouched optional rows are not blocking", () => {
+    expect(
+      blockingRequirements([
+        { status: "not_started" as const, seq: 1 },
+        { status: "not_started" as const, optional: true, seq: 2 },
+        { status: "in_progress" as const, optional: true, seq: 3 },
+      ]).map((r) => r.seq),
+    ).toEqual([1, 3]);
+  });
+});
+
+describe("a chosen either/or path", () => {
+  it("only the chosen path counts: a set-aside option done does not complete it", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "not_started", optionGroup: "opts", planned: true },
+        { status: "completed", optionGroup: "opts", planned: false },
+      ]),
+    ).toBe("not_started");
+  });
+
+  it("chosen path done => completed", () => {
+    expect(
+      deriveCreditStatus([
+        { status: "completed", optionGroup: "opts", planned: true },
+        { status: "not_started", optionGroup: "opts", planned: false },
+      ]),
+    ).toBe("completed");
+  });
+
+  it("set-aside options never appear as blocking or missing evidence", () => {
+    const reqs = [
+      { status: "in_progress" as const, optionGroup: "opts", planned: true, seq: 1, requiresEvidence: true, evidenceCount: 0 },
+      { status: "not_started" as const, optionGroup: "opts", planned: false, seq: 2, requiresEvidence: true, evidenceCount: 0 },
+    ];
+    expect(blockingRequirements(reqs).map((r) => r.seq)).toEqual([1]);
+    expect(missingEvidenceRequirements(reqs).map((r) => r.seq)).toEqual([1]);
   });
 });

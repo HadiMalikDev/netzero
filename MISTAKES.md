@@ -104,3 +104,20 @@ from the dashboard, credits resolve to the first project.
 **Prevention:** Drill-downs keep distinct destinations. When a workspace-wide number has no
 workspace-wide list, follow the same first-project resolution the Credits nav already uses,
 with the filter applied — do not collapse every tile onto one page.
+
+
+## 2026-10-05 — Widened feedback row 14 beyond what the client asked
+
+**What happened:** Planning V2 row 14 ("checkbox per sub-requirement"), I offered a scope option
+that put a "pursuing" tick on every point-earning row as well as on either/or paths, and wrote it
+into the plan. Hadi rejected the plan: row 14 is only about required either/or groups — pick path A
+and path B fades, so a visitor sees which path the project is pursuing. Optional point rows were a
+separate concern (they should simply never block completion).
+
+**Root cause:** Framed the question around what the data model *could* support (any optional row
+can be skipped) instead of the client's sentence, and let one answer to a broadened option stand in
+for the requirement. Mixed two problems — path choice and optional-row blocking — into one control.
+
+**Prevention:** Restate each feedback row in the client's own terms before offering scope options,
+and keep options inside that statement. When the code reveals an adjacent defect (here, optional
+rows blocking completion), raise it as its own question, not as a wider version of the row.

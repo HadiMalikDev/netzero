@@ -4,8 +4,8 @@ import { PageChrome } from "../../../../_components/PageChrome";
 import { Card } from "@/components/ui";
 import { StatusPill } from "@/components/StatusPill";
 import { getCreditByCode, getProject } from "@/lib/data";
-import { updateCreditEntries } from "../../../actions";
-import { RequirementItem } from "./RequirementItem";
+import { resetPath, updateCreditEntries } from "../../../actions";
+import { RequirementItem, type PathState } from "./RequirementItem";
 import { SaveCreditButton } from "./SaveCreditButton";
 import { groupByOption } from "@/lib/option-group";
 import { OptionGroup } from "@/components/OptionGroup";
@@ -94,6 +94,17 @@ export default async function CreditDetailPage({
         <div>
           {groupByOption(credit.requirements).map((block, i) => {
             const items = block.kind === "xor" ? block.items : [block.item];
+            // A path is picked once any option has been set aside.
+            const chosen = items.find((r) => r.planned);
+            const picked = block.kind === "xor" && items.some((r) => !r.planned);
+            const pathOf = (planned: boolean): PathState | undefined =>
+              block.kind !== "xor"
+                ? undefined
+                : !picked
+                  ? "open"
+                  : planned
+                    ? "chosen"
+                    : "dropped";
             const body = items.map((req) => (
               <RequirementItem
                 key={req.entryId}
@@ -102,11 +113,19 @@ export default async function CreditDetailPage({
                 code={credit.code}
                 rsVersionId={project.rsVersionId}
                 grouped={block.kind === "xor"}
+                path={pathOf(req.planned)}
               />
             ));
             if (block.kind === "xor")
               return (
-                <OptionGroup key={`xor-${block.group}-${i}`} count={items.length}>
+                <OptionGroup
+                  key={`xor-${block.group}-${i}`}
+                  count={items.length}
+                  chosenSeq={picked ? chosen?.seq : undefined}
+                  resetEntryId={items[0].entryId}
+                  resetAction={resetPath}
+                  form="save-credit"
+                >
                   {body}
                 </OptionGroup>
               );
