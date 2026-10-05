@@ -1,5 +1,9 @@
 import { chatJSON, hasLLM } from "@/lib/ai/openrouter";
-import { blockingRequirements, untouchedOptional } from "@/lib/status";
+import {
+  blockingRequirements,
+  evidenceSatisfied,
+  untouchedOptional,
+} from "@/lib/status";
 import {
   buildProjectFacts,
   citationFor,
@@ -30,6 +34,7 @@ Rules you must never break:
 - When you mention a credit or requirement, link it with markdown [label](href) using the href from the facts. Never invent a URL.
 - A requirement with "optional": true adds points but never blocks its credit. When you list it, label it "optional" with its points — never present it as required.
 - A requirement with "planned": false is an either/or path the project chose not to pursue. Do not list it as remaining or missing.
+- "docsDue" counts the manual's listed documents due at the project's current stage and "docsProvided" how many have a file. A requirement is not complete until every due document is provided.
 - A credit with "targeted": false is one the project is not pursuing. If you mention it, say it is not targeted.
 Respond ONLY as JSON: {"answer": "<concise markdown answer>", "citations": ["<CODE>", ...]}.
 Use credit codes exactly as they appear in the facts (e.g. "HC-10").`;
@@ -92,6 +97,14 @@ export async function answerQuestion(
   return deterministicAnswer(facts, question, projectId);
 }
 
+/** ", 1 of 3 documents due provided" / ", evidence missing" — or nothing. */
+function evidenceNote(r: FactRequirement): string {
+  if (evidenceSatisfied(r)) return "";
+  return r.docsDue > 0
+    ? `, ${r.docsProvided} of ${r.docsDue} documents due provided`
+    : ", evidence missing";
+}
+
 /** "Optional — adds points" block: never mixed in with the blockers above it. */
 function optionalList<T extends FactRequirement>(
   reqs: T[],
@@ -132,9 +145,7 @@ export function deterministicAnswer(
               (r) =>
                 `- [${c.code} #${r.seq}](${r.href}) (${r.metricType}) — ${r.status.replace("_", " ")}` +
                 (r.optional ? ", optional" : "") +
-                (r.requiresEvidence && r.evidenceCount === 0
-                  ? ", evidence missing"
-                  : ""),
+                evidenceNote(r),
             )
             .join("\n")
         : "") +
@@ -179,7 +190,7 @@ export function deterministicAnswer(
     if (list.length === 0)
       return {
         answer:
-          "No required evidence is missing — every requirement that asks for evidence has at least one file attached.",
+          "No required evidence is missing — every open requirement has the documents due at this stage.",
         citations: [],
         grounded: true,
         via: "deterministic",

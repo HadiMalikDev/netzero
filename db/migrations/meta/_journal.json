@@ -50,6 +50,13 @@
       "when": 1791186144147,
       "tag": "0006_ordinary_iron_monger",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791187542245,
+      "tag": "0007_tired_changeling",
+      "breakpoints": true
     }
   ]
 }

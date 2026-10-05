@@ -7,7 +7,9 @@
  *   requirement:
  *     not_started  — no value and no evidence
  *     in_progress  — some value and/or evidence, but not satisfied
- *     completed    — has a value AND (if the extract listed evidence) >=1 file
+ *     completed    — has a value AND its evidence is satisfied: every listed
+ *                    document due at the project's stage has a file attached
+ *                    against it, or — when the manual lists none — >=1 file
  *   credit: each mandatory requirement must be completed; each XOR group
  *     needs ANY one option completed. not_started if nothing is touched;
  *     otherwise in_progress until every slot is satisfied.
@@ -68,11 +70,28 @@ export function untouchedOptional<T extends CreditStatusReq>(reqs: T[]): T[] {
 
 export interface EntryState {
   metricType: string;
-  requiresEvidence: boolean; // extract listed evidence specs
+  requiresEvidence: boolean;
   valueBool: boolean | null;
   valueNumber: number | null;
   valueText: string | null;
   evidenceCount: number;
+  /** Listed documents due at the project's stage (see lib/evidence.ts docGates). */
+  docsDue?: number;
+  /** How many of those have at least one file attached against them. */
+  docsProvided?: number;
+}
+
+/**
+ * Evidence is satisfied when every listed document due at the project's stage
+ * has a file attached against it. A requirement whose manual entry lists no
+ * documents falls back to "at least one file".
+ */
+export function evidenceSatisfied(
+  e: Pick<EntryState, "requiresEvidence" | "evidenceCount" | "docsDue" | "docsProvided">,
+): boolean {
+  if (!e.requiresEvidence) return true;
+  const due = e.docsDue ?? 0;
+  return due > 0 ? (e.docsProvided ?? 0) >= due : e.evidenceCount > 0;
 }
 
 export function hasValue(e: EntryState): boolean {
@@ -90,7 +109,7 @@ export function hasValue(e: EntryState): boolean {
 
 export function deriveRequirementStatus(e: EntryState): Status {
   const value = hasValue(e);
-  const evidenceOk = e.requiresEvidence ? e.evidenceCount > 0 : true;
+  const evidenceOk = evidenceSatisfied(e);
   const touched = value || e.evidenceCount > 0;
 
   if (value && evidenceOk) return "completed";
@@ -126,10 +145,14 @@ export function blockingRequirements<T extends CreditStatusReq>(reqs: T[]): T[] 
   ).flat();
 }
 
+/** Blocking rows whose evidence is not yet satisfied (a document still due). */
 export function missingEvidenceRequirements<
-  T extends CreditStatusReq & { requiresEvidence: boolean; evidenceCount: number },
+  T extends CreditStatusReq & {
+    requiresEvidence: boolean;
+    evidenceCount: number;
+    docsDue?: number;
+    docsProvided?: number;
+  },
 >(reqs: T[]): T[] {
-  return blockingRequirements(reqs).filter(
-    (r) => r.requiresEvidence && r.evidenceCount === 0,
-  );
+  return blockingRequirements(reqs).filter((r) => !evidenceSatisfied(r));
 }

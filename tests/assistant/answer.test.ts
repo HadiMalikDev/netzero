@@ -35,6 +35,8 @@ const facts: ProjectFacts = {
           hasValue: false,
           requiresEvidence: false,
           evidenceCount: 0,
+          docsDue: 0,
+          docsProvided: 0,
           text: "SBC 601",
           page: 100,
           href: creditHref("p1", "E-01", 1),
@@ -51,6 +53,8 @@ const facts: ProjectFacts = {
           hasValue: true,
           requiresEvidence: false,
           evidenceCount: 0,
+          docsDue: 0,
+          docsProvided: 0,
           text: "modeling",
           page: 100,
           href: creditHref("p1", "E-01", 2),
@@ -90,6 +94,8 @@ describe("optional rows and set-aside paths", () => {
     hasValue: false,
     requiresEvidence: true,
     evidenceCount: 0,
+    docsDue: 0,
+    docsProvided: 0,
     text: "",
     page: 120,
     href: creditHref("p1", "W-02", over.seq ?? 1),
@@ -143,5 +149,35 @@ describe("optional rows and set-aside paths", () => {
     const a = deterministicAnswer(w02, "what documents are missing?", "p1");
     expect(a.answer).not.toContain("W-02");
     expect(a.answer).not.toContain("#req-2");
+  });
+});
+
+describe("documents due", () => {
+  it("names how many due documents are still missing on an open requirement", () => {
+    const lsp: ProjectFacts = {
+      ...facts,
+      credits: [
+        {
+          ...facts.credits[0],
+          code: "PMM-03",
+          title: "Fair Labor Practices",
+          requirements: [
+            {
+              ...facts.credits[0].requirements[0],
+              keystone: false,
+              status: "in_progress",
+              hasValue: true,
+              requiresEvidence: true,
+              evidenceCount: 1,
+              docsDue: 2,
+              docsProvided: 1,
+              href: creditHref("p1", "PMM-03", 1),
+            },
+          ],
+        },
+      ],
+    };
+    const a = deterministicAnswer(lsp, "status of PMM-03", "p1");
+    expect(a.answer).toContain("1 of 2 documents due provided");
   });
 });

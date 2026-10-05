@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 import { CheckIcon, FileIcon, UploadIcon } from "@/components/icons";
 import { ReviewNote } from "@/components/ReviewNote";
 import { formatFileSize, formatUploadedAt, requirementLabel } from "@/lib/format";
-import { splitBySpec, type DocTag } from "@/lib/evidence";
+import { splitBySpec, type DocTag, type ProjectStage } from "@/lib/evidence";
 import type { EvidenceAttachment, RequirementView } from "@/lib/data";
 
 /**
@@ -175,7 +175,7 @@ function RequirementDocs({
 }) {
   const { req, tag, counted } = section;
   const specs = req.evidenceSpecs;
-  const { bySpec, unassigned, provided } = splitBySpec(specs, req.attachments);
+  const { bySpec, unassigned } = splitBySpec(specs, req.attachments);
   const entry = { entryId: req.entryId, projectId, code };
 
   return (
@@ -201,15 +201,15 @@ function RequirementDocs({
             {tagLabel(tag, counted)}
           </span>
         ) : null}
-        {specs.length > 0 ? (
+        {req.docsDue > 0 ? (
           <span
             className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-medium ${
-              provided === specs.length
+              req.docsProvided === req.docsDue
                 ? "bg-emerald-50 text-emerald-700"
                 : "bg-slate-100 text-slate-500"
             }`}
           >
-            {provided} of {specs.length}
+            {req.docsProvided} of {req.docsDue} due
           </span>
         ) : null}
       </div>
@@ -220,8 +220,10 @@ function RequirementDocs({
             const files = bySpec.get(i) ?? [];
             const done = files.length > 0;
             const stage = req.evidenceStages[i];
+            // Listed for a later stage: shown, but not yet due.
+            const later = !req.docGates[i];
             return (
-              <li key={i} className="px-3 py-2">
+              <li key={i} className={`px-3 py-2 ${later && !done ? "opacity-60" : ""}`}>
                 <div className="flex items-start gap-2.5">
                   <span
                     className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
@@ -240,6 +242,11 @@ function RequirementDocs({
                     {stage ? (
                       <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 align-middle text-[10px] font-medium uppercase text-slate-500">
                         {stage} stage
+                      </span>
+                    ) : null}
+                    {later ? (
+                      <span className="ml-1.5 align-middle text-[10px] font-medium text-slate-400">
+                        · due later, not required yet
                       </span>
                     ) : null}
                   </span>
@@ -271,8 +278,8 @@ function RequirementDocs({
         </ul>
       ) : (
         <p className="text-xs text-slate-500">
-          The manual lists no specific documents for this requirement. A file is
-          still required to close it.
+          The manual lists no specific documents for this requirement. At least
+          one file is required to close it.
         </p>
       )}
 
@@ -316,6 +323,7 @@ function RequirementDocs({
 export function RequiredDocuments({
   sections,
   setAside,
+  stage,
   projectId,
   code,
   uploadAction,
@@ -324,6 +332,8 @@ export function RequiredDocuments({
 }: {
   sections: DocSection[];
   setAside: RequirementView[];
+  /** The project's stage: decides which documents are due now. */
+  stage: ProjectStage;
   projectId: string;
   code: string;
   uploadAction: Action;
@@ -334,8 +344,8 @@ export function RequiredDocuments({
   let provided = 0;
   for (const s of sections) {
     if (!s.counted) continue;
-    total += s.req.evidenceSpecs.length;
-    provided += splitBySpec(s.req.evidenceSpecs, s.req.attachments).provided;
+    total += s.req.docsDue;
+    provided += s.req.docsProvided;
   }
   const pct = total ? Math.round((provided / total) * 100) : 0;
 
@@ -346,13 +356,17 @@ export function RequiredDocuments({
           <h2 className="text-sm font-semibold text-slate-800">Required documents</h2>
           <p className="mt-0.5 text-xs text-slate-500">
             Everything the manual asks you to submit for this credit. A document is
-            ticked once a file is attached against it.
+            ticked once a file is attached against it, and a requirement completes
+            only when every document due is ticked.{" "}
+            {stage === "design"
+              ? "This project is at design stage: construction-stage documents are listed but not due yet."
+              : "This project is at construction stage: every listed document is due."}
           </p>
         </div>
         {total > 0 ? (
           <div className="w-48">
             <div className="mb-1 text-right text-xs font-medium text-slate-600">
-              {provided} of {total} provided
+              {provided} of {total} due provided
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
               <div

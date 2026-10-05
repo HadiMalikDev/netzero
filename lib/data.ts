@@ -19,6 +19,7 @@ import {
   type Status,
 } from "./status";
 import { summarizeSpec, WORKSPACE_ID } from "./catalog";
+import { docGates, docsDueProvided, parseStage, splitBySpec } from "./evidence";
 import { parseNum } from "./num";
 import {
   parseThresholds,
@@ -63,6 +64,7 @@ export async function createProject(input: {
   location?: string | null;
   rsVersionId?: string | null;
   targetTier?: string | null;
+  stage?: string;
 }) {
   const id = randomUUID();
   await db.insert(projects).values({
@@ -74,6 +76,7 @@ export async function createProject(input: {
     location: input.location ?? null,
     status: "in_progress",
     targetTier: input.targetTier ?? null,
+    stage: input.stage ?? "design",
   });
   return id;
 }
@@ -160,6 +163,11 @@ export interface RequirementView {
   evidenceSpecs: string[];
   /** Stage of each spec ("design" / "construction"), index-aligned. */
   evidenceStages: (string | null)[];
+  /** Which specs are due at the project's stage, index-aligned. */
+  docGates: boolean[];
+  /** Listed documents due now, and how many have a file against them. */
+  docsDue: number;
+  docsProvided: number;
   requiresEvidence: boolean;
   pageStart: number | null;
   pageEnd: number | null;
@@ -204,6 +212,12 @@ export interface CreditView {
 
 /** All confirmed credits of a project, with requirements + derived status. */
 export async function getProjectCredits(projectId: string): Promise<CreditView[]> {
+  const [proj] = await db
+    .select({ stage: projects.stage })
+    .from(projects)
+    .where(eq(projects.id, projectId));
+  const projectStage = parseStage(proj?.stage);
+
   const pcs = await db
     .select({
       pcId: projectCredits.id,
@@ -327,6 +341,9 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
     const requiresEvidence = true;
     const attachments = evByEntry.get(e.entryId) ?? [];
     const evidenceCount = attachments.length;
+    const stages = evidenceStages(e.evidence, evidenceSpecs.length);
+    const gates = docGates(stages, projectStage);
+    const docs = docsDueProvided(gates, splitBySpec(evidenceSpecs, attachments).bySpec);
     const status = deriveRequirementStatus({
       metricType: e.metricType,
       requiresEvidence,
@@ -334,6 +351,8 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       valueNumber: e.valueNumber,
       valueText: e.valueText,
       evidenceCount,
+      docsDue: docs.due,
+      docsProvided: docs.provided,
     });
     const numericSpec = e.numericSpec ? JSON.parse(e.numericSpec) : null;
     const award = {
@@ -364,7 +383,10 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
         : summarizeSpec(e.numericSpec),
       numericSpec,
       evidenceSpecs,
-      evidenceStages: evidenceStages(e.evidence, evidenceSpecs.length),
+      evidenceStages: stages,
+      docGates: gates,
+      docsDue: docs.due,
+      docsProvided: docs.provided,
       requiresEvidence,
       pageStart: e.pageStart,
       pageEnd: e.pageEnd,

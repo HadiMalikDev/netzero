@@ -162,12 +162,14 @@ database tests on.
 
 ### Found along the way, not changed
 
-- **Credit Totals.** The catalog's credit Totals sum to 131 against the
-  manual's 130 Full Scope. One credit's Total is off by a point (row 11 notes).
+- **Points by building type.** Points depend on building type (manual
+  Table 2). The catalog holds the table and every type sums to 130, but
+  projects don't record their type yet, so totals read 131 (row 11 notes).
 - **Missed groups.** EI-03 and TC-01 each show a lone "Option 1"; the parser
   likely missed their either/or groups (row 14 notes).
 - **Made-up link domains.** In LLM mode the assistant sometimes writes absolute
   links on made-up domains instead of the relative paths it is given (row 14
   notes).
-- **Documents don't gate completion.** The Required documents count still does
-  not gate a credit's completion (row 9 notes).
+- **Documents now gate completion.** Fixed in a follow-up commit: a
+  requirement completes only when every listed document due at the project's
+  stage has a file (row 9 notes). Migration `0007` adds `project.stage`.

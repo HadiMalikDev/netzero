@@ -41,6 +41,7 @@ export async function GET(
   const wb = buildScorecard({
     projectName: project.name,
     ratingSystem,
+    stage: project.stage,
     credits,
     score,
     generatedAt: new Date(),

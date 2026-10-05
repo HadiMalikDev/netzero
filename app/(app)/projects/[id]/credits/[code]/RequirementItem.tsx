@@ -12,9 +12,9 @@ import {
 } from "@/components/req";
 import { choosePath } from "../../../actions";
 import type { RequirementView } from "@/lib/data";
-import { splitBySpec } from "@/lib/evidence";
 import { requirementLabel } from "@/lib/format";
 import type { PathState } from "@/lib/option-group";
+import { evidenceSatisfied } from "@/lib/status";
 import type { NumericLimit } from "@/lib/parser/types";
 import { bandsFromSpec, firstBands, pointsForValue } from "@/lib/points";
 
@@ -46,7 +46,6 @@ export function RequirementItem({
       ? pointsForValue(lookupBands, typedNum)
       : null;
   const label = requirementLabel(req.title, req.text);
-  const docs = splitBySpec(req.evidenceSpecs, req.attachments);
   const dropped = path === "dropped";
   // An optional row nobody has started is not asking for anything yet.
   const idleOptional = req.optional && req.status === "not_started";
@@ -183,7 +182,7 @@ export function RequirementItem({
         <span className="font-semibold text-slate-500">Evidence</span>
         <span
           className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-            req.evidenceCount > 0
+            evidenceSatisfied(req)
               ? "bg-emerald-50 text-emerald-700"
               : idleOptional || dropped
                 ? "bg-slate-100 text-slate-500"
@@ -191,8 +190,8 @@ export function RequirementItem({
           }`}
         >
           {idleOptional ? "required if pursued" : "required"} ·{" "}
-          {req.evidenceSpecs.length > 0
-            ? `${docs.provided} of ${req.evidenceSpecs.length} documents`
+          {req.docsDue > 0
+            ? `${req.docsProvided} of ${req.docsDue} documents due`
             : `${req.evidenceCount} attached`}
         </span>
         {dropped ? null : (

@@ -110,6 +110,14 @@ export function Wizard({ versions }: { versions: VersionOption[] }) {
                 <input name="location" placeholder="Riyadh, KSA" className="input" />
               </Field>
             </div>
+            <Field label="Stage">
+              {/* Decides which of the manual's listed documents are due now;
+                  changeable later from the project overview. */}
+              <select name="stage" defaultValue="design" className="input">
+                <option value="design">Design — design-stage documents due</option>
+                <option value="construction">Construction — all documents due</option>
+              </select>
+            </Field>
           </div>
         </section>
 

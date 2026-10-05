@@ -128,16 +128,31 @@ The thresholds are stored on the rating-system version
 
 ![catalog admin rating levels](./evidence/after-admin-rating-levels.png)
 
-### A catalog discrepancy to review
+### Why the points read 131, not 130
 
-The credit Totals in the catalog sum to 131, but the manual's Full Scope total
-is 130. The three credits with no Total in the catalog were checked against
-the PDF and are right (HC-13 = 1, HC-15 = 2, PMM-03 = 2). So the extra point is
-in another credit's Total.
+The catalog is correct; the gap comes from how the points are added up.
 
-The dial scales to the manual's 130. The targeted range is a straight sum of
-the catalog, so it shows the extra point (…–131) until the catalog is
-corrected.
+- **Points depend on the building type.** The manual's applicability table
+  (Table 2) assigns each credit's points per building type. HC-07 Daylight is
+  worth 2 for offices but 3 for healthcare; HC-13 Access for All is worth
+  nothing for warehouses.
+- **The catalog already holds that table.** The parser stored it for every
+  credit in `catalog_credit.applicability`.
+- **Every building type sums to exactly 130.** At Full Scope this holds for
+  educational institutions, offices, retail, warehouses, hospitality, mosques
+  and healthcare.
+- **The 131 is the reference totals added up.** The "Total" on each credit's
+  page is one reference allocation, and those totals sum to 131. Every
+  credit's Total was checked against the PDF and matches.
+
+The dial and the export add up those reference totals because a project does
+not record which of the seven building types it is. The wizard's "Type" is free
+text. The dial scales to the manual's 130, but the targeted and available spans
+show the 131.
+
+The proper fix is a building-type choice on the project. Points and
+applicability would then come from its column, and inapplicable credits would
+drop out (9 do for warehouses). That is not built yet.
 
 ### Checks
 

@@ -21,7 +21,7 @@ import {
   RequiredDocuments,
   type DocSection,
 } from "@/components/EvidenceChecklist";
-import { documentScope } from "@/lib/evidence";
+import { documentScope, parseStage } from "@/lib/evidence";
 import { SaveCreditButton } from "./SaveCreditButton";
 import { groupByOption, pathStates, type PathState } from "@/lib/option-group";
 import { OptionGroup } from "@/components/OptionGroup";
@@ -131,6 +131,7 @@ export default async function CreditDetailPage({
         <RequiredDocuments
           sections={sections}
           setAside={setAside}
+          stage={parseStage(project.stage)}
           projectId={id}
           code={credit.code}
           uploadAction={uploadEvidence}

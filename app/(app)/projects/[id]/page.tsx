@@ -10,8 +10,10 @@ import { CreditsIcon, FileIcon, UploadIcon } from "@/components/icons";
 import { getProject, getProjectCredits, getProjectOverview } from "@/lib/data";
 import { TierGauge } from "@/components/ProgressDial";
 import { formatSpan } from "@/lib/tiers";
-import { setProjectTargetTier } from "../actions";
+import { setProjectStage, setProjectTargetTier } from "../actions";
 import { TargetTierForm } from "./_components/TargetTierForm";
+import { StageForm } from "./_components/StageForm";
+import { parseStage, type ProjectStage } from "@/lib/evidence";
 
 export default async function ProjectOverviewPage({
   params,
@@ -95,6 +97,7 @@ export default async function ProjectOverviewPage({
 
           <CertificationProgress
             projectId={id}
+            stage={parseStage(project.stage)}
             score={overview.score}
             targetedCredits={credits.filter((c) => c.targeted).length}
             totalCredits={credits.length}
@@ -163,11 +166,13 @@ export default async function ProjectOverviewPage({
 /** The project dial (V2 feedback row 11): points against rating levels. */
 function CertificationProgress({
   projectId,
+  stage,
   score,
   targetedCredits,
   totalCredits,
 }: {
   projectId: string;
+  stage: ProjectStage;
   score: Awaited<ReturnType<typeof getProjectOverview>>["score"];
   targetedCredits: number;
   totalCredits: number;
@@ -182,14 +187,17 @@ function CertificationProgress({
         <h2 className="text-sm font-semibold text-slate-800">
           Certification progress
         </h2>
-        {thresholds.length > 0 ? (
-          <TargetTierForm
-            projectId={projectId}
-            thresholds={thresholds}
-            current={target?.tier ?? null}
-            action={setProjectTargetTier}
-          />
-        ) : null}
+        <div className="flex flex-wrap items-center gap-4">
+          <StageForm projectId={projectId} stage={stage} action={setProjectStage} />
+          {thresholds.length > 0 ? (
+            <TargetTierForm
+              projectId={projectId}
+              thresholds={thresholds}
+              current={target?.tier ?? null}
+              action={setProjectTargetTier}
+            />
+          ) : null}
+        </div>
       </div>
 
       {thresholds.length === 0 ? (

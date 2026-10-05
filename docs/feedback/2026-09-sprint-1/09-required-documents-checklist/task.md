@@ -176,12 +176,49 @@ Each requirement row in the checklist now carries a compact chip ("required ·
 
 ![W-02: optional rows listed, not counted](./evidence/after-v2-w02-optional-not-counted.png)
 
-### Still not wired into scoring
+### Documents now gate completion
 
-As before, a credit can reach Completed without every listed document being
-provided: requirement status needs a value plus at least one file. W-02 above is
-Completed while its box shows 0 of 2. Making the document count gate completion
-is a scoring change that needs its own decision.
+Added the same day, after Hadi's review. A requirement now completes only when
+every listed document **due at the project's stage** has a file attached
+against it.
+
+**The project has a stage.** It is set in the wizard and changeable from the
+overview's Certification progress card. Existing projects start at Design.
+
+| Stage | Documents due | Documents listed but not due |
+|---|---|---|
+| Design | design-stage | construction-stage, shown dimmed as "due later, not required yet" |
+| Construction | every listed document | none |
+
+- **Untagged documents.** A document with no stage tag in the extract is always
+  due.
+- **Other files never count.** "Other files" and credit-level additional
+  attachments never stand in for a listed document.
+- **No listed documents.** Requirements whose manual entry lists no documents
+  (6 of 99) keep the old rule: at least one file.
+- **Counts.** The box and each requirement now count only due documents
+  ("0 of 1 due"). The missing-evidence filter, dashboard counts and assistant
+  ("1 of 2 documents due provided") all follow the same rule.
+
+![W-02 at design stage: #4's design document due](./evidence/after-gate-w02-design-due.png)
+
+![W-02 at construction stage](./evidence/after-gate-w02-construction-due.png)
+
+**Browser check** on W-02 in the Jeddah project:
+
+1. W-02 had been Completed with only an "other" file on #4. It dropped to In
+   Progress (0 of 1 due).
+2. Attaching against #4's design-stage document completed it again.
+3. Switching the project to Construction reopened it (1 of 2 due), and it
+   joined the missing-evidence filter.
+4. Switching back to Design completed it again.
+
+Also checked:
+
+- PMM-03 stays In Progress at 1 of 2 due;
+- no console errors, no 5xx.
+
+Migration `0007` adds `project.stage`.
 
 ### Checks
 

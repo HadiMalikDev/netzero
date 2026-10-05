@@ -96,9 +96,10 @@ Earned points and Status.
 
 ### Notes
 
-- **The extra point.** Available and targeted totals show the catalog's sum
-  (…–131), one more than the manual's 130. That is the catalog discrepancy
-  recorded under row 11, and it will correct itself once the catalog is fixed.
+- **The extra point.** Available and targeted totals show 131, one more than
+  the manual's 130. They add up each credit's reference Total, because the
+  project does not yet record its building type. The catalog itself is
+  correct; see row 11's notes.
 - **No file to clean up.** The file is generated per request by
   `GET /api/projects/[id]/export` (exceljs) and nothing is written to disk.
   Signed out it returns 401; an unknown or other-workspace project returns 404.

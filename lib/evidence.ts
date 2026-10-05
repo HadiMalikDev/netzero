@@ -22,6 +22,40 @@ export function splitBySpec(specs: string[], attachments: EvidenceAttachment[]) 
   return { bySpec, unassigned, provided };
 }
 
+export type ProjectStage = "design" | "construction";
+
+export function parseStage(raw: unknown): ProjectStage {
+  return raw === "construction" ? "construction" : "design";
+}
+
+/**
+ * Which listed documents are due now (index-aligned with evidence_specs). At
+ * design stage, construction-stage documents are listed but not yet due; at
+ * construction stage everything is. A document with no stage tag is always due
+ * — the safe reading when the extract did not say.
+ */
+export function docGates(
+  stages: (string | null)[],
+  projectStage: ProjectStage,
+): boolean[] {
+  return stages.map((s) => projectStage === "construction" || s !== "construction");
+}
+
+/** Due documents, and how many of them have a file against them. */
+export function docsDueProvided(
+  gates: boolean[],
+  bySpec: Map<number, EvidenceAttachment[]>,
+): { due: number; provided: number } {
+  let due = 0;
+  let provided = 0;
+  gates.forEach((g, i) => {
+    if (!g) return;
+    due++;
+    if ((bySpec.get(i)?.length ?? 0) > 0) provided++;
+  });
+  return { due, provided };
+}
+
 export type DocTag = "pursuing" | "either" | "optional";
 
 /**

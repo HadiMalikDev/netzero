@@ -28,6 +28,7 @@ import {
   type CreditView,
 } from "@/lib/data";
 import { parseThresholds } from "@/lib/tiers";
+import { parseStage } from "@/lib/evidence";
 import { groupByOption } from "@/lib/option-group";
 
 const UPLOAD_ROOT = ".data/uploads";
@@ -51,6 +52,7 @@ export async function createProjectFromCatalog(formData: FormData): Promise<void
       (String(formData.get("location") ?? "").trim() || null) as string | null,
     rsVersionId,
     targetTier: await validTier(rsVersionId, formData.get("targetTier")),
+    stage: parseStage(formData.get("stage")),
   });
 
   const credits = await db
@@ -121,6 +123,22 @@ export async function setProjectTargetTier(formData: FormData): Promise<void> {
   await db
     .update(projects)
     .set({ targetTier: await validTier(project.rsVersionId, formData.get("targetTier")) })
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, WORKSPACE_ID)));
+  revalidateProject(projectId);
+}
+
+/**
+ * Set the project's stage. It decides which listed documents are due, so it
+ * moves requirement and credit status: at construction stage the
+ * construction-stage documents start to gate completion.
+ */
+export async function setProjectStage(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  if (!projectId) throw new Error("missing ids");
+  await db
+    .update(projects)
+    .set({ stage: parseStage(formData.get("stage")) })
     .where(and(eq(projects.id, projectId), eq(projects.workspaceId, WORKSPACE_ID)));
   revalidateProject(projectId);
 }

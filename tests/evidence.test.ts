@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { documentScope, splitBySpec } from "@/lib/evidence";
+import {
+  docGates,
+  docsDueProvided,
+  documentScope,
+  parseStage,
+  splitBySpec,
+} from "@/lib/evidence";
 import type { EvidenceAttachment } from "@/lib/data";
 
 const file = (id: string, evidenceSpecIndex: number | null): EvidenceAttachment => ({
@@ -49,5 +55,28 @@ describe("documentScope", () => {
     expect(documentScope(mandatory, "open")).toEqual({ show: true, counted: true, tag: "either" });
     expect(documentScope(mandatory, "chosen").tag).toBe("pursuing");
     expect(documentScope(mandatory, "dropped").show).toBe(false);
+  });
+});
+
+describe("docGates", () => {
+  const stages = ["design", "construction", null];
+
+  it("at design stage, construction documents are listed but not due", () => {
+    expect(docGates(stages, "design")).toEqual([true, false, true]);
+  });
+
+  it("at construction stage every document is due", () => {
+    expect(docGates(stages, "construction")).toEqual([true, true, true]);
+  });
+
+  it("an unknown stage value reads as design", () => {
+    expect(parseStage("whatever")).toBe("design");
+    expect(parseStage("construction")).toBe("construction");
+  });
+
+  it("counts due documents and the due ones provided", () => {
+    const { bySpec } = splitBySpec(["a", "b", "c"], [file("x", 1), file("y", 2)]);
+    expect(docsDueProvided(docGates(stages, "design"), bySpec)).toEqual({ due: 2, provided: 1 });
+    expect(docsDueProvided(docGates(stages, "construction"), bySpec)).toEqual({ due: 3, provided: 2 });
   });
 });

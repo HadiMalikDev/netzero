@@ -46,6 +46,7 @@ async function readBack() {
   const wb = buildScorecard({
     projectName: "Jeddah Central Oceanarium",
     ratingSystem: "Mostadam commercial D+C (2019)",
+    stage: "design",
     credits,
     score,
     generatedAt: new Date("2026-10-05T10:00:00Z"),
@@ -63,8 +64,9 @@ describe("buildScorecard", () => {
   it("writes the header block and column headings", async () => {
     const rows = await readBack();
     expect(rows[1]).toEqual(["Project", "Jeddah Central Oceanarium"]);
-    expect(rows[3]).toEqual(["Target level", "Gold (85+ points)"]);
-    expect(rows[7]).toEqual([...SCORECARD_COLUMNS]);
+    expect(rows[3]).toEqual(["Stage", "Design"]);
+    expect(rows[4]).toEqual(["Target level", "Gold (85+ points)"]);
+    expect(rows[8]).toEqual([...SCORECARD_COLUMNS]);
   });
 
   it("lists every credit, ranges as text and single values as numbers", async () => {

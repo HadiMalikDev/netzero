@@ -22,6 +22,8 @@ const STATUS_LABEL: Record<Status, string> = {
 export interface ScorecardInput {
   projectName: string;
   ratingSystem: string;
+  /** design | construction — which listed documents count as due. */
+  stage: string;
   credits: CreditView[];
   score: ProjectScore;
   generatedAt: Date;
@@ -49,7 +51,7 @@ export function buildScorecard(input: ScorecardInput): ExcelJS.Workbook {
   wb.creator = "NetZero";
   wb.created = input.generatedAt;
   const ws = wb.addWorksheet("Scorecard", {
-    views: [{ state: "frozen", ySplit: 8 }],
+    views: [{ state: "frozen", ySplit: 9 }],
   });
   ws.columns = [
     { width: 10 },
@@ -72,6 +74,7 @@ export function buildScorecard(input: ScorecardInput): ExcelJS.Workbook {
   const header: [string, string][] = [
     ["Project", input.projectName],
     ["Rating system", input.ratingSystem],
+    ["Stage", input.stage === "construction" ? "Construction" : "Design"],
     [
       "Target level",
       score.target ? `${score.target.tier} (${score.target.min}+ points)` : "Not set",
@@ -88,7 +91,7 @@ export function buildScorecard(input: ScorecardInput): ExcelJS.Workbook {
     const r = ws.addRow([k, v]);
     r.getCell(1).font = { bold: true };
   }
-  // Row 8: column headings (the frozen pane sits under it).
+  // Row 9: column headings (the frozen pane sits under it).
   const head = ws.addRow([...SCORECARD_COLUMNS]);
   head.font = { bold: true, color: { argb: "FFFFFFFF" } };
   head.eachCell((c) => {

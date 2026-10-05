@@ -3,6 +3,7 @@ import {
   blockingRequirements,
   deriveCreditStatus,
   deriveRequirementStatus,
+  evidenceSatisfied,
   hasValue,
   optionalFlags,
   missingEvidenceRequirements,
@@ -310,6 +311,39 @@ describe("a chosen either/or path", () => {
       { status: "not_started" as const, optionGroup: "opts", planned: false, seq: 2, requiresEvidence: true, evidenceCount: 0 },
     ];
     expect(blockingRequirements(reqs).map((r) => r.seq)).toEqual([1]);
+    expect(missingEvidenceRequirements(reqs).map((r) => r.seq)).toEqual([1]);
+  });
+});
+
+describe("documents due gate completion", () => {
+  const filled = { ...base, metricType: "DESCRIPTIVE", valueText: "Plan issued.", requiresEvidence: true };
+
+  it("one of two due documents provided => in_progress, not completed", () => {
+    expect(
+      deriveRequirementStatus({ ...filled, evidenceCount: 3, docsDue: 2, docsProvided: 1 }),
+    ).toBe("in_progress");
+  });
+
+  it("every due document provided => completed", () => {
+    expect(
+      deriveRequirementStatus({ ...filled, evidenceCount: 2, docsDue: 2, docsProvided: 2 }),
+    ).toBe("completed");
+  });
+
+  it("files that claim no document do not stand in for a due one", () => {
+    expect(evidenceSatisfied({ requiresEvidence: true, evidenceCount: 4, docsDue: 1, docsProvided: 0 })).toBe(false);
+  });
+
+  it("no listed documents => at least one file, as before", () => {
+    expect(evidenceSatisfied({ requiresEvidence: true, evidenceCount: 1, docsDue: 0 })).toBe(true);
+    expect(evidenceSatisfied({ requiresEvidence: true, evidenceCount: 0, docsDue: 0 })).toBe(false);
+  });
+
+  it("missing evidence lists a blocking row with a due document outstanding", () => {
+    const reqs = [
+      { seq: 1, status: "in_progress" as const, requiresEvidence: true, evidenceCount: 2, docsDue: 3, docsProvided: 2 },
+      { seq: 2, status: "completed" as const, requiresEvidence: true, evidenceCount: 1, docsDue: 1, docsProvided: 1 },
+    ];
     expect(missingEvidenceRequirements(reqs).map((r) => r.seq)).toEqual([1]);
   });
 });

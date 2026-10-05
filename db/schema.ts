@@ -260,6 +260,12 @@ export const projects = pgTable("project", {
   status: text("status").notNull().default("in_progress"),
   /** The rating level being pursued (a tier name from the version's thresholds). */
   targetTier: text("target_tier"),
+  /**
+   * design | construction. Decides which of the manual's listed documents are
+   * due now: construction-stage documents only gate completion once the
+   * project is at construction stage.
+   */
+  stage: text("stage").notNull().default("design"),
   createdAt: integer("created_at").notNull().default(now),
 });
 
