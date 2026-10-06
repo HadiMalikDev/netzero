@@ -146,6 +146,12 @@ describe("docState", () => {
     expect(docState(true, [f("partially_met")])).toBe("provided_with_gaps");
     expect(docState(true, [f("met"), f("not_met")])).toBe("provided_with_gaps");
   });
+
+  it("an uncounted (optional, untouched) row is Not pursued, never Missing", () => {
+    expect(docState(true, [], false)).toBe("not_pursued");
+    expect(docState(false, [], false)).toBe("not_pursued");
+    expect(docState(true, [f()], false)).toBe("provided");
+  });
 });
 
 describe("formatValue", () => {
@@ -299,6 +305,7 @@ describe("buildChecklist — either/or and optional rows", () => {
     if (second.kind !== "requirement") throw new Error("expected a requirement");
     expect(second.block.tag).toBe("optional");
     expect(second.block.counted).toBe(false);
+    expect(second.block.docs[0].state).toBe("not_pursued");
     expect(m.summary.listed).toBe(1);
   });
 });

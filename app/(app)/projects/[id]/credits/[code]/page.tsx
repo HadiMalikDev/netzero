@@ -15,6 +15,7 @@ import {
 } from "../../../actions";
 import { CreditRing } from "@/components/ProgressDial";
 import { TargetedToggle } from "@/components/TargetedToggle";
+import { DownloadChecklistLink } from "@/components/DownloadChecklistLink";
 import { creditSpan } from "@/lib/tiers";
 import { RequirementItem } from "./RequirementItem";
 import {
@@ -97,6 +98,7 @@ export default async function CreditDetailPage({
           </div>
           <div className="flex shrink-0 items-center gap-3">
             <StatusPill status={credit.status} />
+            <DownloadChecklistLink projectId={id} code={credit.code} />
             <TargetedToggle
               projectId={id}
               projectCreditId={credit.projectCreditId}

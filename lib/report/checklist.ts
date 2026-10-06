@@ -23,13 +23,15 @@ import { guidanceLists, type GuidanceList } from "./guidance-items";
  *    (the same rule lib/ai/evidence-review.ts applies to status).
  */
 
-export type DocState = "provided" | "provided_with_gaps" | "missing" | "not_due";
+export type DocState = "provided" | "provided_with_gaps" | "missing" | "not_due" | "not_pursued";
 
 export const DOC_STATE_LABEL: Record<DocState, string> = {
   provided: "Provided",
   provided_with_gaps: "Provided — AI read found gaps",
   missing: "Missing",
   not_due: "Not due yet",
+  /** An optional requirement nobody has started: nothing is owed yet, so nothing is "missing". */
+  not_pursued: "Not pursued yet",
 };
 
 /** The screen's wording for each verdict (components/ReviewNote.tsx). */
@@ -179,8 +181,16 @@ function toFile(a: EvidenceAttachment): ChecklistFile {
   };
 }
 
-export function docState(due: boolean, files: ChecklistFile[]): DocState {
-  if (files.length === 0) return due ? "missing" : "not_due";
+/**
+ * `counted` is false for an optional requirement nobody has started: its
+ * documents are listed but nothing is owed, so an absent file is "not pursued",
+ * never "missing". A file attached early still reads Provided.
+ */
+export function docState(due: boolean, files: ChecklistFile[], counted = true): DocState {
+  if (files.length === 0) {
+    if (!counted) return "not_pursued";
+    return due ? "missing" : "not_due";
+  }
   const gaps = files.some((f) => f.review && GAP_VERDICTS.has(f.review.verdict ?? ""));
   return gaps ? "provided_with_gaps" : "provided";
 }
@@ -223,7 +233,7 @@ function requirementBlock(
       text,
       stage: req.evidenceStages[index] ?? null,
       due,
-      state: docState(due, docFiles),
+      state: docState(due, docFiles, counted),
       files: docFiles,
     };
   });

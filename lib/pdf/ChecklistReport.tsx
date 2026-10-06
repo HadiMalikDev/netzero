@@ -49,8 +49,11 @@ const s = {
       fontSize: 8.5,
       color: C.body,
     },
+    // react-pdf inherits the page's *computed* line height (9pt × 1.4), so any
+    // larger text needs its own lineHeight or lines overlap.
     h2: {
       fontSize: 12,
+      lineHeight: 1.3,
       fontFamily: "Helvetica-Bold",
       color: C.ink,
       marginTop: 14,
@@ -72,15 +75,17 @@ const s = {
       borderRadius: 4,
     },
     tileLast: { marginRight: 0 },
-    tileValue: { fontSize: 16, fontFamily: "Helvetica-Bold", color: C.ink },
-    tileLabel: { fontSize: 7.5, textTransform: "uppercase", color: C.faint, fontFamily: "Helvetica-Bold" },
-    // requirement
-    req: {
-      marginBottom: 10,
-      borderWidth: 1,
-      borderColor: C.line,
-      borderRadius: 4,
-      padding: 9,
+    tileValue: { fontSize: 16, lineHeight: 1.2, fontFamily: "Helvetica-Bold", color: C.ink },
+    tileLabel: { fontSize: 7.5, lineHeight: 1.3, textTransform: "uppercase", color: C.faint, fontFamily: "Helvetica-Bold", marginTop: 2 },
+    tileNote: { fontSize: 8, color: C.muted, marginTop: 5 },
+    // requirement — a ruled section, not a bordered card: the rule travels with
+    // the unbreakable header, so a block can never start as a bare border at a
+    // page foot (react-pdf splits a wrapping view wherever the page ends).
+    req: { marginBottom: 12 },
+    reqHead: {
+      borderTopWidth: 1.5,
+      borderTopColor: C.line,
+      paddingTop: 8,
     },
     reqTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
     reqTitleWrap: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", flexShrink: 1, paddingRight: 8 },
@@ -148,7 +153,7 @@ const s = {
     gap: { fontSize: 8, color: C.amber, marginLeft: 6 },
     // choose / set aside
     choose: {
-      marginBottom: 10,
+      marginBottom: 12,
       padding: 9,
       borderWidth: 1,
       borderColor: "#c4b5fd",
@@ -177,6 +182,7 @@ const STATE_STYLE: Record<DocState, { color: string; bg: string; border: string 
   provided_with_gaps: { color: C.amber, bg: C.amberBg, border: "#fcd34d" },
   missing: { color: C.red, bg: C.redBg, border: "#fca5a5" },
   not_due: { color: C.muted, bg: C.panel, border: C.line },
+  not_pursued: { color: C.muted, bg: C.panel, border: C.line },
 };
 
 const STATUS_STYLE: Record<string, { color: string; bg: string; border: string }> = {
@@ -245,10 +251,11 @@ function DocRows({ docs }: { docs: DocRow[] }) {
                 <View style={[s.td, s.colBox]}>
                   <StateBox state={d.state} />
                 </View>
-                <Text style={[s.td, s.colDoc, d.state === "not_due" ? s.dim : {}]}>{safe(d.text)}</Text>
+                <Text style={[s.td, s.colDoc, d.state === "not_due" || d.state === "not_pursued" ? s.dim : {}]}>
+                  {safe(d.text)}
+                </Text>
                 <View style={[s.td, s.colStage]}>
                   <Text style={s.stage}>{d.stage ? safe(d.stage) : "any"}</Text>
-                  {!d.due ? <Text style={[s.stage, s.dim]}>not due yet</Text> : null}
                 </View>
                 <View style={[s.td, s.colState]}>
                   <Chip label={DOC_STATE_LABEL[d.state]} tone={tone} />
@@ -270,30 +277,33 @@ function DocRows({ docs }: { docs: DocRow[] }) {
 }
 
 function Requirement({ block }: { block: RequirementBlock }) {
+  // The block may split across pages at a document row; its header never does.
   return (
     <View style={s.req} wrap>
-      <View style={s.reqTop}>
-        <View style={s.reqTitleWrap}>
-          <Text style={s.seq}>#{block.seq}</Text>
-          {block.title ? <Text style={s.reqTitle}>{safe(block.title)}</Text> : null}
-          {block.tag === "pursuing" ? <Pill variant="points">Pursuing this path</Pill> : null}
-          {block.tag === "optional" ? (
-            <Pill>{block.counted ? "Optional · pursuing" : "Optional · only if pursued"}</Pill>
-          ) : null}
+      <View style={s.reqHead} wrap={false}>
+        <View style={s.reqTop}>
+          <View style={s.reqTitleWrap}>
+            <Text style={s.seq}>#{block.seq}</Text>
+            {block.title ? <Text style={s.reqTitle}>{safe(block.title)}</Text> : null}
+            {block.tag === "pursuing" ? <Pill variant="points">Pursuing this path</Pill> : null}
+            {block.tag === "optional" ? (
+              <Pill>{block.counted ? "Optional · pursuing" : "Optional · only if pursued"}</Pill>
+            ) : null}
+          </View>
+          <Chip label={block.statusLabel} tone={STATUS_STYLE[block.status] ?? STATE_STYLE.not_due} />
         </View>
-        <Chip label={block.statusLabel} tone={STATUS_STYLE[block.status] ?? STATE_STYLE.not_due} />
-      </View>
-      <Text style={s.reqText}>{safe(block.text)}</Text>
-      <View style={s.kv}>
-        <Text style={s.k}>Recorded value</Text>
-        <Text style={s.v}>{block.value ? safe(block.value) : "—"}</Text>
-      </View>
-      {block.note ? (
+        <Text style={s.reqText}>{safe(block.text)}</Text>
         <View style={s.kv}>
-          <Text style={s.k}>Note</Text>
-          <Text style={s.v}>{safe(block.note)}</Text>
+          <Text style={s.k}>Recorded value</Text>
+          <Text style={s.v}>{block.value ? safe(block.value) : "—"}</Text>
         </View>
-      ) : null}
+        {block.note ? (
+          <View style={s.kv}>
+            <Text style={s.k}>Note</Text>
+            <Text style={s.v}>{safe(block.note)}</Text>
+          </View>
+        ) : null}
+      </View>
       {block.docs.length ? (
         <DocRows docs={block.docs} />
       ) : (
@@ -430,8 +440,14 @@ export function ChecklistReport({ model, images }: ChecklistReportProps) {
             </View>
           ))}
         </View>
+        {model.sections.some((sec) => sec.kind === "requirement" && !sec.block.counted) ? (
+          <Text style={s.tileNote}>
+            Counts cover the requirements being pursued. Optional requirements nobody has started
+            are listed below but not counted, as on the credit screen.
+          </Text>
+        ) : null}
 
-        <Text style={s.h2}>
+        <Text style={s.h2} minPresenceAhead={90}>
           Requirements and required documents
           <Text style={s.h2Meta}>  Project at {project.stageLabel} stage</Text>
         </Text>
