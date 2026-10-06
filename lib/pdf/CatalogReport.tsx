@@ -1,25 +1,6 @@
 import React from "react";
-import {
-  Document,
-  Page,
-  Text,
-  View,
-  StyleSheet,
-  Font,
-} from "@react-pdf/renderer";
-
-/**
- * Let long unbreakable tokens (UUID filenames, URLs in reference text) wrap
- * inside narrow cells instead of overflowing; normal words pass through intact.
- * MUST be called from the same module that calls `renderToBuffer` — the callback
- * binds to that entry's `@react-pdf` instance, so registering it here (a
- * different import) does not take effect. The route calls this before rendering.
- */
-export function registerPdfHyphenation(): void {
-  Font.registerHyphenationCallback((word) =>
-    word.length > 16 ? (word.match(/.{1,14}/g) ?? [word]) : [word],
-  );
-}
+import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { base, C, Footer, Pill, safe } from "./shared";
 import type {
   ExportCategory,
   ExportCredit,
@@ -33,85 +14,13 @@ import type { Applicability, EvidenceItem } from "@/lib/parser/types";
 /**
  * The extraction-review PDF: a read-only dump of a catalog version, laid out so
  * a third party can check it against the original manual page-by-page. Built
- * with @react-pdf/renderer's built-in Helvetica (no external fonts → offline,
- * deterministic). Rendered to a Buffer in the /api/catalog/[versionId]/pdf route.
+ * on the shared primitives in ./shared (Helvetica, `safe()`, page frame).
+ * Rendered to a Buffer in the /api/catalog/[versionId]/pdf route.
  */
 
-/**
- * The built-in Helvetica is WinAnsi-only — a glyph outside that set (e.g. ≤, ≥,
- * ✓, or any exotic char in the parsed manual text) has no width and makes
- * @react-pdf throw "unsupported number". `safe()` maps the common technical
- * symbols to ASCII and drops anything else that WinAnsi can't encode, so
- * arbitrary catalog text can never crash the render. Applied to every
- * DB-derived string.
- */
-const SYMBOL_MAP: Record<string, string> = {
-  "≤": "<=",
-  "≥": ">=",
-  "≈": "~",
-  "≠": "!=",
-  "×": "x",
-  "÷": "/",
-  "→": "->",
-  "←": "<-",
-  "↔": "<->",
-  "✓": "[ok]",
-  "✔": "[ok]",
-  "✗": "[x]",
-  "⚠": "[!]",
-  "√": "sqrt",
-  "∆": "delta",
-  "Δ": "delta",
-  "Ω": "ohm",
-  "∞": "inf",
-};
-// Codepoints > 0xFF that WinAnsi still encodes (punctuation in the 0x80–0x9F map).
-const WINANSI_EXTRA = new Set([
-  0x2013, 0x2014, 0x2018, 0x2019, 0x201a, 0x201c, 0x201d, 0x201e, 0x2020,
-  0x2021, 0x2022, 0x2026, 0x2030, 0x2039, 0x203a, 0x20ac, 0x2122, 0x0152,
-  0x0153, 0x0160, 0x0161, 0x0178, 0x017d, 0x017e, 0x0192, 0x02c6, 0x02dc,
-]);
-function safe(input: string | null | undefined): string {
-  if (!input) return "";
-  let out = "";
-  for (const ch of input) {
-    const mapped = SYMBOL_MAP[ch];
-    if (mapped != null) {
-      out += mapped;
-      continue;
-    }
-    const code = ch.codePointAt(0)!;
-    if (code <= 0xff || WINANSI_EXTRA.has(code)) out += ch;
-    else out += "?";
-  }
-  return out;
-}
-
-const C = {
-  ink: "#0f172a", // slate-900
-  body: "#334155", // slate-700
-  muted: "#64748b", // slate-500
-  faint: "#94a3b8", // slate-400
-  line: "#e2e8f0", // slate-200
-  panel: "#f8fafc", // slate-50
-  brand: "#0f766e", // teal-700 (accent)
-  brandBg: "#f0fdfa", // teal-50
-  amber: "#b45309", // amber-700
-  amberBg: "#fffbeb", // amber-50
-  red: "#b91c1c",
-  green: "#15803d",
-};
-
-const s = StyleSheet.create({
-  page: {
-    paddingTop: 44,
-    paddingBottom: 48,
-    paddingHorizontal: 44,
-    fontSize: 9,
-    fontFamily: "Helvetica",
-    color: C.body,
-    lineHeight: 1.4,
-  },
+const s = {
+  ...base,
+  ...StyleSheet.create({
   // cover
   coverWrap: { flexGrow: 1, justifyContent: "center" },
   coverKicker: {
@@ -129,23 +38,6 @@ const s = StyleSheet.create({
     marginBottom: 12,
   },
   coverSub: { fontSize: 13, color: C.muted, marginTop: 2, marginBottom: 24 },
-  metaGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    borderTopWidth: 1,
-    borderTopColor: C.line,
-    paddingTop: 16,
-    marginTop: 4,
-  },
-  metaCell: { width: "50%", marginBottom: 12, paddingRight: 12 },
-  metaLabel: {
-    fontSize: 8,
-    textTransform: "uppercase",
-    color: C.faint,
-    fontFamily: "Helvetica-Bold",
-    marginBottom: 2,
-  },
-  metaValue: { fontSize: 11, color: C.ink },
   howto: {
     marginTop: 18,
     padding: 12,
@@ -191,37 +83,6 @@ const s = StyleSheet.create({
   },
   creditSource: { fontSize: 8.5, color: C.muted, marginTop: 2 },
   sourceStrong: { fontFamily: "Helvetica-Bold", color: C.brand },
-  // generic pill
-  pill: {
-    fontSize: 7.5,
-    fontFamily: "Helvetica-Bold",
-    color: C.muted,
-    backgroundColor: C.panel,
-    borderWidth: 1,
-    borderColor: C.line,
-    borderRadius: 3,
-    paddingHorizontal: 4,
-    paddingVertical: 1.5,
-    marginLeft: 4,
-  },
-  pillKeystone: {
-    color: C.amber,
-    backgroundColor: C.amberBg,
-    borderColor: "#fcd34d",
-  },
-  pillPoints: {
-    color: C.brand,
-    backgroundColor: C.brandBg,
-    borderColor: "#99f6e4",
-  },
-  sectionLabel: {
-    fontSize: 8,
-    textTransform: "uppercase",
-    color: C.faint,
-    fontFamily: "Helvetica-Bold",
-    marginTop: 8,
-    marginBottom: 3,
-  },
   aim: { fontSize: 9, color: C.body },
   // reviewer note
   note: {
@@ -282,20 +143,6 @@ const s = StyleSheet.create({
     color: C.brand,
     fontFamily: "Helvetica-Bold",
   },
-  // sub-panel (limits / evidence / bands)
-  panel: {
-    marginTop: 4,
-    padding: 6,
-    backgroundColor: C.panel,
-    borderRadius: 3,
-  },
-  panelLabel: {
-    fontSize: 7.5,
-    fontFamily: "Helvetica-Bold",
-    color: C.muted,
-    marginBottom: 2,
-  },
-  li: { fontSize: 8.5, color: C.body, marginBottom: 1 },
   // table (bands / applicability)
   table: { marginTop: 4, borderWidth: 1, borderColor: C.line, borderRadius: 3 },
   tr: { flexDirection: "row" },
@@ -330,74 +177,11 @@ const s = StyleSheet.create({
     padding: 6,
     borderRadius: 3,
   },
-  reconOk: { backgroundColor: "#f0fdf4" },
-  reconBad: { backgroundColor: "#fef2f2" },
+  reconOk: { backgroundColor: C.greenBg },
+  reconBad: { backgroundColor: C.redBg },
   reconText: { fontSize: 8.5 },
-  // A4 content width is 595.28 − 2×44 ≈ 507. Fixed footer elements MUST carry
-  // explicit width AND height: a `fixed` + `render` box without them makes
-  // @react-pdf compute a non-finite offset across many pages and throw
-  // "unsupported number". Kept as two separately-positioned elements (a row
-  // wrapper around a render child triggers the same bug).
-  footerRule: {
-    position: "absolute",
-    bottom: 33,
-    left: 44,
-    width: 507,
-    height: 1,
-    backgroundColor: C.line,
-  },
-  footerLeft: {
-    position: "absolute",
-    bottom: 22,
-    left: 44,
-    width: 380,
-    height: 10,
-    fontSize: 7.5,
-    color: C.faint,
-  },
-  footerRight: {
-    position: "absolute",
-    bottom: 22,
-    right: 44,
-    width: 120,
-    height: 10,
-    textAlign: "right",
-    fontSize: 7.5,
-    color: C.faint,
-  },
-});
-
-function Footer({ versionId }: { versionId: string }) {
-  return (
-    <>
-      <View style={s.footerRule} fixed />
-      <Text style={s.footerLeft} fixed>
-        {versionId}
-      </Text>
-      <Text
-        style={s.footerRight}
-        fixed
-        render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-      />
-    </>
-  );
-}
-
-function Pill({
-  children,
-  variant,
-}: {
-  children: React.ReactNode;
-  variant?: "keystone" | "points";
-}) {
-  const extra =
-    variant === "keystone"
-      ? s.pillKeystone
-      : variant === "points"
-        ? s.pillPoints
-        : null;
-  return <Text style={extra ? [s.pill, extra] : s.pill}>{children}</Text>;
-}
+  }),
+};
 
 function EvidencePanel({ items }: { items: EvidenceItem[] }) {
   if (!items.length) return null;
@@ -762,7 +546,7 @@ export function CatalogReport({ data, generatedAt }: CatalogReportProps) {
             </Text>
           </View>
         </View>
-        <Footer versionId={versionId} />
+        <Footer left={versionId} />
       </Page>
 
       {/* Body */}
@@ -776,7 +560,7 @@ export function CatalogReport({ data, generatedAt }: CatalogReportProps) {
             <CategorySection key={cat.code} category={cat} />
           ))
         )}
-        <Footer versionId={versionId} />
+        <Footer left={versionId} />
       </Page>
     </Document>
   );

@@ -2,7 +2,8 @@ import type { NextRequest } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { currentUser } from "@/lib/auth/session";
 import { getVersionForExport } from "@/lib/catalog";
-import { CatalogReport, registerPdfHyphenation } from "@/lib/pdf/CatalogReport";
+import { CatalogReport } from "@/lib/pdf/CatalogReport";
+import { registerPdfHyphenation } from "@/lib/pdf/shared";
 
 // Registered here (the module that calls renderToBuffer) so the long-token
 // wrapping actually applies. See registerPdfHyphenation's note.
