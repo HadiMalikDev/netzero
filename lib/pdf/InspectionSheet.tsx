@@ -169,7 +169,8 @@ export function InspectionSheet({ model, images }: InspectionSheetProps) {
           </View>
         </View>
 
-        <View break>
+        {/* The photo table gets its own page; an empty note does not. */}
+        <View break={model.photos.length > 0} style={model.photos.length ? {} : { marginTop: 24 }}>
           <Text style={s.h2}>Photographs</Text>
           {model.photos.length === 0 ? (
             <Text style={[s.note, s.dim]}>
