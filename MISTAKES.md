@@ -137,3 +137,19 @@ re-read the select only after a reload, so it never saw the snap-back.
 **Prevention:** Save-on-change controls hold their value in state and call the action from a
 transition (`AutoSaveSelect`), not via form auto-submit. When verifying a control that saves in
 place, read the control's own value right after the save, without reloading.
+
+## 2026-10-07 — Shipped a PDF with "????" where the manual's equations were
+
+**What happened:** Hadi opened the downloaded E-01 compliance checklist and found strings of
+question marks where the manual's U-value and R-value equations should be. The WinAnsi filter
+`safe()` wrote "?" for every character Helvetica cannot encode, and the manual sets its equations
+in Unicode mathematical-italic letters (𝑅 − 𝑣𝑎𝑙𝑢𝑒), so whole formulas became "? ? ?????". I had
+seen this on page 3 of the E-01 render, noted it as "stored text, faithful" and moved on.
+
+**Root cause:** Treated a visible defect in the output as a data problem because the bytes were
+the catalog's. The reader does not care whose bytes they are. A compatibility normalisation
+(`NFKC`) folds those letters back to plain text, which was a two-line fix.
+
+**Prevention:** When a check of real output shows something a reader would object to, fix it or
+raise it explicitly in the handover; never file it under "faithful to the data" in a doc the
+client has to go looking for. A "?" in client-facing output is always a defect to chase.

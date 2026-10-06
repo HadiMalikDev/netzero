@@ -297,7 +297,7 @@ route was called with `curl` and a session cookie minted the way
 | A started optional row counted and Completed (W-02 #4) | pass |
 | Six control measures and seven CEMP sections printed as blank boxes | pass |
 | Real PNG embedded; junk "PNG" reads unreadable | pass |
-| ≤ in text renders as `<=`; `µ` kept; math glyphs in E-01's stored guidance become `?` (stored text, unchanged) | pass |
+| ≤ in text renders as `<=`; `µ` kept; E-01's equations, set by the manual in mathematical-italic letters, fold to plain text ("R - value (m2K W/ ) = Material Thickness (m) …"), no `?` anywhere in the PDF | pass, after Hadi's review (below) |
 | Catalog review PDF byte-identical after the shared-primitives refactor | pass |
 | `pnpm test` | 162 passing, 9 skipped (database tests off) |
 | `tsc --noEmit` | clean |
@@ -310,9 +310,23 @@ route was called with `curl` and a session cookie minted the way
   faithfully: W-02 #3 begins "3 The irrigation…" and ends "2 Landscaping";
   PMM-03 #1 is cut at "requirements in the". Catalog data, not this feature.
 - E-01's stored guidance has "generally 101 accepted" (a page number inside
-  a sentence) and the manual's equations as math glyphs. The page-number
-  rule only strips a number after a sentence end, a colon or a marker, on
-  purpose, so "equals 2 Air Changes" survives.
+  a sentence). The page-number rule only strips a number after a sentence
+  end, a colon or a marker, on purpose, so "equals 2 Air Changes" survives.
+
+### Hadi's review — question marks in E-01
+
+Hadi opened the E-01 PDF and found strings of `?` where the manual's R-value
+and U-value equations should be. The manual sets those in Unicode
+mathematical-italic letters, which Helvetica cannot encode, and `safe()`
+wrote `?` for each. I had seen it and filed it as "stored text"; that was
+wrong, and is logged in `MISTAKES.md`.
+
+Fixed in `lib/pdf/shared.tsx`, so the catalog review PDF benefits too: a
+character Helvetica cannot set is first folded with Unicode compatibility
+normalisation (𝑅 → R, ℎ → h), and the equation symbols `−`, `⁄` and `∑` are
+mapped by hand. A glyph that still cannot be set stays `?`, by design. The
+re-downloaded E-01 has no `?` in it (`tests/pdf-safe.test.ts` checks the
+whole stored E-01 guidance for that).
 - Postgres.app has a per-app permission dialog for trust connections. A dev
   server started with a shell `&` got every query rejected; started through
   the harness it worked. Noted for the next session.

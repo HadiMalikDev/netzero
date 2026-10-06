@@ -49,6 +49,10 @@ const SYMBOL_MAP: Record<string, string> = {
   "Δ": "delta",
   "Ω": "ohm",
   "∞": "inf",
+  "−": "-", // U+2212 minus, as in the manual's equations
+  "⁄": "/", // U+2044 fraction slash
+  "∑": "sum",
+  "∙": "·",
 };
 // Codepoints > 0xFF that WinAnsi still encodes (punctuation in the 0x80–0x9F map).
 const WINANSI_EXTRA = new Set([
@@ -56,6 +60,8 @@ const WINANSI_EXTRA = new Set([
   0x2021, 0x2022, 0x2026, 0x2030, 0x2039, 0x203a, 0x20ac, 0x2122, 0x0152,
   0x0153, 0x0160, 0x0161, 0x0178, 0x017d, 0x017e, 0x0192, 0x02c6, 0x02dc,
 ]);
+const winAnsi = (code: number) => code <= 0xff || WINANSI_EXTRA.has(code);
+
 export function safe(input: string | null | undefined): string {
   if (!input) return "";
   let out = "";
@@ -66,7 +72,16 @@ export function safe(input: string | null | undefined): string {
       continue;
     }
     const code = ch.codePointAt(0)!;
-    if (code <= 0xff || WINANSI_EXTRA.has(code)) out += ch;
+    if (winAnsi(code)) {
+      out += ch;
+      continue;
+    }
+    // The manual sets its equations in Unicode "mathematical italic" letters
+    // (𝑅 − 𝑣𝑎𝑙𝑢𝑒 → R - value). Compatibility normalisation folds those, and
+    // the like (ℎ, fullwidth forms), back to plain letters. Only taken when
+    // every resulting char is encodable; otherwise the glyph is unknown.
+    const folded = ch.normalize("NFKC");
+    if (folded !== ch && [...folded].every((c) => winAnsi(c.codePointAt(0)!))) out += folded;
     else out += "?";
   }
   return out;
