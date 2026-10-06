@@ -194,6 +194,8 @@ export interface CreditView {
   isKeystone: boolean;
   pointsRaw: string | null;
   aim: string | null;
+  /** The manual's supporting guidance, as stored; the checklist PDF lists from it. */
+  supportingGuidance: string | null;
   pageStart: number | null;
   pageEnd: number | null;
   status: Status;
@@ -231,6 +233,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       isKeystone: catalogCredits.isKeystone,
       pointsRaw: catalogCredits.pointsRaw,
       aim: catalogCredits.aim,
+      supportingGuidance: catalogCredits.supportingGuidance,
       pageStart: catalogCredits.sourcePageStart,
       pageEnd: catalogCredits.sourcePageEnd,
     })
@@ -423,6 +426,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       isKeystone: p.isKeystone,
       pointsRaw: p.pointsRaw,
       aim: p.aim,
+      supportingGuidance: p.supportingGuidance,
       pageStart: p.pageStart,
       pageEnd: p.pageEnd,
       status: deriveCreditStatus(reqs),

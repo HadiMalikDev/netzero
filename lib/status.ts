@@ -25,6 +25,13 @@ import { mapByOption } from "./option-group";
 
 export type Status = "not_started" | "in_progress" | "completed";
 
+/** The wording every export uses for a status (the screen pill matches it). */
+export const STATUS_LABEL: Record<Status, string> = {
+  completed: "Completed",
+  in_progress: "In Progress",
+  not_started: "Not Started",
+};
+
 export interface CreditStatusReq {
   status: Status;
   optionGroup?: string | null;
