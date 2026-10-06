@@ -256,6 +256,31 @@ function label(r: Pick<RequirementView, "seq" | "title" | "text">) {
   return { seq: r.seq, title: r.title, text: r.text };
 }
 
+/**
+ * Every PNG/JPEG attached anywhere on the credit, oldest first within each
+ * requirement, each labelled with where it was attached. Used by the
+ * inspection sheet's Description | Photos table, which lists all of them
+ * (the checklist's own photo section follows the sections it shows instead).
+ */
+export function creditPhotos(credit: CreditView): Photo[] {
+  const out: Photo[] = [];
+  const add = (a: EvidenceAttachment, attachedTo: string) => {
+    if (isImageFile(a.fileName))
+      out.push({ fileId: a.id, fileName: a.fileName, createdAt: a.createdAt, attachedTo });
+  };
+  for (const req of credit.requirements) {
+    for (const a of req.attachments) {
+      const slot =
+        a.evidenceSpecIndex != null && a.evidenceSpecIndex < req.evidenceSpecs.length
+          ? req.evidenceSpecs[a.evidenceSpecIndex]
+          : null;
+      add(a, slot ? `Requirement #${req.seq} — ${slot}` : `Requirement #${req.seq} — other file`);
+    }
+  }
+  for (const a of credit.additionalAttachments) add(a, "Additional attachment (credit level)");
+  return out;
+}
+
 export function buildChecklist(input: ChecklistInput): ChecklistModel {
   const { credit } = input;
 
