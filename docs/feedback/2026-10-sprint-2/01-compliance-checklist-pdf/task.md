@@ -184,3 +184,135 @@ On the Jeddah project, in Playwright:
 - Changing how status or points are computed.
 - Re-parsing the catalog. Guidance is read from the stored string at download
   time, so existing versions work without a migration.
+
+---
+
+## Done — 2026-10-07
+
+Every credit page has a **Download checklist (PDF)** button in its header,
+next to the status pill. It calls
+`GET /api/projects/[id]/credits/[code]/checklist`, which builds the PDF from
+the project's state at that moment. No new table, no migration, no manual
+entry.
+
+The four decisions above were taken as recommended: "Compliance checklist" on
+the button and the PDF; per-credit only; the manual's plan-content rows are
+printed as blank boxes with a note saying so; PNG and JPEG embed, other types
+are listed.
+
+### Commits on `feat/compliance-checklist-pdf`
+
+| Commit | Change |
+|---|---|
+| `ef1f8c0` | Guidance items: itemised lists pulled from the stored supporting guidance (17 tests on the real HC-10, SS-03, E-01 and W-02 strings) |
+| `6a66201` | Checklist model: documents, states, files, AI reads, photos, set-aside options, counts; `supportingGuidance` on `CreditView`; `STATUS_LABEL` shared with the Excel export |
+| `ac27e32` | Shared PDF primitives pulled out of the catalog report — catalog PDF byte-identical before and after (548,955 bytes, 64 pages) |
+| `ae451e9` | The checklist PDF component, rendered in a test and read back |
+| `8b7fbb0` | Route and button, plus four fixes found only by downloading real PDFs (below) |
+| this one | Done section, evidence |
+
+### What the PDF looks like
+
+[HC-10](./evidence/after-HC-10-iaq-checklist.pdf) ·
+[SS-03](./evidence/after-SS-03-cemp-checklist.pdf) ·
+[W-02](./evidence/after-W-02-files-ai-reads-unreadable-images.pdf) ·
+[PMM-03](./evidence/after-PMM-03-provided-and-missing.pdf) ·
+[E-01, path chosen](./evidence/after-E-01-path-chosen.pdf) ·
+[E-01, no path chosen](./evidence/after-E-01-no-path-chosen.pdf) ·
+[HC-10 with a photograph](./evidence/after-HC-10-photo-embedded.pdf)
+
+![HC-10 page 1](./evidence/after-HC-10-iaq-checklist-p1.png)
+
+![SS-03 page 1](./evidence/after-SS-03-cemp-checklist-p1.png)
+
+1. **Header**: credit, project, status chip, points as the screen shows them
+   ("4 / 2–10 pts" on W-02), keystone, category, manual pages; rating system
+   worded exactly as the Excel export words it; stage, target level,
+   generation time in Riyadh time.
+2. **Provenance note**: generated from project records, nothing typed in, a
+   document reads Provided only with a file against it, not a log of dated
+   site inspections.
+3. **Summary tiles**: documents listed, due at this stage, provided, with
+   gaps (AI), missing. When optional untouched rows exist, a line says the
+   counts cover pursued requirements only, as on the credit screen.
+4. **One ruled section per requirement**: number, title, path/optional tag
+   with the screen's wording ("Pursuing this path", "Optional · only if
+   pursued", "Optional · pursuing"), status, text, recorded value, note; then
+   a table with a tick box, the document, its stage and its state — Provided,
+   Provided — AI read found gaps, Missing, Not due yet, Not pursued yet — with
+   each attached file (name, size, upload date) and its AI read labelled
+   "advisory only" with the screen's verdict wording and the listed gaps.
+   Files attached without a document slot are listed under "Other files".
+5. **Either/or**: an open group prints as one "no path chosen yet" box naming
+   the options; a chosen path is listed and the set-aside option is named
+   under "Not listed".
+6. **Additional attachments** at credit level, listed with their AI read.
+7. **Photographs**: every PNG/JPEG, embedded, with upload date and what it was
+   attached against. An unreadable one prints "[image could not be read]".
+8. **What the manual requires the plan to contain**: blank boxes. HC-10 gives
+   the six SMACNA control measures and the IAQ testing rules; SS-03 the seven
+   CEMP sections with every bullet nested under them, then the Environmental
+   Professional criteria. 49 of the 56 credits have at least one list.
+
+### Found only by downloading, and fixed
+
+- **Photos drew nothing.** The two `Site-Photo-Accommodation.png` uploads in
+  the dev database are 4 KB of random bytes, not PNGs, and react-pdf draws
+  nothing for bytes it cannot decode, silently. The route now sniffs the
+  bytes (PNG/JPEG magic, not the file name) and anything else is listed as
+  unreadable. Confirmed with a generated 320×200 PNG attached to the Riyadh
+  test project's "Completed IAQ Checklist" slot: it embeds (one image object
+  in the PDF, visible on page 3). That test row and file were removed again.
+- **Untouched optional rows shouted "Missing".** HC-10's two requirements
+  are both optional, so the screen lists their documents but counts nothing.
+  The PDF said 0 listed while painting every row red. Those rows now read
+  "Not pursued yet", in grey, and the tiles carry the note.
+- **Tiles overlapped.** react-pdf inherits the page's computed line height,
+  so 16pt digits got a 12.6pt line. Larger text now sets its own.
+- **A block could start as a bare border at a page foot.** react-pdf splits
+  a wrapping view wherever the page ends; `minPresenceAhead` only keeps
+  *following* content with a child, so it moved whole blocks instead. Blocks
+  are now ruled sections whose header is unbreakable, so a block splits at a
+  document row or not at all.
+- "Not due yet" was printed twice per row.
+
+### Checks
+
+Without Playwright, as asked. The dev server ran against `netzero_v2`; the
+route was called with `curl` and a session cookie minted the way
+`lib/auth/session.ts` mints one.
+
+| Check | Result |
+|---|---|
+| No cookie | 401 |
+| Project id from nowhere | 404 |
+| Unknown credit code | 404 |
+| HC-10, SS-03, W-02, PMM-03, E-01 on Jeddah; E-01, HC-10 on Riyadh | 200, `application/pdf`, `attachment; filename="jeddah-central-oceanarium-hc-10-checklist.pdf"` |
+| Credit page HTML carries the button with the right href | pass |
+| Design stage: construction documents Not due yet, design documents Missing (SS-03, PMM-03, E-01) | pass |
+| A file against a document reads Provided with its AI read (PMM-03 "Appears to meet"; W-02 "Could not read") | pass |
+| Credit-level file listed with "Partially meets" and its four gaps (PMM-03) | pass |
+| Set-aside option named, not listed (Jeddah E-01); open group as one choose box (Riyadh E-01) | pass |
+| Untouched optional rows Not pursued yet, counted 0 (HC-10, W-02 #5) | pass |
+| A started optional row counted and Completed (W-02 #4) | pass |
+| Six control measures and seven CEMP sections printed as blank boxes | pass |
+| Real PNG embedded; junk "PNG" reads unreadable | pass |
+| ≤ in text renders as `<=`; `µ` kept; math glyphs in E-01's stored guidance become `?` (stored text, unchanged) | pass |
+| Catalog review PDF byte-identical after the shared-primitives refactor | pass |
+| `pnpm test` | 162 passing, 9 skipped (database tests off) |
+| `tsc --noEmit` | clean |
+| `pnpm lint` | 0 errors, the 5 pre-existing warnings |
+| `pnpm build` | succeeds |
+
+### Left as found, worth knowing
+
+- Two stored requirement texts carry parser noise the PDF reproduces
+  faithfully: W-02 #3 begins "3 The irrigation…" and ends "2 Landscaping";
+  PMM-03 #1 is cut at "requirements in the". Catalog data, not this feature.
+- E-01's stored guidance has "generally 101 accepted" (a page number inside
+  a sentence) and the manual's equations as math glyphs. The page-number
+  rule only strips a number after a sentence end, a colon or a marker, on
+  purpose, so "equals 2 Air Changes" survives.
+- Postgres.app has a per-app permission dialog for trust connections. A dev
+  server started with a shell `&` got every query rejected; started through
+  the harness it worked. Noted for the next session.
