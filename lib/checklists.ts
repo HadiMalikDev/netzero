@@ -412,6 +412,14 @@ export async function applyAiDraft(
   });
 }
 
+/** Mark the draft as running again (a re-run). Saved answers are untouched. */
+export async function applyAiDraftPending(inspectionId: string): Promise<void> {
+  await db
+    .update(checklistInspections)
+    .set({ aiState: "pending", aiNote: null })
+    .where(and(eq(checklistInspections.id, inspectionId), eq(checklistInspections.workspaceId, WORKSPACE_ID)));
+}
+
 export interface SaveInput {
   inspectionDate: string | null;
   inspector: string | null;

@@ -16,8 +16,7 @@ import {
 import { CreditRing } from "@/components/ProgressDial";
 import { TargetedToggle } from "@/components/TargetedToggle";
 import { DownloadChecklistLink } from "@/components/DownloadChecklistLink";
-import { DownloadInspectionSheetLink } from "@/components/DownloadInspectionSheetLink";
-import { templateFor } from "@/lib/report/inspection-template";
+import { hasChecklist } from "@/lib/checklists";
 import { creditSpan } from "@/lib/tiers";
 import { RequirementItem } from "./RequirementItem";
 import {
@@ -101,8 +100,13 @@ export default async function CreditDetailPage({
           <div className="flex shrink-0 items-center gap-3">
             <StatusPill status={credit.status} />
             <DownloadChecklistLink projectId={id} code={credit.code} />
-            {templateFor(credit) ? (
-              <DownloadInspectionSheetLink projectId={id} code={credit.code} />
+            {(await hasChecklist(credit.projectCreditId, credit.title)) ? (
+              <Link
+                href={`/projects/${id}/credits/${encodeURIComponent(credit.code)}/inspections`}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Inspections
+              </Link>
             ) : null}
             <TargetedToggle
               projectId={id}
