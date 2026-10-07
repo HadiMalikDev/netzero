@@ -210,11 +210,15 @@ export const base = StyleSheet.create({
   },
 });
 
-/** The page footer: a rule, a left-hand label, and "n / total" on the right. */
-export function Footer({ left }: { left: string }) {
+/**
+ * The page footer: a rule, a left-hand label, and "n / total" on the right.
+ * `contentWidth` is the page width less margins: 507 on A4 portrait (the
+ * default), 754 on landscape.
+ */
+export function Footer({ left, contentWidth = 507 }: { left: string; contentWidth?: number }) {
   return (
     <>
-      <View style={base.footerRule} fixed />
+      <View style={[base.footerRule, { width: contentWidth }]} fixed />
       <Text style={base.footerLeft} fixed>
         {left}
       </Text>

@@ -1,13 +1,18 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { projectCredits } from "@/db/schema";
+import { evidenceDocs, projectCredits } from "@/db/schema";
 import { requireUser } from "@/lib/auth/session";
 import { runInspectionDraft } from "@/lib/ai/inspection-draft";
+import { draftRecommendations } from "@/lib/ai/observation-recommendation";
+import { addObservation, raiseObservations, updateObservation, type ObservationStatus } from "@/lib/observations";
 import {
   addItem,
   addSection,
@@ -103,6 +108,11 @@ export async function saveInspectionAction(formData: FormData): Promise<void> {
     };
   }
   await saveInspection(inspectionId, input, user.id);
+  // Non-compliant answers open observations in the form's corrective-action
+  // log (forms with the log on, e.g. ESC); the AI drafts their
+  // recommendations after the response.
+  const raised = await raiseObservations(inspectionId);
+  if (raised.length) after(() => draftRecommendations(raised));
   revalidatePath(base(projectId, code));
   redirect(`${base(projectId, code)}/${inspectionId}?saved=1`);
 }
@@ -181,6 +191,81 @@ export async function editFormTextAction(formData: FormData): Promise<void> {
   await requireUser();
   const { projectId, code, templateId } = await ownTemplate(formData);
   if (!templateId) throw new Error("make the project's own copy first");
-  await editFormText(templateId, String(formData.get("title") ?? ""), String(formData.get("confirmation") ?? ""));
+  await editFormText(templateId, String(formData.get("title") ?? ""), String(formData.get("confirmation") ?? ""), {
+    on: formData.get("observationLog") === "on",
+    title: String(formData.get("observationTitle") ?? ""),
+  });
   backToForm(projectId, code);
+}
+
+// ---------- corrective-action log ----------
+
+const PHOTO_TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
+
+/**
+ * Store an observation photo as a credit-level evidence file, so the existing
+ * file route serves it and it sits with the credit's other evidence. PNG or
+ * JPEG only: those are what the PDF can embed. Null when no file was sent.
+ */
+async function savePhoto(file: FormDataEntryValue | null, projectId: string, projectCreditId: string): Promise<string | null> {
+  if (!(file instanceof File) || file.size === 0) return null;
+  const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+  if (!PHOTO_TYPES[ext]) throw new Error("Photos must be PNG or JPEG");
+  const dir = join(".data/uploads", projectId, "evidence");
+  await mkdir(dir, { recursive: true });
+  const id = randomUUID();
+  const filePath = join(dir, `${id}-${file.name.replace(/[^\w.\-() ]+/g, "_")}`);
+  const buf = Buffer.from(await file.arrayBuffer());
+  await writeFile(filePath, buf);
+  await db.insert(evidenceDocs).values({
+    id,
+    workspaceId: WORKSPACE_ID,
+    projectCreditId,
+    requirementEntryId: null,
+    fileName: file.name,
+    filePath,
+    fileSize: buf.length,
+  });
+  return id;
+}
+
+function backToInspections(projectId: string, code: string): never {
+  revalidatePath(base(projectId, code));
+  redirect(`${base(projectId, code)}#observations`);
+}
+
+export async function addObservationAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  const code = String(formData.get("code") ?? "");
+  const credit = await getCreditByCode(projectId, code);
+  if (!credit) throw new Error("credit not found");
+  const template = await ensureProjectTemplate(credit.projectCreditId, credit.title);
+  if (!template?.observationLog) throw new Error("This form has no observations log");
+  const id = await addObservation(template.id, String(formData.get("observation") ?? ""), String(formData.get("observedOn") ?? ""));
+  if (id) after(() => draftRecommendations([id]));
+  backToInspections(projectId, code);
+}
+
+export async function updateObservationAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  const code = String(formData.get("code") ?? "");
+  const credit = await getCreditByCode(projectId, code);
+  if (!credit) throw new Error("credit not found");
+  const template = await projectTemplate(credit.projectCreditId);
+  if (!template) throw new Error("no form");
+  const before = await savePhoto(formData.get("beforePhoto"), projectId, credit.projectCreditId);
+  const afterPhoto = await savePhoto(formData.get("afterPhoto"), projectId, credit.projectCreditId);
+  await updateObservation(template.id, String(formData.get("observationId") ?? ""), {
+    observation: String(formData.get("observation") ?? ""),
+    recommendation: String(formData.get("recommendation") ?? ""),
+    correctiveAction: String(formData.get("correctiveAction") ?? ""),
+    observedOn: String(formData.get("observedOn") ?? ""),
+    closedOn: String(formData.get("closedOn") ?? ""),
+    status: (String(formData.get("status") ?? "") === "closed" ? "closed" : "open") as ObservationStatus,
+    ...(before ? { beforePhotoId: before } : {}),
+    ...(afterPhoto ? { afterPhotoId: afterPhoto } : {}),
+  });
+  backToInspections(projectId, code);
 }

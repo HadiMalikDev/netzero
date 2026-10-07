@@ -80,6 +80,8 @@ const inspection: InspectionDetail = {
     remarksLabel: "Remarks",
     headerFields: ["date", "inspector", "area"],
     signatories: [],
+    observationLog: false,
+    observationTitle: "Observations",
   },
   responses: [
     r("1.1", "1", "HVAC Protection", "Filters at supply air intake", { aiAnswer: "yes", answer: "yes" }),
@@ -197,6 +199,39 @@ describe("InspectionSheet PDF", () => {
     expect(text).toMatch(/Checked & verified by Position: Sustainability Manager Signature Checked & verified by Position: Environmental Manager Signature/);
     expect(text).not.toContain("I confirm");
     expect(text).not.toContain("Area / level");
+  });
+
+  it("prints the ESC corrective-action log on a landscape page, in the client's columns", async () => {
+    const esc: InspectionDetail = {
+      ...inspection,
+      template: { ...inspection.template, naColumn: true, observationLog: true, observationTitle: "Environmental Observations" },
+    };
+    const rows = [
+      {
+        id: "o1", inspectionId: "i", itemNo: "1.5", observation: "1.5 Is there any damage in perimeter fencing? — Yes: Panel down",
+        recommendation: "Re-fix the panel and re-inspect.", recommendationSource: "ai" as const, aiState: "done",
+        beforePhoto: { id: "photo", fileName: "Dust-screen.png" }, correctiveAction: "Panel re-fixed.", afterPhoto: null,
+        observedOn: "2026-05-30", closedOn: "2026-06-02", status: "closed" as const, createdAt: 1,
+      },
+      {
+        id: "o2", inspectionId: null, itemNo: null, observation: "Waste skips full", recommendation: null, recommendationSource: null,
+        aiState: "pending", beforePhoto: null, correctiveAction: null, afterPhoto: null, observedOn: "2026-06-01", closedOn: null,
+        status: "open" as const, createdAt: 2,
+      },
+    ];
+    const m = model({ inspection: esc, observations: rows });
+    expect(m.observations?.rows).toHaveLength(2);
+    const buf = await renderToBuffer(InspectionSheet({ model: m, images: new Map([["photo", { data: PNG_1x1, format: "png" }]]) }));
+    const { text, pages } = await textOf(buf);
+    expect(pages).toBe(2);
+    expect(text).toMatch(/Sr\.# Observation Recommendation Photo Corrective Action Taken Photo Obs\. Date \/ Closing Date Status Environmental Observations/);
+    expect(text).toContain("1 1.5 Is there any damage in perimeter fencing? — Yes: Panel down Re-fix the panel and re-inspect. Panel re-fixed. 30 May 2026 2 Jun 2026 Closed");
+    expect(text).toContain("2 Waste skips full 1 Jun 2026 Open");
+    expect(text).not.toContain("DESCRIPTION PHOTOS"); // the log replaces the plain photo list
+    const pdf = await getDocumentProxy(new Uint8Array(buf));
+    const p2 = await pdf.getPage(2);
+    const [, , w, h] = p2.view;
+    expect(w).toBeGreaterThan(h); // landscape
   });
 
   it("renders with no photographs on one page", async () => {

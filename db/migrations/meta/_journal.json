@@ -85,6 +85,13 @@
       "when": 1791411593759,
       "tag": "0011_seed_esc_checklist",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791413746857,
+      "tag": "0012_checklist_observations",
+      "breakpoints": true
     }
   ]
 }

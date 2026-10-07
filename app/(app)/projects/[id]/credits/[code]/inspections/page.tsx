@@ -7,6 +7,8 @@ import { getCreditByCode, getProject } from "@/lib/data";
 import { defaultTemplateFor, listInspections, projectTemplate } from "@/lib/checklists";
 import { formatUploadedAt } from "@/lib/format";
 import { startInspectionAction } from "../../../../inspection-actions";
+import { listObservations } from "@/lib/observations";
+import { ObservationLog } from "./ObservationLog";
 
 /**
  * A credit's inspections (Sprint 2 item 3): every filled copy of the
@@ -27,6 +29,7 @@ export default async function InspectionsPage({
   const form = own ?? (await defaultTemplateFor(credit.title));
   if (!form) notFound();
   const inspections = own ? await listInspections(own.id) : [];
+  const observations = own && form.observationLog ? await listObservations(own.id) : [];
   const base = `/projects/${id}/credits/${encodeURIComponent(code)}/inspections`;
 
   const start = (
@@ -114,6 +117,9 @@ export default async function InspectionsPage({
           </table>
         </Card>
       )}
+      {form.observationLog ? (
+        <ObservationLog title={form.observationTitle} rows={observations} projectId={id} code={code} />
+      ) : null}
     </PageChrome>
   );
 }

@@ -88,8 +88,18 @@ export default async function FormEditorPage({
               Confirmation statement (printed above the sign-off; leave empty for none)
               <textarea name="confirmation" defaultValue={shown.confirmation} rows={3} className="input mt-1" />
             </label>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="observationLog" defaultChecked={shown.observationLog} className="h-4 w-4 rounded border-slate-300" />
+                Corrective-action log (observations with before / after photos) instead of the photo list
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Log heading
+                <input name="observationTitle" defaultValue={shown.observationTitle} className="input mt-1" />
+              </label>
+            </div>
             <div>
-              <button type="submit" className={small}>Save title and statement</button>
+              <button type="submit" className={small}>Save form settings</button>
             </div>
           </form>
         </Card>

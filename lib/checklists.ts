@@ -100,6 +100,9 @@ export interface TemplateRow {
   remarksLabel: string;
   headerFields: HeaderField[];
   signatories: string[];
+  /** Print a corrective-action log instead of the plain photo list (ESC). */
+  observationLog: boolean;
+  observationTitle: string;
 }
 
 export type HeaderField = "ref_no" | "date" | "time" | "inspector" | "area";
@@ -139,6 +142,8 @@ const templateCols = {
   remarksLabel: checklistTemplates.remarksLabel,
   headerFields: checklistTemplates.headerFields,
   signatories: checklistTemplates.signatories,
+  observationLog: checklistTemplates.observationLog,
+  observationTitle: checklistTemplates.observationTitle,
 };
 
 /** The workspace default for a credit, matched on its title (case aside). */
@@ -207,6 +212,8 @@ export async function ensureProjectTemplate(
         remarksLabel: def.remarksLabel,
         headerFields: JSON.stringify(def.headerFields),
         signatories: JSON.stringify(def.signatories),
+        observationLog: def.observationLog,
+        observationTitle: def.observationTitle,
       });
       const sections = await tx
         .select()
@@ -641,8 +648,16 @@ export async function addSection(templateId: string, heading: string): Promise<b
   return true;
 }
 
-/** The form's printed title and confirmation statement. */
-export async function editFormText(templateId: string, title: string, confirmation: string): Promise<boolean> {
+/**
+ * The form's printed title and confirmation statement, and — when given —
+ * whether it prints a corrective-action log and under what heading.
+ */
+export async function editFormText(
+  templateId: string,
+  title: string,
+  confirmation: string,
+  log?: { on: boolean; title: string },
+): Promise<boolean> {
   const t = clean(title, 200);
   // A form may have no confirmation statement (the ESC form signs off with
   // "Checked & verified by" blocks instead).
@@ -650,7 +665,12 @@ export async function editFormText(templateId: string, title: string, confirmati
   if (!t) return false;
   await db
     .update(checklistTemplates)
-    .set({ title: t, confirmation: c, updatedAt: Math.floor(Date.now() / 1000) })
+    .set({
+      title: t,
+      confirmation: c,
+      ...(log ? { observationLog: log.on, observationTitle: clean(log.title, 120) || "Observations" } : {}),
+      updatedAt: Math.floor(Date.now() / 1000),
+    })
     .where(eq(checklistTemplates.id, templateId));
   return true;
 }

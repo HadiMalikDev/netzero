@@ -421,6 +421,13 @@ export const checklistTemplates = pgTable(
      * list = a single Signature / Date line under the confirmation statement.
      */
     signatories: text("signatories").notNull().default("[]"),
+    /**
+     * Print a corrective-action log (Sr#, Observation, Recommendation, Photo,
+     * Corrective Action Taken, Photo, Obs./Closing Date, Status) instead of
+     * the plain photo list. On for ESC; the heading is the form's own.
+     */
+    observationLog: boolean("observation_log").notNull().default(false),
+    observationTitle: text("observation_title").notNull().default("Observations"),
     createdAt: integer("created_at").notNull().default(now),
     updatedAt: integer("updated_at").notNull().default(now),
   },
@@ -517,6 +524,47 @@ export const checklistResponses = pgTable(
     remark: text("remark"),
   },
   (t) => [index("checklist_response_inspection_idx").on(t.inspectionId)],
+);
+
+/**
+ * The corrective-action log of a project's form (Sprint 2 item 3): a running
+ * list per credit, not per inspection, so an issue stays open across weekly
+ * inspections until someone closes it. Opened automatically when a review
+ * saves a non-compliant answer, or added by hand. The AI drafts the
+ * recommendation; photos, corrective action and closing are a person's.
+ */
+export const checklistObservations = pgTable(
+  "checklist_observation",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    /** The project's own copy of the form: the log belongs to that credit. */
+    templateId: text("template_id")
+      .notNull()
+      .references(() => checklistTemplates.id, { onDelete: "cascade" }),
+    /** The inspection it was raised in; null when added by hand. */
+    inspectionId: text("inspection_id").references(() => checklistInspections.id, { onDelete: "set null" }),
+    /** The checklist item it came from ("4.5"), for de-duplication; null if by hand. */
+    itemNo: text("item_no"),
+    observation: text("observation").notNull(),
+    recommendation: text("recommendation"),
+    /** "ai" while the recommendation is the AI's untouched draft; "person" once edited. */
+    recommendationSource: text("recommendation_source"),
+    /** pending | done | failed | skipped — the AI recommendation draft. */
+    aiState: text("ai_state"),
+    beforePhotoId: text("before_photo_id").references(() => evidenceDocs.id, { onDelete: "set null" }),
+    correctiveAction: text("corrective_action"),
+    afterPhotoId: text("after_photo_id").references(() => evidenceDocs.id, { onDelete: "set null" }),
+    /** YYYY-MM-DD. */
+    observedOn: text("observed_on"),
+    closedOn: text("closed_on"),
+    /** open | closed */
+    status: text("status").notNull().default("open"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [index("checklist_observation_template_idx").on(t.templateId)],
 );
 
 export type Workspace = typeof workspaces.$inferSelect;

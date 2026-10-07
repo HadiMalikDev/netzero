@@ -236,7 +236,9 @@ describeDb("project checklist forms", () => {
     expect(await addSection(t.id, "Site-specific")).toBe(true);
     expect(await editSection(t.id, hvac.id, "rename", "HVAC protection")).toBe(true);
     expect(await editSection(t.id, hvac.id, "down")).toBe(true);
-    expect(await editFormText(t.id, "IAQ Inspection — Tower A", "Confirmed.")).toBe(true);
+    expect(await editFormText(t.id, "IAQ Inspection — Tower A", "Confirmed.", { on: true, title: "IAQ Observations" })).toBe(true);
+    expect(await ensureProjectTemplate(pcId, "Indoor Air Quality")).toMatchObject({ observationLog: true, observationTitle: "IAQ Observations" });
+    expect(await defaultTemplateFor("Indoor Air Quality")).toMatchObject({ observationLog: false }); // the default is untouched
     form = await getForm(t.id);
     expect(form.map((s) => s.heading).slice(0, 2)).toEqual(["Source Control", "HVAC protection"]);
     expect(form[1].no).toBe("2");

@@ -3,6 +3,7 @@ import type { ProjectStage } from "@/lib/evidence";
 import { formatPageSpan } from "@/lib/ai/review-notes";
 import type { Answer, HeaderField, InspectionDetail } from "@/lib/checklists";
 import { creditPhotos, type Photo } from "./checklist";
+import type { ObservationRow } from "@/lib/observations";
 
 /**
  * The printable copy of one reviewed inspection (Sprint 2 item 3), in the
@@ -44,6 +45,11 @@ export interface SheetModel {
   generatedAt: string;
   sections: SheetSection[];
   photos: Photo[];
+  /**
+   * The corrective-action log as it stands at download (forms with the log
+   * on, e.g. ESC); null prints the plain photo list instead.
+   */
+  observations: { title: string; rows: ObservationRow[] } | null;
 }
 
 const STAGE_LABEL: Record<string, string> = { design: "Design", construction: "Construction" };
@@ -94,6 +100,8 @@ export interface SheetInput {
   ratingSystem: string;
   projectStage: ProjectStage;
   generatedAt: string;
+  /** The form's log, when it has one. */
+  observations?: ObservationRow[];
   /** Pre-formatted review date. */
   reviewedOn: string | null;
 }
@@ -142,5 +150,8 @@ export function buildInspectionSheet(input: SheetInput): SheetModel {
     generatedAt: input.generatedAt,
     sections,
     photos: creditPhotos(credit),
+    observations: insp.template.observationLog
+      ? { title: insp.template.observationTitle, rows: input.observations ?? [] }
+      : null,
   };
 }

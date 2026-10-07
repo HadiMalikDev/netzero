@@ -14,6 +14,7 @@ import type { ImageBytes } from "@/lib/pdf/ChecklistReport";
 import { InspectionSheet } from "@/lib/pdf/InspectionSheet";
 import { registerPdfHyphenation } from "@/lib/pdf/shared";
 import { buildInspectionSheet } from "@/lib/report/inspection-sheet";
+import { listObservations } from "@/lib/observations";
 
 registerPdfHyphenation();
 
@@ -82,10 +83,14 @@ export async function GET(
     projectStage: parseStage(project.stage),
     generatedAt: formatGeneratedAt(new Date()),
     reviewedOn: formatUploadedAt(insp.reviewedAt),
+    observations: insp.template.observationLog ? await listObservations(insp.templateId) : undefined,
   });
 
   const images: ImageBytes = new Map();
-  const ids = model.photos.map((p) => p.fileId);
+  const ids = [
+    ...model.photos.map((p) => p.fileId),
+    ...(model.observations?.rows ?? []).flatMap((o) => [o.beforePhoto?.id, o.afterPhoto?.id]).filter((x): x is string => Boolean(x)),
+  ];
   const rows = ids.length
     ? await db
         .select({ id: evidenceDocs.id, filePath: evidenceDocs.filePath })

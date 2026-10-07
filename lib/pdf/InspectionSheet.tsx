@@ -3,6 +3,7 @@ import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/render
 import { base, C, Footer, safe } from "./shared";
 import type { ImageBytes } from "./ChecklistReport";
 import type { SheetModel, SheetSection } from "@/lib/report/inspection-sheet";
+import type { ObservationRow } from "@/lib/observations";
 // The header and sign-off follow each form's own layout (naColumn, remarks
 // label, header fields, signatories): see checklist_template in db/schema.ts.
 import { formatUploadedAt } from "@/lib/format";
@@ -59,6 +60,17 @@ const s = {
     pName: { fontSize: 9, fontFamily: "Helvetica-Bold", color: C.ink },
     pMeta: { fontSize: 8, color: C.muted, marginTop: 3 },
     note: { fontSize: 8, color: C.faint },
+    // corrective-action log (landscape), in the client's colours
+    oTable: { borderWidth: 1, borderColor: "#1f2a1a" },
+    oHead: { backgroundColor: "#3d5229" },
+    oTh: { fontSize: 8.5, fontFamily: "Helvetica-Bold", color: "#ffffff", padding: 5, textAlign: "center", borderRightWidth: 1, borderRightColor: "#1f2a1a" },
+    oBand: { backgroundColor: "#cfe2bf", justifyContent: "center" },
+    oBandText: { flex: 1, fontSize: 12, fontFamily: "Helvetica-Bold", color: C.ink, textAlign: "center", padding: 6 },
+    oTd: { fontSize: 8, color: C.body, padding: 5, borderRightWidth: 1, borderRightColor: C.line },
+    oImg: { width: "100%", maxHeight: 80, objectFit: "contain" },
+    oOpen: { backgroundColor: "#fde68a", justifyContent: "center" },
+    oClosed: { backgroundColor: "#4ade80", justifyContent: "center" },
+    oStatusText: { fontSize: 8.5, fontFamily: "Helvetica-Bold", color: C.ink, textAlign: "center" },
   }),
 };
 
@@ -91,6 +103,86 @@ function SectionRows({ section, naColumn }: { section: SheetSection; naColumn: b
  * One filled header field. Three fit on a line (IAQ); with more (ESC: Ref No,
  * date, time, inspector) values would wrap mid-word, so they go two per line.
  */
+/** "2026-05-30" → "30 May 2026". */
+function d(iso: string | null): string {
+  if (!iso) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m
+    ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+    : iso;
+}
+
+/**
+ * The corrective-action log on its own landscape page, in the client's
+ * columns: Sr#, Observation, Recommendation, Photo, Corrective Action Taken,
+ * Photo, Obs. Date / Closing Date, Status. The header row repeats on each page.
+ */
+function ObservationLogPage({ title, rows, images, footer }: { title: string; rows: ObservationRow[]; images: ImageBytes; footer: string }) {
+  const col = { sr: 34, obs: 150, rec: 140, photo: 118, act: 140, date: 72, status: 56 };
+  return (
+    <Page size="A4" orientation="landscape" style={s.page}>
+      <View style={s.oTable}>
+        <View style={[s.tr, s.oHead]} fixed>
+          <Text style={[s.oTh, { width: col.sr }]}>Sr.#</Text>
+          <Text style={[s.oTh, { width: col.obs }]}>Observation</Text>
+          <Text style={[s.oTh, { width: col.rec }]}>Recommendation</Text>
+          <Text style={[s.oTh, { width: col.photo }]}>Photo</Text>
+          <Text style={[s.oTh, { width: col.act }]}>Corrective Action Taken</Text>
+          <Text style={[s.oTh, { width: col.photo }]}>Photo</Text>
+          <Text style={[s.oTh, { width: col.date }]}>Obs. Date / Closing Date</Text>
+          <Text style={[s.oTh, { width: col.status }]}>Status</Text>
+        </View>
+        <View style={[s.tr, s.oBand]}>
+          <Text style={s.oBandText}>{safe(title)}</Text>
+        </View>
+        {rows.length === 0 ? (
+          <View style={s.tr}>
+            <Text style={[s.td, { flex: 1, color: C.faint }]}>No observations recorded.</Text>
+          </View>
+        ) : (
+          rows.map((o, i) => {
+            const before = o.beforePhoto ? images.get(o.beforePhoto.id) : undefined;
+            const after = o.afterPhoto ? images.get(o.afterPhoto.id) : undefined;
+            return (
+              <View key={o.id} style={s.tr} wrap={false}>
+                <Text style={[s.oTd, { width: col.sr, textAlign: "center" }]}>{i + 1}</Text>
+                <Text style={[s.oTd, { width: col.obs }]}>{safe(o.observation)}</Text>
+                <Text style={[s.oTd, { width: col.rec }]}>{safe(o.recommendation ?? "")}</Text>
+                <View style={[s.oTd, { width: col.photo }]}>
+                  {before ? (
+                    // eslint-disable-next-line jsx-a11y/alt-text
+                    <Image style={s.oImg} src={before} />
+                  ) : o.beforePhoto ? (
+                    <Text style={s.note}>[image could not be read]</Text>
+                  ) : null}
+                </View>
+                <Text style={[s.oTd, { width: col.act }]}>{safe(o.correctiveAction ?? "")}</Text>
+                <View style={[s.oTd, { width: col.photo }]}>
+                  {after ? (
+                    // eslint-disable-next-line jsx-a11y/alt-text
+                    <Image style={s.oImg} src={after} />
+                  ) : o.afterPhoto ? (
+                    <Text style={s.note}>[image could not be read]</Text>
+                  ) : null}
+                </View>
+                <Text style={[s.oTd, { width: col.date }]}>
+                  {d(o.observedOn)}
+                  {o.closedOn ? `\n${d(o.closedOn)}` : ""}
+                </Text>
+                <View style={[s.oTd, { width: col.status }, o.status === "closed" ? s.oClosed : s.oOpen]}>
+                  <Text style={s.oStatusText}>{o.status === "closed" ? "Closed" : "Open"}</Text>
+                </View>
+              </View>
+            );
+          })
+        )}
+      </View>
+      {/* A4 landscape: 841.89 − 2×44 ≈ 754 of content width. */}
+      <Footer left={footer} contentWidth={754} />
+    </Page>
+  );
+}
+
 function Fill({ label, value, last, half }: { label: string; value: string | null; last?: boolean; half?: boolean }) {
   const style = half ? [s.fill, s.fillHalf, last ? { marginRight: 0 } : {}] : last ? [s.fill, { marginRight: 0 }] : s.fill;
   return (
@@ -184,6 +276,7 @@ export function InspectionSheet({ model, images }: InspectionSheetProps) {
           )}
         </View>
 
+        {model.observations ? null : (
         <View break={model.photos.length > 0} style={model.photos.length ? {} : { marginTop: 24 }}>
           <Text style={s.h2}>Photographs</Text>
           {model.photos.length === 0 ? (
@@ -222,8 +315,13 @@ export function InspectionSheet({ model, images }: InspectionSheetProps) {
           )}
         </View>
 
+        )}
+
         <Footer left={footer} />
       </Page>
+      {model.observations ? (
+        <ObservationLogPage title={model.observations.title} rows={model.observations.rows} images={images} footer={footer} />
+      ) : null}
     </Document>
   );
 }
