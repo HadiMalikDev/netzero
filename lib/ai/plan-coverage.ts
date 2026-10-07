@@ -26,11 +26,15 @@ const MAX_QUOTE = 240;
 
 const SYSTEM = `You check whether a construction Indoor Air Quality Management Plan (or similar site plan) ADDRESSES each numbered inspection item, for a reviewer who will check your reading.
 
-Return ONLY JSON: {"items": [{"no": string, "covered": boolean, "quote": string}]} with one entry per item number you were given.
+Return ONLY JSON: {"items": [{"no": string, "status": string, "quote": string}]} with one entry per item number you were given.
+
+status must be exactly one of:
+- "covered": the plan itself states the measure the item describes, as a commitment or procedure. A general statement of intent ("good indoor air quality will be maintained") does not cover a specific item.
+- "not_applicable": the plan explicitly says the item does not apply to this project (for example "there is no demolition in this scope" for a demolition item). Never conclude this from silence.
+- "none": anything else, including when the plan does not mention the item.
 
 Rules:
-- "covered" is true only when the plan itself states the measure the item describes, as a commitment or procedure. A general statement of intent ("good indoor air quality will be maintained") does not cover a specific item.
-- "quote" must be a VERBATIM span copied from the plan text, under 200 characters, that shows the measure. If you cannot quote it, set covered to false and quote to "".
+- "quote" must be a VERBATIM span copied from the plan text, under 200 characters, that shows the measure or the statement that it does not apply. If you cannot quote it, use "none" and quote "".
 - Never infer from the item wording, from other items, or from what such plans usually contain. Judge the text you were given only.`;
 
 const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
@@ -58,8 +62,15 @@ export function normalizeCoverage(
   for (const it of items) {
     const o = byNo.get(it.no);
     const quote = String(o?.quote ?? "").trim().slice(0, MAX_QUOTE);
-    const covered = o?.covered === true && quote.length > 0 && haystack.includes(norm(quote));
-    out[it.no] = covered ? { status: "covered", quote } : { status: "not_found", quote: null };
+    const verified = quote.length > 0 && haystack.includes(norm(quote));
+    // Older shape: {"covered": true}. Anything unrecognised reads as none.
+    const status = String(o?.status ?? (o?.covered === true ? "covered" : "none")).toLowerCase();
+    out[it.no] =
+      verified && status === "covered"
+        ? { status: "covered", quote }
+        : verified && status === "not_applicable"
+          ? { status: "not_applicable", quote }
+          : { status: "not_found", quote: null };
   }
   return out;
 }

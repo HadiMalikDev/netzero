@@ -13,7 +13,8 @@ import type { InspectionTemplate } from "./inspection-template";
  */
 
 export interface CoverageEntry {
-  status: "covered" | "not_found";
+  /** not_applicable: the plan says, in a verified quote, that the item does not apply. */
+  status: "covered" | "not_applicable" | "not_found";
   /** The verbatim sentence from the plan that addresses the item, when covered. */
   quote: string | null;
 }
