@@ -143,3 +143,61 @@ It is data now: one row in `checklist_template` with `credit_title`
 "Construction Environmental Management", its sections and items, the plan
 document ("CEMP developed") and the completed-sheet document ("Site audit
 report"). A seed migration like `0009`, or the editor on a project. No code.
+
+---
+
+## Added — 2026-10-08: the ESC form
+
+Hadi sent the contractor's ESC Inspection Checklist (MBL-JCD-ESC-001) and
+asked for it to be seeded alongside IAQ so a fresh deploy has both.
+
+**Seeded** (migration `0011`): the default form for any credit titled
+"Construction Environmental Management" (SS-03). 28 items in four sections
+(dust and wind erosion 6, stormwater 11, dewatering 4, housekeeping 7),
+transcribed word for word, grammar included. The AI reads the plan attached
+under "CEMP developed…"; the sheet is a construction-stage document
+("Site audit report…").
+
+**The form's layout differs from IAQ's, so layout is now per form**
+(migration `0010`, additive; IAQ keeps its layout through the defaults):
+
+| | IAQ | ESC |
+|---|---|---|
+| Columns | Yes · No · Remarks (N/A in Remarks) | Yes · No · **NA** · **Notes/Comments/Non-Conformances** |
+| Header | Inspection date · Inspected by · Area | **Ref No** · Inspection date · **Time** · Inspected by |
+| Sign-off | Confirmation statement, Signature, Date | **Checked & verified by**, Position, Signature: Sustainability Manager and Environmental Manager |
+
+**"No is compliant" questions.** Five ESC questions are phrased so that
+"Yes" is a problem: fence damage, a dust problem, silt-curtain damage, a
+spill or leak, vehicle maintenance on site. Three have no compliant answer:
+rain in the last 24 hours and the two "do you allow" questions. Each item now
+records its compliant answer, and the AI only suggests Yes where Yes is
+compliant. Without this, a CEMP line like "any spill shall be cleaned up
+immediately" would have produced "Yes, there is a spill". The editor sets it
+per item; the review page labels the No-compliant ones.
+
+**Found in the live run and fixed:** the AI first suggested "Yes" for the
+concrete washout item, quoting "Concrete washout is not permitted on site".
+The prompt now treats "not permitted on site" as N/A; the re-run gave N/A.
+
+[ESC reviewed inspection, downloaded from the app](./evidence/after-esc-reviewed-inspection.pdf)
+
+![ESC page 1](./evidence/after-esc-reviewed-inspection-p1.png)
+
+| Check | Result |
+|---|---|
+| Inspections link on SS-03 | present |
+| AI draft on SS-03 with a test CEMP (live model) | 13 Yes, 2 N/A, 13 blank; **0 Yes on a No-compliant or observation item** |
+| Review saved through the real form (Ref No, date, time, inspector, answers) | 303 `?saved=1`, all stored |
+| PDF | NA column, notes column, two sign-off blocks, no statement, header two per line |
+| Fresh empty database, all 12 migrations | both forms seeded (IAQ 6/32, ESC 4/28) |
+| Tests with database / tsc / lint / build | 202 passing / clean / 0 errors / succeeds |
+
+**Not built:** the third page of the ESC form, the Environmental
+Observations log (observation, recommendation, before and after photos,
+corrective action, dates, status). That is a list of findings that each get
+closed out, not a checklist, so it is its own feature. For now the ESC PDF
+keeps the Description | Photos page.
+
+**A deliberate difference:** the team's ESC form has no item numbers; the
+app numbers items (1.1, 1.2…) so reviewers and the AI can refer to them.
