@@ -1,7 +1,7 @@
 import type { CreditView } from "@/lib/data";
 import type { ProjectStage } from "@/lib/evidence";
 import { formatPageSpan } from "@/lib/ai/review-notes";
-import type { Answer, InspectionDetail } from "@/lib/checklists";
+import type { Answer, HeaderField, InspectionDetail } from "@/lib/checklists";
 import { creditPhotos, type Photo } from "./checklist";
 
 /**
@@ -27,7 +27,16 @@ export interface SheetSection {
 
 export interface SheetModel {
   title: string;
+  /** Empty: the form has no confirmation statement. */
   confirmation: string;
+  layout: {
+    naColumn: boolean;
+    remarksLabel: string;
+    /** The filled header, in the form's order and wording. */
+    header: { label: string; value: string | null }[];
+    /** One "Checked & verified by" block per position; empty = one signature line. */
+    signatories: string[];
+  };
   project: { name: string; ratingSystem: string; stageLabel: string };
   credit: { code: string; title: string; pageSpan: string | null };
   inspection: { date: string | null; inspector: string | null; area: string | null };
@@ -70,6 +79,14 @@ export function formatInspectionDate(iso: string | null): string | null {
   });
 }
 
+const HEADER_LABEL: Record<HeaderField, string> = {
+  ref_no: "Ref No",
+  date: "Inspection date",
+  time: "Time",
+  inspector: "Inspected by",
+  area: "Area / level",
+};
+
 export interface SheetInput {
   inspection: InspectionDetail;
   credit: CreditView;
@@ -94,7 +111,22 @@ export function buildInspectionSheet(input: SheetInput): SheetModel {
   }
   return {
     title: insp.template.title,
-    confirmation: insp.template.confirmation,
+    confirmation: insp.template.confirmation.trim(),
+    layout: {
+      naColumn: insp.template.naColumn,
+      remarksLabel: insp.template.remarksLabel,
+      header: insp.template.headerFields.map((f) => ({
+        label: HEADER_LABEL[f],
+        value: {
+          ref_no: insp.refNo,
+          date: formatInspectionDate(insp.inspectionDate),
+          time: insp.inspectionTime,
+          inspector: insp.inspector,
+          area: insp.area,
+        }[f],
+      })),
+      signatories: insp.template.signatories,
+    },
     project: {
       name: input.projectName,
       ratingSystem: input.ratingSystem,

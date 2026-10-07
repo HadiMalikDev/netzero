@@ -15,9 +15,20 @@ import { getProjectCredits, type CreditView } from "@/lib/data";
  * A person reviews every suggestion before anything prints.
  */
 
-/** Suggestion for one item, from the verified plan read. */
-export function suggestionFrom(entry: CoverageEntry | undefined): { answer: Answer | null; quote: string | null } {
-  if (entry?.status === "covered") return { answer: "yes", quote: entry.quote };
+/**
+ * Suggestion for one item, from the verified plan read. A plan states measures,
+ * so "covered" can only ever support Yes on an item where Yes is the compliant
+ * answer. On a "No is compliant" item ("Is there any spill or leak at site?")
+ * or a plain observation ("Any rain in the last 24 hours?") a covered reading
+ * would assert a problem or a fact the plan cannot know, so it is dropped.
+ * N/A stands on any item: the plan saying an item does not apply is the same
+ * statement whichever way the question is phrased.
+ */
+export function suggestionFrom(
+  entry: CoverageEntry | undefined,
+  compliantAnswer: Answer | null = "yes",
+): { answer: Answer | null; quote: string | null } {
+  if (entry?.status === "covered" && compliantAnswer === "yes") return { answer: "yes", quote: entry.quote };
   if (entry?.status === "not_applicable") return { answer: "na", quote: entry.quote };
   return { answer: null, quote: null };
 }
@@ -84,7 +95,7 @@ export async function runInspectionDraft(
       return;
     }
     const byItemNo: Record<string, { answer: Answer | null; quote: string | null }> = {};
-    for (const it of items) byItemNo[it.no] = suggestionFrom(outcome.byItem[it.no]);
+    for (const r of insp.responses) byItemNo[r.itemNo] = suggestionFrom(outcome.byItem[r.itemNo], r.compliantAnswer);
     await applyAiDraft(inspectionId, { state: "done", sources: outcome.sources, byItemNo });
   } catch (e) {
     await applyAiDraft(inspectionId, { state: "failed", reason: (e as Error).message.slice(0, 200) }).catch(() => {});

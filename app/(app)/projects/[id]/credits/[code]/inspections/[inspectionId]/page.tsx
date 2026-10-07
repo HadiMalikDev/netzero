@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../../../_components/PageChrome";
 import { Button, Card } from "@/components/ui";
 import { getCreditByCode, getProject } from "@/lib/data";
-import { getInspection, type Answer, type ResponseRow } from "@/lib/checklists";
+import { getInspection, type Answer, type HeaderField, type ResponseRow } from "@/lib/checklists";
 import { formatUploadedAt } from "@/lib/format";
 import { rerunDraftAction, saveInspectionAction } from "../../../../../inspection-actions";
 
@@ -22,6 +22,15 @@ const CHOICES: { value: Answer | ""; label: string }[] = [
 
 const AI_LABEL: Record<Answer, string> = { yes: "AI: Yes", no: "AI: No", na: "AI: N/A" };
 
+/** Header inputs, in the form's own order and wording. */
+const HEADER_INPUT: Record<HeaderField, { label: string; name: string; type: string }> = {
+  ref_no: { label: "Ref No", name: "refNo", type: "text" },
+  date: { label: "Inspection date", name: "inspectionDate", type: "date" },
+  time: { label: "Time", name: "inspectionTime", type: "time" },
+  inspector: { label: "Inspected by", name: "inspector", type: "text" },
+  area: { label: "Area / level", name: "area", type: "text" },
+};
+
 function Row({ r }: { r: ResponseRow }) {
   const overridden = r.aiAnswer != null && r.answer !== r.aiAnswer;
   return (
@@ -29,6 +38,11 @@ function Row({ r }: { r: ResponseRow }) {
       <td className="w-14 bg-slate-600 px-3 py-3 text-center text-xs font-semibold text-white">{r.itemNo}</td>
       <td className="px-4 py-3">
         <div className="text-sm text-slate-800">{r.itemText}</div>
+        {r.compliantAnswer !== "yes" ? (
+          <div className="mt-0.5 text-[11px] text-slate-400">
+            {r.compliantAnswer === "no" ? "No is the compliant answer" : "Observation: no compliant answer"}
+          </div>
+        ) : null}
         {r.aiAnswer ? (
           <div className="mt-1.5 rounded-md border border-brand-100 bg-brand-50/60 px-2.5 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-brand-700">
@@ -59,7 +73,7 @@ function Row({ r }: { r: ResponseRow }) {
         </div>
       </td>
       <td className="w-64 px-4 py-3">
-        <input name={`remark:${r.id}`} defaultValue={r.remark ?? ""} placeholder="Remark" className="input" />
+        <input name={`remark:${r.id}`} defaultValue={r.remark ?? ""} placeholder="Note" className="input" />
       </td>
     </tr>
   );
@@ -162,19 +176,17 @@ export default async function InspectionReviewPage({
 
       <form action={saveInspectionAction}>
         {hidden}
-        <Card className="mb-4 grid gap-4 px-5 py-4 sm:grid-cols-3">
-          <label className="text-sm font-medium text-slate-700">
-            Inspection date
-            <input type="date" name="inspectionDate" defaultValue={insp.inspectionDate ?? ""} className="input mt-1" />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Inspector
-            <input name="inspector" defaultValue={insp.inspector ?? ""} className="input mt-1" />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Area / level
-            <input name="area" defaultValue={insp.area ?? ""} className="input mt-1" />
-          </label>
+        <Card className="mb-4 grid gap-4 px-5 py-4 sm:grid-cols-4">
+          {insp.template.headerFields.map((f) => {
+            const h = HEADER_INPUT[f];
+            const value = { ref_no: insp.refNo, date: insp.inspectionDate, time: insp.inspectionTime, inspector: insp.inspector, area: insp.area }[f];
+            return (
+              <label key={f} className="text-sm font-medium text-slate-700">
+                {h.label}
+                <input type={h.type} name={h.name} defaultValue={value ?? ""} className="input mt-1" />
+              </label>
+            );
+          })}
         </Card>
 
         <Card className="overflow-hidden">
@@ -184,7 +196,7 @@ export default async function InspectionReviewPage({
                 <th className="px-3 py-2 text-center">No</th>
                 <th className="px-4 py-2">Description</th>
                 <th className="px-4 py-2">Answer</th>
-                <th className="px-4 py-2">Remarks</th>
+                <th className="px-4 py-2">{insp.template.remarksLabel}</th>
               </tr>
             </thead>
             {sections.map((s) => (

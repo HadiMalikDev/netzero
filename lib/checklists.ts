@@ -41,6 +41,8 @@ export interface ItemRow {
   seq: number;
   text: string;
   active: boolean;
+  /** The compliant answer: "yes", "no", or null for an observation. */
+  compliantAnswer: Answer | null;
 }
 
 export interface NumberedItem extends ItemRow {
@@ -93,7 +95,37 @@ export interface TemplateRow {
   confirmation: string;
   planDocument: string | null;
   sheetDocument: string | null;
+  /** Layout of the printed sheet (see db/schema.ts). */
+  naColumn: boolean;
+  remarksLabel: string;
+  headerFields: HeaderField[];
+  signatories: string[];
 }
+
+export type HeaderField = "ref_no" | "date" | "time" | "inspector" | "area";
+const HEADER_FIELDS = new Set<string>(["ref_no", "date", "time", "inspector", "area"]);
+
+function jsonList(raw: string | null): string[] {
+  try {
+    const v = raw ? JSON.parse(raw) : [];
+    return Array.isArray(v) ? v.map((x) => String(x)).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Stored header-field JSON → known fields in order; the IAQ trio if none. */
+export function parseHeaderFields(raw: string | null): HeaderField[] {
+  const f = jsonList(raw).filter((x) => HEADER_FIELDS.has(x)) as HeaderField[];
+  return f.length ? f : ["date", "inspector", "area"];
+}
+
+type TemplateDbRow = Omit<TemplateRow, "headerFields" | "signatories"> & {
+  headerFields: string;
+  signatories: string;
+};
+const toTemplate = (r: TemplateDbRow | undefined): TemplateRow | null =>
+  r ? { ...r, headerFields: parseHeaderFields(r.headerFields), signatories: jsonList(r.signatories) } : null;
 
 const templateCols = {
   id: checklistTemplates.id,
@@ -103,6 +135,10 @@ const templateCols = {
   confirmation: checklistTemplates.confirmation,
   planDocument: checklistTemplates.planDocument,
   sheetDocument: checklistTemplates.sheetDocument,
+  naColumn: checklistTemplates.naColumn,
+  remarksLabel: checklistTemplates.remarksLabel,
+  headerFields: checklistTemplates.headerFields,
+  signatories: checklistTemplates.signatories,
 };
 
 /** The workspace default for a credit, matched on its title (case aside). */
@@ -119,7 +155,7 @@ export async function defaultTemplateFor(creditTitle: string): Promise<TemplateR
     )
     .orderBy(asc(checklistTemplates.createdAt))
     .limit(1);
-  return t ?? null;
+  return toTemplate(t);
 }
 
 export async function projectTemplate(projectCreditId: string): Promise<TemplateRow | null> {
@@ -133,7 +169,7 @@ export async function projectTemplate(projectCreditId: string): Promise<Template
       ),
     )
     .limit(1);
-  return t ?? null;
+  return toTemplate(t);
 }
 
 /** Whether a credit has an inspection form: its own copy, or a default to copy. */
@@ -167,6 +203,10 @@ export async function ensureProjectTemplate(
         confirmation: def.confirmation,
         planDocument: def.planDocument,
         sheetDocument: def.sheetDocument,
+        naColumn: def.naColumn,
+        remarksLabel: def.remarksLabel,
+        headerFields: JSON.stringify(def.headerFields),
+        signatories: JSON.stringify(def.signatories),
       });
       const sections = await tx
         .select()
@@ -191,6 +231,7 @@ export async function ensureProjectTemplate(
             seq: i.seq,
             text: i.text,
             active: i.active,
+            compliantAnswer: i.compliantAnswer,
           })),
         );
     });
@@ -217,11 +258,12 @@ export async function getForm(templateId: string): Promise<NumberedSection[]> {
           seq: checklistItems.seq,
           text: checklistItems.text,
           active: checklistItems.active,
+          compliantAnswer: checklistItems.compliantAnswer,
         })
         .from(checklistItems)
         .where(inArray(checklistItems.sectionId, sections.map((s) => s.id)))
     : [];
-  return numberForm(sections, items);
+  return numberForm(sections, items.map((i) => ({ ...i, compliantAnswer: parseAnswer(i.compliantAnswer) })));
 }
 
 // ---------- inspections ----------
@@ -286,6 +328,7 @@ export async function startInspection(templateId: string): Promise<string> {
           sectionNo: s.no,
           sectionHeading: s.heading,
           itemText: i.text,
+          compliantAnswer: i.compliantAnswer,
         })),
     );
     if (rows.length) await tx.insert(checklistResponses).values(rows);
@@ -299,6 +342,7 @@ export interface ResponseRow {
   sectionNo: string;
   sectionHeading: string;
   itemText: string;
+  compliantAnswer: Answer | null;
   aiAnswer: Answer | null;
   aiQuote: string | null;
   answer: Answer | null;
@@ -312,6 +356,8 @@ export interface InspectionDetail {
   inspectionDate: string | null;
   inspector: string | null;
   area: string | null;
+  inspectionTime: string | null;
+  refNo: string | null;
   aiState: string;
   aiNote: string | null;
   reviewedAt: number | null;
@@ -329,6 +375,8 @@ export async function getInspection(inspectionId: string): Promise<InspectionDet
       inspectionDate: checklistInspections.inspectionDate,
       inspector: checklistInspections.inspector,
       area: checklistInspections.area,
+      inspectionTime: checklistInspections.inspectionTime,
+      refNo: checklistInspections.refNo,
       aiState: checklistInspections.aiState,
       aiNote: checklistInspections.aiNote,
       reviewedAt: checklistInspections.reviewedAt,
@@ -340,11 +388,15 @@ export async function getInspection(inspectionId: string): Promise<InspectionDet
     .where(and(eq(checklistInspections.id, inspectionId), eq(checklistInspections.workspaceId, WORKSPACE_ID)))
     .limit(1);
   if (!i) return null;
-  const [template] = await db
-    .select(templateCols)
-    .from(checklistTemplates)
-    .where(eq(checklistTemplates.id, i.templateId))
-    .limit(1);
+  const template = toTemplate(
+    (
+      await db
+        .select(templateCols)
+        .from(checklistTemplates)
+        .where(eq(checklistTemplates.id, i.templateId))
+        .limit(1)
+    )[0],
+  )!;
   const rows = await db
     .select()
     .from(checklistResponses)
@@ -356,6 +408,7 @@ export async function getInspection(inspectionId: string): Promise<InspectionDet
       sectionNo: r.sectionNo,
       sectionHeading: r.sectionHeading,
       itemText: r.itemText,
+      compliantAnswer: parseAnswer(r.compliantAnswer),
       aiAnswer: parseAnswer(r.aiAnswer),
       aiQuote: r.aiQuote,
       answer: parseAnswer(r.answer),
@@ -424,6 +477,8 @@ export interface SaveInput {
   inspectionDate: string | null;
   inspector: string | null;
   area: string | null;
+  inspectionTime?: string | null;
+  refNo?: string | null;
   answers: Record<string, { answer: Answer | null; remark: string | null }>;
 }
 
@@ -448,6 +503,8 @@ export async function saveInspection(inspectionId: string, input: SaveInput, use
         inspectionDate: input.inspectionDate,
         inspector: input.inspector?.trim() || null,
         area: input.area?.trim() || null,
+        inspectionTime: input.inspectionTime?.trim() || null,
+        refNo: input.refNo?.trim().slice(0, 80) || null,
         reviewedBy: userId,
         reviewedAt: Math.floor(Date.now() / 1000),
       })
@@ -505,16 +562,29 @@ async function moveRow(
   for (let k = 0; k < ordered.length; k++) if (ordered[k].seq !== k + 1) await write(ordered[k].id, k + 1);
 }
 
-export type ItemOp = "save" | "toggle" | "up" | "down";
+export type ItemOp = "save" | "toggle" | "up" | "down" | "compliance";
 
 /** Edit one item of a project's form. Items are switched off, never deleted. */
-export async function editItem(templateId: string, itemId: string, op: ItemOp, text?: string): Promise<boolean> {
+export async function editItem(
+  templateId: string,
+  itemId: string,
+  op: ItemOp,
+  text?: string,
+  compliant?: string,
+): Promise<boolean> {
   const item = await ownItem(templateId, itemId);
   if (!item) return false;
   if (op === "save") {
     const t = clean(text ?? "", 400);
     if (!t) return false;
     await db.update(checklistItems).set({ text: t }).where(eq(checklistItems.id, itemId));
+  } else if (op === "compliance") {
+    // "yes" | "no" | anything else = an observation with no compliant answer.
+    const c = parseAnswer(compliant);
+    await db
+      .update(checklistItems)
+      .set({ compliantAnswer: c === "yes" || c === "no" ? c : null })
+      .where(eq(checklistItems.id, itemId));
   } else if (op === "toggle") {
     await db.update(checklistItems).set({ active: !item.active }).where(eq(checklistItems.id, itemId));
   } else {
@@ -574,8 +644,10 @@ export async function addSection(templateId: string, heading: string): Promise<b
 /** The form's printed title and confirmation statement. */
 export async function editFormText(templateId: string, title: string, confirmation: string): Promise<boolean> {
   const t = clean(title, 200);
+  // A form may have no confirmation statement (the ESC form signs off with
+  // "Checked & verified by" blocks instead).
   const c = clean(confirmation, 1500);
-  if (!t || !c) return false;
+  if (!t) return false;
   await db
     .update(checklistTemplates)
     .set({ title: t, confirmation: c, updatedAt: Math.floor(Date.now() / 1000) })

@@ -40,7 +40,7 @@ Return ONLY JSON: {"items": [{"no": string, "status": string, "quote": string}]}
 
 status must be exactly one of:
 - "covered": the plan itself states the measure the item describes, as a commitment or procedure. A general statement of intent ("good indoor air quality will be maintained") does not cover a specific item.
-- "not_applicable": the plan explicitly says the item does not apply to this project (for example "there is no demolition in this scope" for a demolition item). Never conclude this from silence.
+- "not_applicable": the plan explicitly says the item does not apply to this project (for example "there is no demolition in this scope" for a demolition item). This includes the plan saying the activity the item asks about is not permitted or does not take place on this site: "Concrete washout is not permitted on site" makes "Is the concrete washout area in order?" not_applicable, not covered. Never conclude this from silence.
 - "none": anything else, including when the plan does not mention the item.
 
 Rules:

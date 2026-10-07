@@ -46,6 +46,7 @@ const r = (itemNo: string, sectionNo: string, sectionHeading: string, itemText: 
   sectionNo,
   sectionHeading,
   itemText,
+  compliantAnswer: "yes",
   aiAnswer: null,
   aiQuote: null,
   answer: null,
@@ -60,6 +61,8 @@ const inspection: InspectionDetail = {
   inspectionDate: "2026-10-08",
   inspector: "Site IAQ Coordinator",
   area: "Level 2",
+  inspectionTime: null,
+  refNo: null,
   aiState: "done",
   aiNote: "[]",
   reviewedAt: 1_759_900_000,
@@ -73,6 +76,10 @@ const inspection: InspectionDetail = {
     confirmation: "I confirm the checked activities to be proceeding according to the plan.",
     planDocument: "IAQ Management Plan",
     sheetDocument: "Completed IAQ Checklist",
+    naColumn: false,
+    remarksLabel: "Remarks",
+    headerFields: ["date", "inspector", "area"],
+    signatories: [],
   },
   responses: [
     r("1.1", "1", "HVAC Protection", "Filters at supply air intake", { aiAnswer: "yes", answer: "yes" }),
@@ -108,6 +115,11 @@ describe("buildInspectionSheet", () => {
   it("carries the header and reviewer, and is a construction-stage sheet while the project is at design", () => {
     const m = model();
     expect(m.inspection).toEqual({ date: "8 Oct 2026", inspector: "Site IAQ Coordinator", area: "Level 2" });
+    expect(m.layout.header).toEqual([
+      { label: "Inspection date", value: "8 Oct 2026" },
+      { label: "Inspected by", value: "Site IAQ Coordinator" },
+      { label: "Area / level", value: "Level 2" },
+    ]);
     expect(m.reviewed).toEqual({ by: "Admin", on: "8 Oct 2026" });
     expect(m.project.stageLabel).toBe("Construction");
     expect(m.photos.map((p) => p.attachedTo)).toEqual(["Requirement #1 — Completed IAQ Checklist of all regular inspections…"]);
@@ -141,7 +153,7 @@ describe("InspectionSheet PDF", () => {
     expect(pages).toBe(2);
     expect(text).toContain("Construction Indoor Air Quality Inspection");
     expect(text).toContain("Construction stage");
-    expect(text).toMatch(/Inspection date 8 Oct 2026 Inspector Site IAQ Coordinator Area \/ level Level 2/);
+    expect(text).toMatch(/Inspection date 8 Oct 2026 Inspected by Site IAQ Coordinator Area \/ level Level 2/);
     expect(text).toMatch(/No Description Yes No Remarks 1 HVAC Protection/);
     expect(text).toContain("1.1 Filters at supply air intake YES");
     expect(text).toContain("1.2 Filters at return air openings NO Filters missing on AHU-3");
@@ -151,6 +163,40 @@ describe("InspectionSheet PDF", () => {
     expect(text).toContain("Signature");
     expect(text).not.toMatch(/\bAI\b|In uploaded plan|No demolition/);
     expect(text).toContain("Dust-screen.png");
+  });
+
+  it("follows the ESC form's layout: Ref No and Time, an NA column, the notes column, two sign-offs, no statement", async () => {
+    const esc: InspectionDetail = {
+      ...inspection,
+      inspectionDate: "2026-05-30",
+      inspectionTime: "09:00",
+      refNo: "MBL-JCD-ESC-001",
+      inspector: "Waqar Ahmed",
+      area: null,
+      template: {
+        ...inspection.template,
+        title: "Erosion & Sedimentation Control Inspection and Corrective Action Log",
+        confirmation: "",
+        naColumn: true,
+        remarksLabel: "Notes/Comments/Non-Conformances",
+        headerFields: ["ref_no", "date", "time", "inspector"],
+        signatories: ["Sustainability Manager", "Environmental Manager"],
+      },
+      responses: [
+        r("1.1", "1", "Dust control and soil erosion by wind", "Are soil stockpiles adequately covered or stabilized", { answer: "yes", remark: "Topsoil stockpile covered with sheet." }),
+        r("1.4", "1", "Dust control and soil erosion by wind", "Is perimeter fencing effective in reducing wind speed causing soil erosion?", { answer: "na", remark: "Wind will not cause any soil erosion due to high moisture in the soil." }),
+        r("1.5", "1", "Dust control and soil erosion by wind", "Is there any damage in perimeter fencing?", { compliantAnswer: "no", answer: "no", remark: "Fencing around the site is well-maintained." }),
+      ],
+    };
+    const { text } = await textOf(await renderToBuffer(InspectionSheet({ model: model({ inspection: esc }), images: new Map() })));
+    expect(text).toContain("Erosion & Sedimentation Control Inspection and Corrective Action Log");
+    expect(text).toMatch(/Ref No MBL-JCD-ESC-001 Inspection date 30 May 2026 Time 09:00 Inspected by Waqar Ahmed/);
+    expect(text).toMatch(/No Description Yes No NA Notes\/Comments\/Non-Conformances/);
+    expect(text).toContain("1.4 Is perimeter fencing effective in reducing wind speed causing soil erosion? N/A Wind will not cause");
+    expect(text).toContain("1.5 Is there any damage in perimeter fencing? NO Fencing around the site is well-maintained.");
+    expect(text).toMatch(/Checked & verified by Position: Sustainability Manager Signature Checked & verified by Position: Environmental Manager Signature/);
+    expect(text).not.toContain("I confirm");
+    expect(text).not.toContain("Area / level");
   });
 
   it("renders with no photographs on one page", async () => {

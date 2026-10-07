@@ -85,7 +85,7 @@ export default async function FormEditorPage({
               <input name="title" defaultValue={shown.title} className="input mt-1" />
             </label>
             <label className="text-sm font-medium text-slate-700">
-              Confirmation statement (printed above the signature)
+              Confirmation statement (printed above the sign-off; leave empty for none)
               <textarea name="confirmation" defaultValue={shown.confirmation} rows={3} className="input mt-1" />
             </label>
             <div>
@@ -128,6 +128,17 @@ export default async function FormEditorPage({
                         defaultValue={it.text}
                         className={`input flex-1 ${it.active ? "" : "text-slate-400 line-through"}`}
                       />
+                      <select
+                        name="compliant"
+                        defaultValue={it.compliantAnswer ?? ""}
+                        title="Which answer means compliant. The AI only ever suggests Yes where Yes is compliant."
+                        className="rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-600"
+                      >
+                        <option value="yes">Yes = compliant</option>
+                        <option value="no">No = compliant</option>
+                        <option value="">Observation</option>
+                      </select>
+                      <button type="submit" name="op" value="compliance" className={small}>Set</button>
                       <button type="submit" name="op" value="save" className={small}>Save</button>
                       <button type="submit" name="op" value="toggle" className={small}>
                         {it.active ? "Switch off" : "Switch on"}

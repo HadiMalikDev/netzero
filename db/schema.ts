@@ -406,6 +406,21 @@ export const checklistTemplates = pgTable(
      */
     planDocument: text("plan_document"),
     sheetDocument: text("sheet_document"),
+    /**
+     * How the printed sheet is laid out, per form, because each site team's
+     * form differs (2026-10-08): IAQ prints N/A inside Remarks; ESC has its own
+     * NA column and calls the last column "Notes/Comments/Non-Conformances".
+     */
+    naColumn: boolean("na_column").notNull().default(false),
+    remarksLabel: text("remarks_label").notNull().default("Remarks"),
+    /** Header fields, in order, as a JSON list of: ref_no, date, time, inspector, area. */
+    headerFields: text("header_fields").notNull().default('["date","inspector","area"]'),
+    /**
+     * Sign-off positions as a JSON list, e.g. ["Sustainability Manager",
+     * "Environmental Manager"]: one "Checked & verified by" block each. Empty
+     * list = a single Signature / Date line under the confirmation statement.
+     */
+    signatories: text("signatories").notNull().default("[]"),
     createdAt: integer("created_at").notNull().default(now),
     updatedAt: integer("updated_at").notNull().default(now),
   },
@@ -437,6 +452,13 @@ export const checklistItems = pgTable("checklist_item", {
    * the item can come back. Off items are left out of new inspections.
    */
   active: boolean("active").notNull().default(true),
+  /**
+   * The answer that means compliant: "yes" (a measure in place), "no" (a
+   * problem absent, e.g. "Is there any spill or leak at site?"), or null for a
+   * plain observation ("Any rain in the last 24 hours?"). The AI suggests Yes
+   * only where Yes is compliant, so it can never assert that a problem exists.
+   */
+  compliantAnswer: text("compliant_answer").default("yes"),
 });
 
 /**
@@ -455,6 +477,9 @@ export const checklistInspections = pgTable("checklist_inspection", {
   inspectionDate: text("inspection_date"),
   inspector: text("inspector"),
   area: text("area"),
+  inspectionTime: text("inspection_time"),
+  /** The team's own reference, e.g. "MBL-JCD-ESC-001". */
+  refNo: text("ref_no"),
   /** pending | done | skipped | failed — the AI draft, not the review. */
   aiState: text("ai_state").notNull().default("pending"),
   /** Why the draft was skipped or failed, or which files it read (JSON list). */
@@ -481,6 +506,8 @@ export const checklistResponses = pgTable(
     sectionNo: text("section_no").notNull(),
     sectionHeading: text("section_heading").notNull(),
     itemText: text("item_text").notNull(),
+    /** The item's compliant answer, copied in with its text. */
+    compliantAnswer: text("compliant_answer"),
     /** The AI's suggestion: "yes" | "na" | null (no suggestion). Never "no". */
     aiAnswer: text("ai_answer"),
     /** The plan sentence behind the suggestion, verbatim. */

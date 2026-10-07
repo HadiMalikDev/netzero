@@ -92,6 +92,8 @@ export async function saveInspectionAction(formData: FormData): Promise<void> {
     inspectionDate: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
     inspector: String(formData.get("inspector") ?? ""),
     area: String(formData.get("area") ?? ""),
+    inspectionTime: /^\d{2}:\d{2}$/.test(String(formData.get("inspectionTime") ?? "")) ? String(formData.get("inspectionTime")) : null,
+    refNo: String(formData.get("refNo") ?? ""),
     answers: {},
   };
   for (const r of insp.responses) {
@@ -138,8 +140,14 @@ export async function editItemAction(formData: FormData): Promise<void> {
   const { projectId, code, templateId } = await ownTemplate(formData);
   if (!templateId) throw new Error("make the project's own copy first");
   const op = String(formData.get("op") ?? "") as ItemOp;
-  if (!["save", "toggle", "up", "down"].includes(op)) throw new Error("bad op");
-  await editItem(templateId, String(formData.get("itemId") ?? ""), op, String(formData.get("text") ?? ""));
+  if (!["save", "toggle", "up", "down", "compliance"].includes(op)) throw new Error("bad op");
+  await editItem(
+    templateId,
+    String(formData.get("itemId") ?? ""),
+    op,
+    String(formData.get("text") ?? ""),
+    String(formData.get("compliant") ?? ""),
+  );
   backToForm(projectId, code);
 }
 

@@ -3,6 +3,8 @@ import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/render
 import { base, C, Footer, safe } from "./shared";
 import type { ImageBytes } from "./ChecklistReport";
 import type { SheetModel, SheetSection } from "@/lib/report/inspection-sheet";
+// The header and sign-off follow each form's own layout (naColumn, remarks
+// label, header fields, signatories): see checklist_template in db/schema.ts.
 import { formatUploadedAt } from "@/lib/format";
 
 /**
@@ -20,8 +22,10 @@ const s = {
     kicker: { fontSize: 9, textTransform: "uppercase", color: C.brand, fontFamily: "Helvetica-Bold", marginBottom: 6 },
     title: { fontSize: 18, lineHeight: 1.2, fontFamily: "Helvetica-Bold", color: C.ink },
     subtitle: { fontSize: 11, color: C.muted, marginTop: 2, marginBottom: 10 },
-    fillRow: { flexDirection: "row", marginTop: 8, marginBottom: 12 },
-    fill: { flex: 1, flexDirection: "row", alignItems: "flex-end", marginRight: 18 },
+    fillRow: { flexDirection: "row", flexWrap: "wrap", marginTop: 8, marginBottom: 6 },
+    // flexGrow/Shrink/Basis set one by one: `flex: 0` would zero the basis and ignore the width.
+    fillHalf: { flexGrow: 0, flexShrink: 0, flexBasis: "47%", width: "47%", marginBottom: 8 },
+    fill: { flex: 1, flexDirection: "row", alignItems: "flex-end", marginRight: 18, marginBottom: 6 },
     fillLabel: { fontSize: 9, fontFamily: "Helvetica-Bold", color: C.ink, marginRight: 6 },
     fillValue: { flex: 1, fontSize: 10, color: C.ink, borderBottomWidth: 1, borderBottomColor: C.ink, paddingBottom: 1, minHeight: 13 },
     // table
@@ -36,6 +40,7 @@ const s = {
     tdYes: { width: 44, borderLeftWidth: 1, borderLeftColor: C.line, textAlign: "center", fontFamily: "Helvetica-Bold", color: C.ink },
     tdNoCol: { width: 44, borderLeftWidth: 1, borderLeftColor: C.line, textAlign: "center", fontFamily: "Helvetica-Bold", color: C.ink },
     tdRemarks: { width: 150, borderLeftWidth: 1, borderLeftColor: C.line },
+    tdRemarksWide: { width: 170 },
     sectionHeading: { fontFamily: "Helvetica-Bold", color: C.ink },
     na: { fontFamily: "Helvetica-Bold", color: C.ink },
     // confirmation
@@ -43,6 +48,8 @@ const s = {
     reviewed: { marginTop: 6, fontSize: 8.5, color: C.muted },
     signRow: { flexDirection: "row", marginTop: 22, alignItems: "flex-end" },
     signLine: { flex: 1, borderBottomWidth: 1, borderBottomColor: C.ink, height: 13 },
+    signBlocks: { flexDirection: "row", marginTop: 14, borderWidth: 1, borderColor: C.line, padding: 10 },
+    signBlock: { flex: 1, marginRight: 24 },
     // photos
     h2: { fontSize: 12, lineHeight: 1.3, fontFamily: "Helvetica-Bold", color: C.ink, marginBottom: 6, paddingBottom: 3, borderBottomWidth: 1.5, borderBottomColor: C.ink },
     ph: { fontSize: 10, fontFamily: "Helvetica-Bold", color: C.ink, padding: 6, textAlign: "center", textTransform: "uppercase" },
@@ -55,7 +62,7 @@ const s = {
   }),
 };
 
-function SectionRows({ section }: { section: SheetSection }) {
+function SectionRows({ section, naColumn }: { section: SheetSection; naColumn: boolean }) {
   return (
     <>
       <View style={[s.tr, s.trSection]} wrap={false} minPresenceAhead={40}>
@@ -68,9 +75,10 @@ function SectionRows({ section }: { section: SheetSection }) {
           <Text style={[s.td, s.tdDesc]}>{safe(it.text)}</Text>
           <Text style={[s.td, s.tdYes]}>{it.answer === "yes" ? "YES" : ""}</Text>
           <Text style={[s.td, s.tdNoCol]}>{it.answer === "no" ? "NO" : ""}</Text>
-          <Text style={[s.td, s.tdRemarks]}>
-            {it.answer === "na" ? <Text style={s.na}>N/A</Text> : null}
-            {it.answer === "na" && it.remark ? " · " : ""}
+          {naColumn ? <Text style={[s.td, s.tdNoCol]}>{it.answer === "na" ? "N/A" : ""}</Text> : null}
+          <Text style={naColumn ? [s.td, s.tdRemarks, s.tdRemarksWide] : [s.td, s.tdRemarks]}>
+            {!naColumn && it.answer === "na" ? <Text style={s.na}>N/A</Text> : null}
+            {!naColumn && it.answer === "na" && it.remark ? " · " : ""}
             {it.remark ? safe(it.remark) : ""}
           </Text>
         </View>
@@ -79,9 +87,14 @@ function SectionRows({ section }: { section: SheetSection }) {
   );
 }
 
-function Fill({ label, value, last }: { label: string; value: string | null; last?: boolean }) {
+/**
+ * One filled header field. Three fit on a line (IAQ); with more (ESC: Ref No,
+ * date, time, inspector) values would wrap mid-word, so they go two per line.
+ */
+function Fill({ label, value, last, half }: { label: string; value: string | null; last?: boolean; half?: boolean }) {
+  const style = half ? [s.fill, s.fillHalf, last ? { marginRight: 0 } : {}] : last ? [s.fill, { marginRight: 0 }] : s.fill;
   return (
-    <View style={last ? [s.fill, { marginRight: 0 }] : s.fill}>
+    <View style={style}>
       <Text style={s.fillLabel}>{label}</Text>
       <Text style={s.fillValue}>{value ? safe(value) : " "}</Text>
     </View>
@@ -108,9 +121,15 @@ export function InspectionSheet({ model, images }: InspectionSheetProps) {
         </Text>
 
         <View style={s.fillRow}>
-          <Fill label="Inspection date" value={inspection.date} />
-          <Fill label="Inspector" value={inspection.inspector} />
-          <Fill label="Area / level" value={inspection.area} last />
+          {model.layout.header.map((h, i) => (
+            <Fill
+              key={h.label}
+              label={h.label}
+              value={h.value}
+              half={model.layout.header.length > 3}
+              last={model.layout.header.length > 3 ? i % 2 === 1 : i === model.layout.header.length - 1}
+            />
+          ))}
         </View>
 
         <View style={s.table}>
@@ -119,28 +138,50 @@ export function InspectionSheet({ model, images }: InspectionSheetProps) {
             <Text style={[s.th, s.tdDesc, { textAlign: "left" }]}>Description</Text>
             <Text style={[s.th, s.tdYes]}>Yes</Text>
             <Text style={[s.th, s.tdNoCol]}>No</Text>
-            <Text style={[s.th, s.tdRemarks]}>Remarks</Text>
+            {model.layout.naColumn ? <Text style={[s.th, s.tdNoCol]}>NA</Text> : null}
+            <Text style={model.layout.naColumn ? [s.th, s.tdRemarks, s.tdRemarksWide] : [s.th, s.tdRemarks]}>
+              {safe(model.layout.remarksLabel)}
+            </Text>
           </View>
           {model.sections.map((sec) => (
-            <SectionRows key={sec.no} section={sec} />
+            <SectionRows key={sec.no} section={sec} naColumn={model.layout.naColumn} />
           ))}
         </View>
 
         <View wrap={false}>
-          <Text style={s.confirm}>{safe(model.confirmation)}</Text>
+          {model.confirmation ? <Text style={s.confirm}>{safe(model.confirmation)}</Text> : null}
           <Text style={s.reviewed}>
             {reviewed.by ? `Responses reviewed by ${safe(reviewed.by)}${reviewed.on ? ` on ${reviewed.on}` : ""}.` : "Not reviewed."}
           </Text>
-          <View style={s.signRow}>
-            <View style={[s.fill, { flex: 3 }]}>
-              <Text style={s.fillLabel}>Signature</Text>
-              <View style={s.signLine} />
+          {model.layout.signatories.length ? (
+            // One "Checked & verified by" block per position, as the team's form has.
+            <View style={s.signBlocks}>
+              {model.layout.signatories.map((pos, i) => (
+                <View key={pos} style={i === model.layout.signatories.length - 1 ? [s.signBlock, { marginRight: 0 }] : s.signBlock}>
+                  <View style={s.fill}>
+                    <Text style={s.fillLabel}>Checked &amp; verified by</Text>
+                    <View style={s.signLine} />
+                  </View>
+                  <Text style={[s.fillLabel, { marginTop: 6 }]}>Position: {safe(pos)}</Text>
+                  <View style={[s.fill, { marginTop: 16 }]}>
+                    <Text style={s.fillLabel}>Signature</Text>
+                    <View style={s.signLine} />
+                  </View>
+                </View>
+              ))}
             </View>
-            <View style={[s.fill, { flex: 2, marginRight: 0 }]}>
-              <Text style={s.fillLabel}>Date</Text>
-              <View style={s.signLine} />
+          ) : (
+            <View style={s.signRow}>
+              <View style={[s.fill, { flex: 3 }]}>
+                <Text style={s.fillLabel}>Signature</Text>
+                <View style={s.signLine} />
+              </View>
+              <View style={[s.fill, { flex: 2, marginRight: 0 }]}>
+                <Text style={s.fillLabel}>Date</Text>
+                <View style={s.signLine} />
+              </View>
             </View>
-          </View>
+          )}
         </View>
 
         <View break={model.photos.length > 0} style={model.photos.length ? {} : { marginTop: 24 }}>

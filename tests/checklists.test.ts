@@ -41,10 +41,10 @@ describe("numberForm", () => {
     { id: "a", seq: 1, heading: "HVAC Protection" },
   ];
   const items = [
-    { id: "a2", sectionId: "a", seq: 2, text: "Return filters", active: false },
-    { id: "a1", sectionId: "a", seq: 1, text: "Supply filters", active: true },
-    { id: "a3", sectionId: "a", seq: 3, text: "Seal diffusers", active: true },
-    { id: "b1", sectionId: "b", seq: 1, text: "Low-VOC products", active: true },
+    { id: "a2", sectionId: "a", seq: 2, text: "Return filters", active: false, compliantAnswer: "yes" as const },
+    { id: "a1", sectionId: "a", seq: 1, text: "Supply filters", active: true, compliantAnswer: "yes" as const },
+    { id: "a3", sectionId: "a", seq: 3, text: "Seal diffusers", active: true, compliantAnswer: "yes" as const },
+    { id: "b1", sectionId: "b", seq: 1, text: "Low-VOC products", active: true, compliantAnswer: "yes" as const },
   ];
 
   it("numbers sections by order and items among the active ones, leaving no gap", () => {
@@ -257,6 +257,61 @@ describeDb("project checklist forms", () => {
     const before = await getForm(t.id);
     await editSection(t.id, before[0].id, "up");
     expect((await getForm(t.id)).map((s) => s.id)).toEqual(before.map((s) => s.id));
+  });
+
+  it("seeds the ESC form for Construction Environmental Management, laid out as the team's form", async () => {
+    const esc = await defaultTemplateFor("construction environmental management");
+    expect(esc).toMatchObject({
+      title: "Erosion & Sedimentation Control Inspection and Corrective Action Log",
+      confirmation: "",
+      planDocument: "CEMP developed",
+      sheetDocument: "Site audit report",
+      naColumn: true,
+      remarksLabel: "Notes/Comments/Non-Conformances",
+      headerFields: ["ref_no", "date", "time", "inspector"],
+      signatories: ["Sustainability Manager", "Environmental Manager"],
+    });
+    const form = await getForm(esc!.id);
+    expect(form.map((s) => [s.heading, s.items.length])).toEqual([
+      ["Dust control and soil erosion by wind", 6],
+      ["Stormwater control measures", 11],
+      ["Dewatering water", 4],
+      ["Housekeeping", 7],
+    ]);
+    const items = form.flatMap((s) => s.items);
+    const by = (t: string) => items.find((i) => i.text.startsWith(t))!;
+    expect(by("Are soil stockpiles adequately covered").compliantAnswer).toBe("yes");
+    expect(by("Is there any spill or leak at site").compliantAnswer).toBe("no");
+    expect(by("Is there any damage in perimeter fencing").compliantAnswer).toBe("no");
+    expect(by("Is there any incidence of rain").compliantAnswer).toBeNull();
+    expect(items.filter((i) => i.compliantAnswer === "no")).toHaveLength(5);
+    // IAQ keeps its own layout.
+    const iaq = await defaultTemplateFor("Indoor Air Quality");
+    expect(iaq).toMatchObject({ naColumn: false, remarksLabel: "Remarks", headerFields: ["date", "inspector", "area"], signatories: [] });
+  });
+
+  it("a project's copy keeps the layout and each item's compliant answer; an inspection snapshots it", async () => {
+    const t = (await ensureProjectTemplate(otherPcId, "Outdoor Water Performance"))!;
+    expect(t).toBeNull(); // W-02 has no form
+    const escPc = randomUUID();
+    const escCredit = randomUUID();
+    await db.insert(catalogCredits).values({ id: escCredit, workspaceId: WORKSPACE_ID, rsVersionId: versionId, code: "SS-03", title: "Construction Environmental Management", categoryCode: "SS", categoryName: "Site" });
+    await db.insert(projectCredits).values({ id: escPc, workspaceId: WORKSPACE_ID, projectId, catalogCreditId: escCredit });
+    const copy = (await ensureProjectTemplate(escPc, "Construction Environmental Management"))!;
+    expect(copy).toMatchObject({ naColumn: true, signatories: ["Sustainability Manager", "Environmental Manager"] });
+    const spill = (await getForm(copy.id)).flatMap((s) => s.items).find((i) => i.text.startsWith("Is there any spill"))!;
+    expect(spill.compliantAnswer).toBe("no");
+    expect(await editItem(copy.id, spill.id, "compliance", undefined, "")).toBe(true);
+    expect((await getForm(copy.id)).flatMap((s) => s.items).find((i) => i.id === spill.id)!.compliantAnswer).toBeNull();
+    const inspId = await startInspection(copy.id);
+    const insp = (await getInspection(inspId))!;
+    expect(insp.responses.find((r) => r.itemText.startsWith("Are soil stockpiles"))!.compliantAnswer).toBe("yes");
+    expect(insp.responses.find((r) => r.itemText.startsWith("Is there any spill"))!.compliantAnswer).toBeNull();
+    await saveInspection(inspId, { inspectionDate: "2026-05-30", inspector: "Waqar Ahmed", area: null, inspectionTime: "09:00", refNo: "MBL-JCD-ESC-001", answers: {} }, "user_solo");
+    expect(await getInspection(inspId)).toMatchObject({ refNo: "MBL-JCD-ESC-001", inspectionTime: "09:00" });
+    await db.delete(checklistInspections).where(eq(checklistInspections.id, inspId));
+    await db.delete(checklistTemplates).where(eq(checklistTemplates.id, copy.id));
+    await db.delete(projectCredits).where(eq(projectCredits.id, escPc));
   });
 
   it("records why a draft was skipped", async () => {
