@@ -54,6 +54,27 @@ export interface SheetInput {
   coverage: CoverageOutcome;
 }
 
+const STAGE_LABEL: Record<string, string> = { design: "Design", construction: "Construction" };
+
+/**
+ * The stage the sheet is used in: the catalog's stage tag on the document the
+ * completed sheet provides (HC-10's "Completed IAQ Checklist…" is a
+ * construction-stage document). Falls back to the project's stage only when
+ * the catalog has no such document or no tag on it.
+ */
+export function sheetStage(
+  credit: CreditView,
+  sheetDocument: RegExp,
+  projectStage: ProjectStage,
+): string {
+  for (const req of credit.requirements) {
+    const i = req.evidenceSpecs.findIndex((d) => sheetDocument.test(d));
+    const tag = i >= 0 ? req.evidenceStages[i] : null;
+    if (tag && STAGE_LABEL[tag]) return STAGE_LABEL[tag];
+  }
+  return STAGE_LABEL[projectStage];
+}
+
 export function buildInspectionSheet(input: SheetInput): SheetModel {
   const { template, credit, coverage } = input;
   let covered = 0;
@@ -75,7 +96,7 @@ export function buildInspectionSheet(input: SheetInput): SheetModel {
     project: {
       name: input.projectName,
       ratingSystem: input.ratingSystem,
-      stageLabel: input.stage === "construction" ? "Construction" : "Design",
+      stageLabel: sheetStage(credit, template.sheetDocument, input.stage),
     },
     credit: {
       code: credit.code,

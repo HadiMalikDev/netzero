@@ -40,6 +40,13 @@ export interface InspectionTemplate {
    * against (for the advisory coverage column). Matched on the document text.
    */
   planDocument: RegExp;
+  /**
+   * The required document this sheet becomes once completed (e.g. "Completed
+   * IAQ Checklist…"). The sheet takes its stage from that document's stage tag
+   * in the catalog, not from where the project currently is: the form is used
+   * during construction even while the project is still at design.
+   */
+  sheetDocument: RegExp;
   sections: TemplateSection[];
   /** The declaration above the signature line. */
   confirmation: string;
@@ -56,6 +63,7 @@ export const IAQ_INSPECTION: InspectionTemplate = {
   title: "Construction Indoor Air Quality Inspection",
   matches: (c) => /indoor\s+air\s+quality/i.test(c.title),
   planDocument: /IAQ\s+Management\s+Plan/i,
+  sheetDocument: /Completed\s+IAQ\s+Checklist/i,
   sections: [
     section("1", "HVAC Protection", [
       "Filters at supply air intake",

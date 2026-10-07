@@ -23,6 +23,7 @@ const credit = {
     {
       seq: 1,
       evidenceSpecs: ["Spec", "IAQ Management Plan", "Completed IAQ Checklist"],
+      evidenceStages: ["design", "construction", "construction"],
       attachments: [
         { id: "photo", fileName: "Dust-screen.png", fileSize: 70, createdAt: 1_759_800_000, evidenceSpecIndex: 2, review: null },
       ],

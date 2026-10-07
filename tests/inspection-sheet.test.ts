@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CreditView, EvidenceAttachment, RequirementView } from "@/lib/data";
-import { buildInspectionSheet, planFileIds } from "@/lib/report/inspection-sheet";
+import { buildInspectionSheet, planFileIds, sheetStage } from "@/lib/report/inspection-sheet";
 import {
   IAQ_INSPECTION,
   templateFor,
@@ -76,6 +76,7 @@ const hc10: CreditView = {
     req({
       seq: 1,
       evidenceSpecs: ["Specifications…", "IAQ Management Plan with all control measures…", "Completed IAQ Checklist…", "Flush-out report"],
+      evidenceStages: ["design", "construction", "construction", "construction"],
       attachments: [
         file("spec", 0),
         file("plan", 1, "IAQ-Plan-rev2.pdf"),
@@ -191,5 +192,18 @@ describe("buildInspectionSheet", () => {
     ]);
     expect(m.project.stageLabel).toBe("Construction");
     expect(m.credit.pageSpan).toBe("pp.182–185");
+  });
+
+  it("is a construction-stage sheet even while the project is at design (client feedback)", () => {
+    const m = buildInspectionSheet({ ...base, stage: "design", coverage: { ran: false, reason: "x" } });
+    expect(m.project.stageLabel).toBe("Construction");
+  });
+
+  it("takes the stage from the catalog's tag, falling back to the project's when untagged", () => {
+    expect(sheetStage(hc10, IAQ_INSPECTION.sheetDocument, "design")).toBe("Construction");
+    const untagged = { ...hc10, requirements: [req({ seq: 1, evidenceSpecs: ["Completed IAQ Checklist"], evidenceStages: [null] })] };
+    expect(sheetStage(untagged, IAQ_INSPECTION.sheetDocument, "design")).toBe("Design");
+    const absent = { ...hc10, requirements: [] };
+    expect(sheetStage(absent, IAQ_INSPECTION.sheetDocument, "construction")).toBe("Construction");
   });
 });

@@ -152,6 +152,25 @@ server and `netzero_v2`, each PDF opened and read page by page.
 | `tsc --noEmit`, `pnpm lint` | clean / 0 errors |
 | `pnpm build` | succeeds |
 
+### Client feedback — 2026-10-08: it is a construction-stage sheet
+
+> IAQ report looks good, just one comment. It will be followed during the
+> construction stage, not design stage.
+
+The header printed the *project's* stage, so Jeddah (at Design) got a sheet
+reading "Design stage". The sheet now takes its stage from the catalog: the
+template names the document the completed sheet becomes ("Completed IAQ
+Checklist…"), and that document's stage tag in the parsed manual is
+CONSTRUCTION. Not hardcoded: a sheet whose document is untagged falls back to
+the project's stage (`sheetStage`, tested). The button stays available at
+Design stage so the team can print the form ahead of time.
+
+Re-downloaded from the dev server: the Jeddah sheet (project at Design) and
+the Riyadh plan-and-photo sheet both read "Construction stage"; the evidence
+PDFs above are the new ones. The plan read gave 20/32 on this run against
+19/32 on the first, on identical plan text: the model is not deterministic,
+another reason its column is advisory and quoted.
+
 ### Left open
 
 - The CEMP site-audit sheet for SS-03 needs the team's form; the template
