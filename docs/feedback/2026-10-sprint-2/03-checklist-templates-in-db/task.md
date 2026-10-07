@@ -207,3 +207,55 @@ keeps the Description | Photos page.
 
 **A deliberate difference:** the team's ESC form has no item numbers; the
 app numbers items (1.1, 1.2…) so reviewers and the AI can refer to them.
+
+---
+
+## Added — 2026-10-08: the ESC corrective-action log
+
+The third page of the client's ESC form is an **Environmental Observations**
+log: Sr#, Observation, Recommendation, Photo, Corrective Action Taken, Photo,
+Obs. Date / Closing Date, Status. Decisions (Hadi):
+
+| Question | Answer |
+|---|---|
+| Where do observations come from? | **Automatically from non-compliant answers, plus added by hand** |
+| Per inspection or running? | **A running log per credit**: open until someone closes it |
+| AI help? | **The AI drafts the recommendation**, editable |
+| Which forms? | **ESC only, switchable per form** (Edit form → form settings) |
+
+How it works:
+
+- **Saving a review** opens an observation for every non-compliant answer,
+  meaning No on a "Yes is compliant" item or Yes on a "No is compliant" one,
+  unless the log already has an open one for that item. N/A, blanks and
+  observation-only items never open one.
+- **The AI drafts a recommendation** from the observation and the project's
+  CEMP, labelled "AI draft" until a person edits it. A late draft never
+  overwrites a person's text.
+- **On the Inspections page** each row is editable: observation,
+  recommendation, before photo, corrective action, after photo (PNG or JPEG,
+  stored as the credit's evidence), observed and closing dates, Open/Closed.
+  Closing without a date records today.
+- **In the PDF** the log replaces the plain photo list, on a landscape page in
+  the client's columns and colours (dark green header, Environmental
+  Observations band, Open amber, Closed green). It prints the log as it
+  stands when downloaded.
+
+[ESC sheet with the log, downloaded from the app](./evidence/after-esc-observations-log.pdf)
+uses **placeholder images**: a damaged and a repaired fence, and an oil leak.
+
+Live run (Riyadh test project, SS-03, test CEMP): three non-compliant answers
+(stockpile uncovered, fence panels down, diesel leak) opened three
+observations. The AI drafted recommendations in the CEMP's own terms, for
+example "Repair the two damaged panels on the north side… within 48 hours, as
+required by the CEMP"; the 48 hours is the plan's figure. Photos were uploaded
+through the real row forms and the fence observation was closed.
+
+**Found and fixed in the run:** three observations raised by one save share a
+timestamp and were ordered by random id, so the Sr# order was unstable. They
+now take the checklist's item order.
+
+Checks: 210 tests passing with the database (log logic, de-duplication, closing,
+recommendation ownership, landscape PDF), tsc clean, lint 0 errors, build
+succeeds; a fresh database gets the ESC form with its log switched on. All
+test data and files were removed afterwards.
