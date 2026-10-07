@@ -180,7 +180,12 @@ per item; the review page labels the No-compliant ones.
 concrete washout item, quoting "Concrete washout is not permitted on site".
 The prompt now treats "not permitted on site" as N/A; the re-run gave N/A.
 
-[ESC reviewed inspection, downloaded from the app](./evidence/after-esc-reviewed-inspection.pdf)
+[ESC sheet, downloaded from the app](./evidence/after-esc-reviewed-inspection.pdf):
+a new inspection saved with the header left blank, so Ref No, date, time and
+inspected by print as empty lines to fill by hand. None of these is ever
+pre-filled: a new inspection starts with all four empty. (The first version of
+this evidence carried values typed in from the client's sample during testing;
+Hadi asked for it to show them empty, 2026-10-08.)
 
 ![ESC page 1](./evidence/after-esc-reviewed-inspection-p1.png)
 
@@ -189,6 +194,7 @@ The prompt now treats "not permitted on site" as N/A; the re-run gave N/A.
 | Inspections link on SS-03 | present |
 | AI draft on SS-03 with a test CEMP (live model) | 13 Yes, 2 N/A, 13 blank; **0 Yes on a No-compliant or observation item** |
 | Review saved through the real form (Ref No, date, time, inspector, answers) | 303 `?saved=1`, all stored |
+| A new inspection's header | empty in the database and on the review page; prints as blank lines |
 | PDF | NA column, notes column, two sign-off blocks, no statement, header two per line |
 | Fresh empty database, all 12 migrations | both forms seeded (IAQ 6/32, ESC 4/28) |
 | Tests with database / tsc / lint / build | 202 passing / clean / 0 errors / succeeds |
