@@ -454,3 +454,131 @@ export async function saveInspection(inspectionId: string, input: SaveInput, use
       .where(and(eq(checklistInspections.id, inspectionId), eq(checklistInspections.workspaceId, WORKSPACE_ID)));
   });
 }
+
+// ---------- form editing (a project's own copy only) ----------
+
+/** The section, if it belongs to this template. */
+async function ownSection(templateId: string, sectionId: string) {
+  const [s] = await db
+    .select({ id: checklistSections.id, seq: checklistSections.seq })
+    .from(checklistSections)
+    .where(and(eq(checklistSections.id, sectionId), eq(checklistSections.templateId, templateId)))
+    .limit(1);
+  return s ?? null;
+}
+
+/** The item, if it belongs to this template. */
+async function ownItem(templateId: string, itemId: string) {
+  const [i] = await db
+    .select({ id: checklistItems.id, sectionId: checklistItems.sectionId, seq: checklistItems.seq, active: checklistItems.active })
+    .from(checklistItems)
+    .innerJoin(checklistSections, eq(checklistItems.sectionId, checklistSections.id))
+    .where(and(eq(checklistItems.id, itemId), eq(checklistSections.templateId, templateId)))
+    .limit(1);
+  return i ?? null;
+}
+
+const clean = (s: string, max: number) => s.replace(/\s+/g, " ").trim().slice(0, max);
+
+async function touch(templateId: string) {
+  await db
+    .update(checklistTemplates)
+    .set({ updatedAt: Math.floor(Date.now() / 1000) })
+    .where(eq(checklistTemplates.id, templateId));
+}
+
+/**
+ * Swap a row with its neighbour in `seq` order. Rows are re-sequenced 1..n
+ * first, so gaps or ties left by earlier edits never block a move.
+ */
+async function moveRow(
+  rows: { id: string; seq: number }[],
+  id: string,
+  dir: "up" | "down",
+  write: (id: string, seq: number) => Promise<unknown>,
+) {
+  const ordered = [...rows].sort((a, b) => a.seq - b.seq);
+  const i = ordered.findIndex((r) => r.id === id);
+  const j = dir === "up" ? i - 1 : i + 1;
+  if (i < 0 || j < 0 || j >= ordered.length) return;
+  [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
+  for (let k = 0; k < ordered.length; k++) if (ordered[k].seq !== k + 1) await write(ordered[k].id, k + 1);
+}
+
+export type ItemOp = "save" | "toggle" | "up" | "down";
+
+/** Edit one item of a project's form. Items are switched off, never deleted. */
+export async function editItem(templateId: string, itemId: string, op: ItemOp, text?: string): Promise<boolean> {
+  const item = await ownItem(templateId, itemId);
+  if (!item) return false;
+  if (op === "save") {
+    const t = clean(text ?? "", 400);
+    if (!t) return false;
+    await db.update(checklistItems).set({ text: t }).where(eq(checklistItems.id, itemId));
+  } else if (op === "toggle") {
+    await db.update(checklistItems).set({ active: !item.active }).where(eq(checklistItems.id, itemId));
+  } else {
+    const siblings = await db
+      .select({ id: checklistItems.id, seq: checklistItems.seq })
+      .from(checklistItems)
+      .where(eq(checklistItems.sectionId, item.sectionId));
+    await moveRow(siblings, itemId, op, (id, seq) => db.update(checklistItems).set({ seq }).where(eq(checklistItems.id, id)));
+  }
+  await touch(templateId);
+  return true;
+}
+
+export async function addItem(templateId: string, sectionId: string, text: string): Promise<boolean> {
+  const t = clean(text, 400);
+  if (!t || !(await ownSection(templateId, sectionId))) return false;
+  const [{ max }] = await db
+    .select({ max: sql<number>`coalesce(max(${checklistItems.seq}), 0)` })
+    .from(checklistItems)
+    .where(eq(checklistItems.sectionId, sectionId));
+  await db.insert(checklistItems).values({ id: randomUUID(), sectionId, seq: Number(max) + 1, text: t });
+  await touch(templateId);
+  return true;
+}
+
+export type SectionOp = "rename" | "up" | "down";
+
+export async function editSection(templateId: string, sectionId: string, op: SectionOp, heading?: string): Promise<boolean> {
+  if (!(await ownSection(templateId, sectionId))) return false;
+  if (op === "rename") {
+    const h = clean(heading ?? "", 200);
+    if (!h) return false;
+    await db.update(checklistSections).set({ heading: h }).where(eq(checklistSections.id, sectionId));
+  } else {
+    const all = await db
+      .select({ id: checklistSections.id, seq: checklistSections.seq })
+      .from(checklistSections)
+      .where(eq(checklistSections.templateId, templateId));
+    await moveRow(all, sectionId, op, (id, seq) => db.update(checklistSections).set({ seq }).where(eq(checklistSections.id, id)));
+  }
+  await touch(templateId);
+  return true;
+}
+
+export async function addSection(templateId: string, heading: string): Promise<boolean> {
+  const h = clean(heading, 200);
+  if (!h) return false;
+  const [{ max }] = await db
+    .select({ max: sql<number>`coalesce(max(${checklistSections.seq}), 0)` })
+    .from(checklistSections)
+    .where(eq(checklistSections.templateId, templateId));
+  await db.insert(checklistSections).values({ id: randomUUID(), templateId, seq: Number(max) + 1, heading: h });
+  await touch(templateId);
+  return true;
+}
+
+/** The form's printed title and confirmation statement. */
+export async function editFormText(templateId: string, title: string, confirmation: string): Promise<boolean> {
+  const t = clean(title, 200);
+  const c = clean(confirmation, 1500);
+  if (!t || !c) return false;
+  await db
+    .update(checklistTemplates)
+    .set({ title: t, confirmation: c, updatedAt: Math.floor(Date.now() / 1000) })
+    .where(eq(checklistTemplates.id, templateId));
+  return true;
+}

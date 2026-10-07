@@ -15,8 +15,13 @@ import {
   workspaces,
 } from "@/db/schema";
 import {
+  addItem,
+  addSection,
   applyAiDraft,
   compareItemNo,
+  editFormText,
+  editItem,
+  editSection,
   defaultTemplateFor,
   ensureProjectTemplate,
   getForm,
@@ -214,6 +219,44 @@ describeDb("project checklist forms", () => {
 
     const list = await listInspections(t!.id);
     expect(list.map((l) => l.id)).toContain(inspId);
+  });
+
+  it("edits the project's copy: text, switch off, reorder, add — and refuses rows of another form", async () => {
+    const t = (await ensureProjectTemplate(pcId, "Indoor Air Quality"))!;
+    let form = await getForm(t.id);
+    const hvac = form[0];
+    const second = hvac.items[2]; // currently numbered 1.2 (first item was switched off above)
+
+    expect(await editItem(t.id, second.id, "save", "  Seal  diffusers  ")).toBe(true);
+    expect(await editItem(t.id, second.id, "up")).toBe(true);
+    form = await getForm(t.id);
+    expect(form[0].items[1]).toMatchObject({ id: second.id, text: "Seal diffusers" });
+
+    expect(await addItem(t.id, hvac.id, "Check MERV ratings")).toBe(true);
+    expect(await addSection(t.id, "Site-specific")).toBe(true);
+    expect(await editSection(t.id, hvac.id, "rename", "HVAC protection")).toBe(true);
+    expect(await editSection(t.id, hvac.id, "down")).toBe(true);
+    expect(await editFormText(t.id, "IAQ Inspection — Tower A", "Confirmed.")).toBe(true);
+    form = await getForm(t.id);
+    expect(form.map((s) => s.heading).slice(0, 2)).toEqual(["Source Control", "HVAC protection"]);
+    expect(form[1].no).toBe("2");
+    expect(form[1].items[form[1].items.length - 1]).toMatchObject({ text: "Check MERV ratings", active: true });
+    expect(form[form.length - 1]).toMatchObject({ heading: "Site-specific", items: [] });
+
+    // Rows of the workspace default are not this project's: refused, untouched.
+    const def = await defaultTemplateFor("Indoor Air Quality");
+    const defItem = (await getForm(def!.id))[0].items[0];
+    expect(await editItem(t.id, defItem.id, "toggle")).toBe(false);
+    expect(await editItem(t.id, defItem.id, "save", "hijacked")).toBe(false);
+    expect(await addItem(t.id, (await getForm(def!.id))[0].id, "x")).toBe(false);
+    expect((await getForm(def!.id))[0].items[0]).toMatchObject({ active: true, text: "Filters at supply air intake" });
+
+    // Empty text is refused; moving the first row up is a no-op.
+    expect(await editItem(t.id, second.id, "save", "   ")).toBe(false);
+    expect(await addSection(t.id, "  ")).toBe(false);
+    const before = await getForm(t.id);
+    await editSection(t.id, before[0].id, "up");
+    expect((await getForm(t.id)).map((s) => s.id)).toEqual(before.map((s) => s.id));
   });
 
   it("records why a draft was skipped", async () => {

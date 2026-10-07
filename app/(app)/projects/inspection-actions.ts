@@ -9,13 +9,21 @@ import { projectCredits } from "@/db/schema";
 import { requireUser } from "@/lib/auth/session";
 import { runInspectionDraft } from "@/lib/ai/inspection-draft";
 import {
+  addItem,
+  addSection,
   applyAiDraftPending,
+  editFormText,
+  editItem,
+  editSection,
   ensureProjectTemplate,
   getInspection,
   parseAnswer,
+  projectTemplate,
   saveInspection,
   startInspection,
+  type ItemOp,
   type SaveInput,
+  type SectionOp,
 } from "@/lib/checklists";
 import { getCreditByCode, WORKSPACE_ID } from "@/lib/data";
 
@@ -95,4 +103,76 @@ export async function saveInspectionAction(formData: FormData): Promise<void> {
   await saveInspection(inspectionId, input, user.id);
   revalidatePath(base(projectId, code));
   redirect(`${base(projectId, code)}/${inspectionId}?saved=1`);
+}
+
+// ---------- form editor ----------
+
+/**
+ * The project's own copy of the form, resolved from the form fields. Editing
+ * never touches the workspace default: the editor offers "make this project's
+ * own copy" first, and every op checks the row belongs to that copy.
+ */
+async function ownTemplate(formData: FormData) {
+  const projectId = String(formData.get("projectId") ?? "");
+  const code = String(formData.get("code") ?? "");
+  const credit = await getCreditByCode(projectId, code);
+  if (!credit) throw new Error("credit not found");
+  const t = await projectTemplate(credit.projectCreditId);
+  return { projectId, code, templateId: t?.id ?? null, credit };
+}
+
+function backToForm(projectId: string, code: string): never {
+  revalidatePath(`${base(projectId, code)}/form`);
+  redirect(`${base(projectId, code)}/form`);
+}
+
+export async function copyFormAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, code, credit } = await ownTemplate(formData);
+  await ensureProjectTemplate(credit.projectCreditId, credit.title);
+  backToForm(projectId, code);
+}
+
+export async function editItemAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, code, templateId } = await ownTemplate(formData);
+  if (!templateId) throw new Error("make the project's own copy first");
+  const op = String(formData.get("op") ?? "") as ItemOp;
+  if (!["save", "toggle", "up", "down"].includes(op)) throw new Error("bad op");
+  await editItem(templateId, String(formData.get("itemId") ?? ""), op, String(formData.get("text") ?? ""));
+  backToForm(projectId, code);
+}
+
+export async function addItemAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, code, templateId } = await ownTemplate(formData);
+  if (!templateId) throw new Error("make the project's own copy first");
+  await addItem(templateId, String(formData.get("sectionId") ?? ""), String(formData.get("text") ?? ""));
+  backToForm(projectId, code);
+}
+
+export async function editSectionAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, code, templateId } = await ownTemplate(formData);
+  if (!templateId) throw new Error("make the project's own copy first");
+  const op = String(formData.get("op") ?? "") as SectionOp;
+  if (!["rename", "up", "down"].includes(op)) throw new Error("bad op");
+  await editSection(templateId, String(formData.get("sectionId") ?? ""), op, String(formData.get("heading") ?? ""));
+  backToForm(projectId, code);
+}
+
+export async function addSectionAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, code, templateId } = await ownTemplate(formData);
+  if (!templateId) throw new Error("make the project's own copy first");
+  await addSection(templateId, String(formData.get("heading") ?? ""));
+  backToForm(projectId, code);
+}
+
+export async function editFormTextAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, code, templateId } = await ownTemplate(formData);
+  if (!templateId) throw new Error("make the project's own copy first");
+  await editFormText(templateId, String(formData.get("title") ?? ""), String(formData.get("confirmation") ?? ""));
+  backToForm(projectId, code);
 }
