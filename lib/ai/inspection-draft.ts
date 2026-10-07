@@ -1,11 +1,10 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { evidenceDocs, projectCredits } from "@/db/schema";
-import { planCoverage } from "@/lib/ai/plan-coverage";
+import { planCoverage, type CoverageEntry } from "@/lib/ai/plan-coverage";
 import { applyAiDraft, getInspection, type Answer } from "@/lib/checklists";
 import { WORKSPACE_ID } from "@/lib/catalog";
 import { getProjectCredits, type CreditView } from "@/lib/data";
-import type { CoverageEntry } from "@/lib/report/inspection-sheet";
 
 /**
  * The AI's draft answers for one inspection (Sprint 2 item 3). It reads the

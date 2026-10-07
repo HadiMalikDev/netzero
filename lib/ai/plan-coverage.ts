@@ -1,6 +1,5 @@
 import { chatJSON, hasLLM } from "@/lib/ai/openrouter";
 import { extractDocumentText } from "@/lib/ai/evidence-review";
-import type { CoverageEntry, CoverageOutcome } from "@/lib/report/inspection-sheet";
 
 /**
  * Does the uploaded plan address each item of an inspection sheet? One JSON
@@ -13,6 +12,17 @@ import type { CoverageEntry, CoverageOutcome } from "@/lib/report/inspection-she
  * quote cannot be verified reads "not found", whatever the model claimed.
  * Nothing is stored; the read runs at download time within a time budget.
  */
+
+export interface CoverageEntry {
+  /** not_applicable: the plan says, in a verified quote, that the item does not apply. */
+  status: "covered" | "not_applicable" | "not_found";
+  /** The verbatim plan sentence behind the status, when there is one. */
+  quote: string | null;
+}
+
+export type CoverageOutcome =
+  | { ran: true; byItem: Record<string, CoverageEntry>; sources: string[] }
+  | { ran: false; reason: string };
 
 export interface CoverageItem {
   no: string;

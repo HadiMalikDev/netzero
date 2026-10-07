@@ -1,233 +1,162 @@
 import { describe, expect, it } from "vitest";
-import type { CreditView, EvidenceAttachment, RequirementView } from "@/lib/data";
-import { buildInspectionSheet, planFileIds, sheetStage } from "@/lib/report/inspection-sheet";
-import {
-  IAQ_INSPECTION,
-  templateFor,
-  templateItems,
-} from "@/lib/report/inspection-template";
-import { normalizeCoverage } from "@/lib/ai/plan-coverage";
+import { renderToBuffer } from "@react-pdf/renderer";
+import { extractText, getDocumentProxy } from "unpdf";
+import type { CreditView, EvidenceAttachment } from "@/lib/data";
+import type { InspectionDetail, ResponseRow } from "@/lib/checklists";
+import { InspectionSheet } from "@/lib/pdf/InspectionSheet";
+import { registerPdfHyphenation } from "@/lib/pdf/shared";
+import { buildInspectionSheet, formatInspectionDate, sheetStage } from "@/lib/report/inspection-sheet";
 
-const file = (id: string, idx: number | null, fileName = `${id}.pdf`): EvidenceAttachment => ({
-  id,
-  fileName,
-  fileSize: 10,
+registerPdfHyphenation();
+
+const PNG_1x1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+const photo: EvidenceAttachment = {
+  id: "photo",
+  fileName: "Dust-screen.png",
+  fileSize: 70,
   createdAt: 1_759_800_000,
-  evidenceSpecIndex: idx,
+  evidenceSpecIndex: 2,
   review: null,
-});
-
-const req = (over: Partial<RequirementView>): RequirementView =>
-  ({
-    entryId: `e${over.seq}`,
-    requirementId: `r${over.seq}`,
-    title: null,
-    text: "",
-    metricType: "BOOLEAN",
-    unit: null,
-    pointsRaw: "1",
-    optionGroup: null,
-    pointsType: null,
-    keystone: false,
-    planned: true,
-    optional: false,
-    target: null,
-    numericSpec: null,
-    evidenceSpecs: [],
-    evidenceStages: [],
-    docGates: [],
-    docsListed: 0,
-    docsDue: 0,
-    docsProvided: 0,
-    requiresEvidence: true,
-    pageStart: null,
-    pageEnd: null,
-    valueBool: null,
-    valueNumber: null,
-    valueText: null,
-    note: null,
-    evidenceCount: 0,
-    attachments: [],
-    status: "not_started",
-    pointsEarned: 0,
-    pointsPreview: 0,
-    ...over,
-  }) as RequirementView;
-
-const hc10: CreditView = {
-  projectCreditId: "pc",
-  catalogCreditId: "cc",
-  code: "HC-10",
-  title: "Indoor Air Quality",
-  categoryCode: "HC",
-  categoryName: "Health and Comfort",
-  isKeystone: false,
-  pointsRaw: "3",
-  aim: null,
-  supportingGuidance: null,
-  pageStart: 182,
-  pageEnd: 185,
-  status: "in_progress",
-  pointsEarned: 0,
-  pointsMax: 3,
-  pointsMin: null,
-  targeted: true,
-  requirements: [
-    req({
-      seq: 1,
-      evidenceSpecs: ["Specifications…", "IAQ Management Plan with all control measures…", "Completed IAQ Checklist…", "Flush-out report"],
-      evidenceStages: ["design", "construction", "construction", "construction"],
-      attachments: [
-        file("spec", 0),
-        file("plan", 1, "IAQ-Plan-rev2.pdf"),
-        file("photo", 2, "Dust-screen-L2.jpg"),
-        file("loose", null, "notes.txt"),
-      ],
-    }),
-  ],
-  additionalAttachments: [file("extra", null, "Approval.png")],
 };
 
-describe("inspection templates", () => {
-  it("match a credit by what it is, not by its code", () => {
-    expect(templateFor({ title: "Indoor Air Quality" })?.id).toBe("iaq-inspection");
-    expect(templateFor({ title: "INDOOR AIR QUALITY" })?.id).toBe("iaq-inspection");
-    expect(templateFor({ title: "Construction Environmental Management" })).toBeNull();
-  });
+const credit = {
+  projectCreditId: "pc",
+  code: "HC-10",
+  title: "Indoor Air Quality",
+  pageStart: 182,
+  pageEnd: 185,
+  requirements: [
+    {
+      seq: 1,
+      evidenceSpecs: ["Specifications…", "IAQ Management Plan…", "Completed IAQ Checklist of all regular inspections…"],
+      evidenceStages: ["design", "construction", "construction"],
+      attachments: [photo],
+    },
+  ],
+  additionalAttachments: [],
+} as unknown as CreditView;
 
-  it("carry the team's items plus Moisture & Mold Control, numbered as the team numbers them", () => {
-    const items = templateItems(IAQ_INSPECTION);
-    expect(IAQ_INSPECTION.sections.map((s) => s.heading)).toEqual([
-      "HVAC Protection",
-      "Source Control",
-      "Pathway Interruption",
-      "Housekeeping",
-      "Scheduling and Construction Activity Sequence",
-      "Moisture & Mold Control",
-    ]);
-    expect(items.map((i) => i.no).slice(0, 8)).toEqual(["1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "2.1"]);
-    expect(items.find((i) => i.no === "5.2")?.text).toMatch(/^Coordinate construction activities/);
-    expect(items.filter((i) => i.no.startsWith("6.")).length).toBeGreaterThanOrEqual(3);
-    expect(items).toHaveLength(32);
-  });
+const r = (itemNo: string, sectionNo: string, sectionHeading: string, itemText: string, over: Partial<ResponseRow> = {}): ResponseRow => ({
+  id: itemNo,
+  itemNo,
+  sectionNo,
+  sectionHeading,
+  itemText,
+  aiAnswer: null,
+  aiQuote: null,
+  answer: null,
+  remark: null,
+  ...over,
 });
 
-describe("planFileIds", () => {
-  it("prefers files attached under the plan's own document slot", () => {
-    expect(planFileIds(hc10, IAQ_INSPECTION.planDocument)).toEqual(["plan"]);
-  });
+const inspection: InspectionDetail = {
+  id: "i",
+  templateId: "t",
+  projectCreditId: "pc",
+  inspectionDate: "2026-10-08",
+  inspector: "Site IAQ Coordinator",
+  area: "Level 2",
+  aiState: "done",
+  aiNote: "[]",
+  reviewedAt: 1_759_900_000,
+  reviewedByName: "Admin",
+  createdAt: 1_759_800_000,
+  template: {
+    id: "t",
+    projectCreditId: "pc",
+    creditTitle: "Indoor Air Quality",
+    title: "Construction Indoor Air Quality Inspection",
+    confirmation: "I confirm the checked activities to be proceeding according to the plan.",
+    planDocument: "IAQ Management Plan",
+    sheetDocument: "Completed IAQ Checklist",
+  },
+  responses: [
+    r("1.1", "1", "HVAC Protection", "Filters at supply air intake", { aiAnswer: "yes", answer: "yes" }),
+    r("1.2", "1", "HVAC Protection", "Filters at return air openings", { aiAnswer: "yes", answer: "no", remark: "Filters missing on AHU-3" }),
+    r("1.3", "1", "HVAC Protection", "Seal diffusers during demolition", { aiAnswer: "na", aiQuote: "No demolition.", answer: "na" }),
+    r("2.1", "2", "Source Control", "Low/no VOC products", { answer: "na", remark: "None used yet" }),
+    r("2.2", "2", "Source Control", "Prohibit idling"),
+  ],
+};
 
-  it("falls back to every file on the credit when none claims the plan slot", () => {
-    const noPlan = { ...hc10, requirements: [req({ seq: 1, evidenceSpecs: ["A", "B"], attachments: [file("x", 0), file("y", null)] })] };
-    expect(planFileIds(noPlan, IAQ_INSPECTION.planDocument)).toEqual(["x", "y", "extra"]);
-  });
-});
-
-describe("normalizeCoverage", () => {
-  const items = [
-    { no: "2.5", text: "Keep containers of wet products closed" },
-    { no: "1.1", text: "Filters at supply air intake" },
-  ];
-  const plan = "Section 4. Containers of paints,\n coatings and adhesives must be closed when not in use.";
-
-  it("keeps a covered item only with a verbatim quote (whitespace and case aside)", () => {
-    const out = normalizeCoverage(
-      { items: [{ no: "2.5", covered: true, quote: "containers of paints, coatings and adhesives MUST be closed" }] },
-      items,
-      plan,
-    );
-    expect(out["2.5"].status).toBe("covered");
-    expect(out["2.5"].quote).toMatch(/^containers of paints/);
-    expect(out["1.1"]).toEqual({ status: "not_found", quote: null });
-  });
-
-  it("drops a fabricated quote, whatever the model claimed", () => {
-    const out = normalizeCoverage(
-      { items: [{ no: "1.1", covered: true, quote: "MERV 8 filters shall be fitted at all supply intakes." }] },
-      items,
-      plan,
-    );
-    expect(out["1.1"].status).toBe("not_found");
-  });
-
-  it("keeps N/A only when the plan says so in a verified quote", () => {
-    const naPlan = "Scope. There is no demolition in this fit-out scope. Containers must be closed when not in use.";
-    const naItems = [{ no: "1.3", text: "Seal diffusers during demolition" }, { no: "1.6", text: "Periodic duct inspections" }];
-    const out = normalizeCoverage(
-      {
-        items: [
-          { no: "1.3", status: "not_applicable", quote: "There is no demolition in this fit-out scope." },
-          { no: "1.6", status: "not_applicable", quote: "Duct inspections are not required." },
-        ],
-      },
-      naItems,
-      naPlan,
-    );
-    expect(out["1.3"]).toEqual({ status: "not_applicable", quote: "There is no demolition in this fit-out scope." });
-    expect(out["1.6"]).toEqual({ status: "not_found", quote: null }); // unverifiable
-  });
-
-  it("reads the new status shape for covered items too", () => {
-    expect(
-      normalizeCoverage({ items: [{ no: "2.5", status: "covered", quote: "must be closed when not in use" }] }, items, plan)["2.5"].status,
-    ).toBe("covered");
-    expect(normalizeCoverage({ items: [{ no: "2.5", status: "none", quote: "must be closed when not in use" }] }, items, plan)["2.5"].status).toBe("not_found");
-  });
-
-  it("tolerates a bare array, missing items and junk", () => {
-    expect(normalizeCoverage([{ no: "2.5", covered: true, quote: "must be closed when not in use" }], items, plan)["2.5"].status).toBe("covered");
-    expect(normalizeCoverage(null, items, plan)["2.5"].status).toBe("not_found");
-    expect(normalizeCoverage({ items: "nope" }, items, plan)["1.1"].status).toBe("not_found");
-  });
-});
-
-describe("buildInspectionSheet", () => {
-  const base = {
-    template: IAQ_INSPECTION,
-    credit: hc10,
+const model = (over: Partial<Parameters<typeof buildInspectionSheet>[0]> = {}) =>
+  buildInspectionSheet({
+    inspection,
+    credit,
     projectName: "Jeddah Central Oceanarium",
     ratingSystem: "Mostadam commercial D+C (2019)",
-    stage: "construction" as const,
+    projectStage: "design",
     generatedAt: "now",
-  };
-
-  it("slots the coverage read in per item and counts it", () => {
-    const m = buildInspectionSheet({
-      ...base,
-      coverage: { ran: true, sources: ["IAQ-Plan-rev2.pdf"], byItem: { "2.5": { status: "covered", quote: "closed when not in use" } } },
-    });
-    const src = m.sections[1].items.find((i) => i.no === "2.5")!;
-    expect(src.coverage).toEqual({ status: "covered", quote: "closed when not in use" });
-    expect(m.sections[0].items[0].coverage).toEqual({ status: "not_found", quote: null });
-    expect(m.coverage).toEqual({ ran: true, sources: ["IAQ-Plan-rev2.pdf"], covered: 1, total: 32 });
+    reviewedOn: "8 Oct 2026",
+    ...over,
   });
 
-  it("leaves the column empty, with the reason, when the read did not run", () => {
-    const m = buildInspectionSheet({ ...base, coverage: { ran: false, reason: "no plan uploaded yet" } });
-    expect(m.sections.every((s) => s.items.every((i) => i.coverage === null))).toBe(true);
-    expect(m.coverage).toEqual({ ran: false, reason: "no plan uploaded yet" });
-  });
-
-  it("lists every photograph on the credit with where it was attached", () => {
-    const m = buildInspectionSheet({ ...base, coverage: { ran: false, reason: "x" } });
-    expect(m.photos.map((p) => [p.fileName, p.attachedTo])).toEqual([
-      ["Dust-screen-L2.jpg", "Requirement #1 — Completed IAQ Checklist…"],
-      ["Approval.png", "Additional attachment (credit level)"],
+describe("buildInspectionSheet", () => {
+  it("groups the saved answers under their headings, in order", () => {
+    const m = model();
+    expect(m.sections.map((s) => [s.no, s.heading, s.items.length])).toEqual([
+      ["1", "HVAC Protection", 3],
+      ["2", "Source Control", 2],
     ]);
-    expect(m.project.stageLabel).toBe("Construction");
-    expect(m.credit.pageSpan).toBe("pp.182–185");
+    expect(m.sections[0].items[1]).toEqual({ no: "1.2", text: "Filters at return air openings", answer: "no", remark: "Filters missing on AHU-3" });
   });
 
-  it("is a construction-stage sheet even while the project is at design (client feedback)", () => {
-    const m = buildInspectionSheet({ ...base, stage: "design", coverage: { ran: false, reason: "x" } });
+  it("carries the header and reviewer, and is a construction-stage sheet while the project is at design", () => {
+    const m = model();
+    expect(m.inspection).toEqual({ date: "8 Oct 2026", inspector: "Site IAQ Coordinator", area: "Level 2" });
+    expect(m.reviewed).toEqual({ by: "Admin", on: "8 Oct 2026" });
     expect(m.project.stageLabel).toBe("Construction");
+    expect(m.photos.map((p) => p.attachedTo)).toEqual(["Requirement #1 — Completed IAQ Checklist of all regular inspections…"]);
+  });
+});
+
+describe("sheetStage and formatInspectionDate", () => {
+  it("takes the stage from the catalog tag on the sheet's document, else the project's", () => {
+    expect(sheetStage(credit, "completed iaq checklist", "design")).toBe("Construction");
+    expect(sheetStage(credit, "Not a listed document", "design")).toBe("Design");
+    expect(sheetStage(credit, null, "construction")).toBe("Construction");
   });
 
-  it("takes the stage from the catalog's tag, falling back to the project's when untagged", () => {
-    expect(sheetStage(hc10, IAQ_INSPECTION.sheetDocument, "design")).toBe("Construction");
-    const untagged = { ...hc10, requirements: [req({ seq: 1, evidenceSpecs: ["Completed IAQ Checklist"], evidenceStages: [null] })] };
-    expect(sheetStage(untagged, IAQ_INSPECTION.sheetDocument, "design")).toBe("Design");
-    const absent = { ...hc10, requirements: [] };
-    expect(sheetStage(absent, IAQ_INSPECTION.sheetDocument, "construction")).toBe("Construction");
+  it("prints ISO dates as the team writes them", () => {
+    expect(formatInspectionDate("2026-07-23")).toBe("23 Jul 2026");
+    expect(formatInspectionDate(null)).toBeNull();
+    expect(formatInspectionDate("last week")).toBe("last week");
+  });
+});
+
+async function textOf(buf: Buffer) {
+  const pdf = await getDocumentProxy(new Uint8Array(buf));
+  const { text, totalPages } = await extractText(pdf, { mergePages: true });
+  return { text: text.replace(/\s+/g, " "), pages: totalPages };
+}
+
+describe("InspectionSheet PDF", () => {
+  it("prints the reviewer's answers in Yes / No / Remarks, N/A in Remarks, and no AI column", async () => {
+    const buf = await renderToBuffer(InspectionSheet({ model: model(), images: new Map([["photo", { data: PNG_1x1, format: "png" }]]) }));
+    const { text, pages } = await textOf(buf);
+    expect(pages).toBe(2);
+    expect(text).toContain("Construction Indoor Air Quality Inspection");
+    expect(text).toContain("Construction stage");
+    expect(text).toMatch(/Inspection date 8 Oct 2026 Inspector Site IAQ Coordinator Area \/ level Level 2/);
+    expect(text).toMatch(/No Description Yes No Remarks 1 HVAC Protection/);
+    expect(text).toContain("1.1 Filters at supply air intake YES");
+    expect(text).toContain("1.2 Filters at return air openings NO Filters missing on AHU-3");
+    expect(text).toContain("1.3 Seal diffusers during demolition N/A");
+    expect(text).toContain("2.1 Low/no VOC products N/A · None used yet");
+    expect(text).toContain("Responses reviewed by Admin on 8 Oct 2026.");
+    expect(text).toContain("Signature");
+    expect(text).not.toMatch(/\bAI\b|In uploaded plan|No demolition/);
+    expect(text).toContain("Dust-screen.png");
+  });
+
+  it("renders with no photographs on one page", async () => {
+    const bare = { ...credit, requirements: [{ ...credit.requirements[0], attachments: [] }] } as unknown as CreditView;
+    const { text, pages } = await textOf(await renderToBuffer(InspectionSheet({ model: model({ credit: bare }), images: new Map() })));
+    expect(pages).toBe(1);
+    expect(text).toContain("No PNG or JPEG files are attached to this credit yet");
   });
 });
