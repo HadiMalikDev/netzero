@@ -257,10 +257,25 @@ function label(r: Pick<RequirementView, "seq" | "title" | "text">) {
 }
 
 /**
- * Every PNG/JPEG attached anywhere on the credit, oldest first within each
- * requirement, each labelled with where it was attached. Used by the
- * inspection sheet's Description | Photos table, which lists all of them
- * (the checklist's own photo section follows the sections it shows instead).
+ * The credit's requirements laid out as the credit page shows them: each
+ * either/or option's path state, then the sections shown and the options set
+ * aside. Shared by both PDFs so they agree on what is being pursued.
+ */
+export function creditSections(credit: Pick<CreditView, "requirements">) {
+  const paths = new Map<string, PathState>();
+  for (const block of groupByOption(credit.requirements)) {
+    if (block.kind !== "xor") continue;
+    pathStates(block.items).forEach((p, i) => paths.set(block.items[i].entryId, p));
+  }
+  return documentSections(credit.requirements, paths);
+}
+
+/**
+ * Every PNG/JPEG on the credit that belongs to what the project is pursuing,
+ * labelled with where it was attached: photos on an either/or option the
+ * project set aside, or on a group with no path chosen yet, are left out —
+ * the same rule as the compliance checklist (Hadi, 2026-10-11). Optional
+ * requirements and credit-level attachments are included.
  */
 export function creditPhotos(credit: CreditView): Photo[] {
   const out: Photo[] = [];
@@ -268,7 +283,11 @@ export function creditPhotos(credit: CreditView): Photo[] {
     if (isImageFile(a.fileName))
       out.push({ fileId: a.id, fileName: a.fileName, createdAt: a.createdAt, attachedTo });
   };
+  const shown = new Set(
+    creditSections(credit).sections.flatMap((s) => (s.kind === "docs" ? [s.req.entryId] : [])),
+  );
   for (const req of credit.requirements) {
+    if (!shown.has(req.entryId)) continue;
     for (const a of req.attachments) {
       const slot =
         a.evidenceSpecIndex != null && a.evidenceSpecIndex < req.evidenceSpecs.length
@@ -285,12 +304,7 @@ export function buildChecklist(input: ChecklistInput): ChecklistModel {
   const { credit } = input;
 
   // Path state of each either/or option, as the credit page computes it.
-  const paths = new Map<string, PathState>();
-  for (const block of groupByOption(credit.requirements)) {
-    if (block.kind !== "xor") continue;
-    pathStates(block.items).forEach((p, i) => paths.set(block.items[i].entryId, p));
-  }
-  const { sections, setAside } = documentSections(credit.requirements, paths);
+  const { sections, setAside } = creditSections(credit);
 
   const out: ChecklistModel["sections"] = [];
   const summary: ChecklistSummary = { listed: 0, due: 0, provided: 0, withGaps: 0, missing: 0 };

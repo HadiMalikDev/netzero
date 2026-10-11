@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CreditView, EvidenceAttachment, RequirementView } from "@/lib/data";
 import {
   buildChecklist,
+  creditPhotos,
   docState,
   formatValue,
   isImageFile,
@@ -338,5 +339,35 @@ describe("buildChecklist — header and guidance", () => {
     expect(withLists.guidance[0].items.map((i) => i.text)).toContain("Housekeeping");
     expect(build(credit({ supportingGuidance: "Prose only. No list." })).guidance).toEqual([]);
     expect(build(credit({ supportingGuidance: null })).guidance).toEqual([]);
+  });
+});
+
+describe("creditPhotos — the inspection sheet's photos follow the path being pursued", () => {
+  const img = (id: string, idx: number | null) => file(id, idx, { fileName: `${id}.png` });
+  const xor = (planned: [boolean, boolean]) => [
+    req({ seq: 1, title: "Option A", optionGroup: "g", planned: planned[0], evidenceSpecs: ["A doc"], attachments: [img("a-photo", 0)] }),
+    req({ seq: 2, title: "Option B", optionGroup: "g", planned: planned[1], evidenceSpecs: ["B doc"], attachments: [img("b-photo", 0)] }),
+    req({ seq: 3, optional: true, evidenceSpecs: ["Opt doc"], attachments: [img("opt-photo", 0), img("loose", null)] }),
+  ];
+  const ids = (c: CreditView) => creditPhotos(c).map((p) => p.fileId);
+
+  it("leaves out photos on the option set aside, keeps the chosen one, optional rows and credit-level files", () => {
+    expect(ids(credit({ requirements: xor([false, true]), additionalAttachments: [img("extra", null)] }))).toEqual([
+      "b-photo",
+      "opt-photo",
+      "loose",
+      "extra",
+    ]);
+  });
+
+  it("leaves out both options' photos while no path is chosen", () => {
+    expect(ids(credit({ requirements: xor([true, true]) }))).toEqual(["opt-photo", "loose"]);
+  });
+
+  it("agrees with the compliance checklist's photos", () => {
+    for (const planned of [[false, true], [true, false], [true, true]] as [boolean, boolean][]) {
+      const c = credit({ requirements: xor(planned), additionalAttachments: [img("extra", null)] });
+      expect(ids(c).sort()).toEqual(build(c).photos.map((p) => p.fileId).sort());
+    }
   });
 });
