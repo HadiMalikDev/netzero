@@ -1,0 +1,2 @@
+ALTER TABLE "checklist_observation" ADD COLUMN "item_id" text;--> statement-breakpoint
+ALTER TABLE "checklist_observation" ADD CONSTRAINT "checklist_observation_item_id_checklist_item_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."checklist_item"("id") ON DELETE set null ON UPDATE no action;

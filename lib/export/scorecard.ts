@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import type { CreditView, ProjectScore } from "@/lib/data";
-import type { Status } from "@/lib/status";
+import { STATUS_LABEL } from "@/lib/status";
 import { creditSpan, formatSpan, type PointsSpan } from "@/lib/tiers";
 
 /**
@@ -12,12 +12,6 @@ import { creditSpan, formatSpan, type PointsSpan } from "@/lib/tiers";
  * Pure: takes the already-derived project data and returns a workbook, so the
  * route only loads and serves, and tests can read the sheet back.
  */
-
-const STATUS_LABEL: Record<Status, string> = {
-  completed: "Completed",
-  in_progress: "In Progress",
-  not_started: "Not Started",
-};
 
 export interface ScorecardInput {
   projectName: string;

@@ -374,6 +374,205 @@ export const evidenceReviews = pgTable("evidence_review", {
   completedAt: integer("completed_at"),
 });
 
+/**
+ * Inspection-sheet forms (Sprint 2 item 3). A checklist is a project-specific
+ * form the site team fills at every inspection — the IAQ sheet for HC-10, a
+ * site-audit sheet for SS-03 — so it is data, not code.
+ *
+ * A template with no `project_credit_id` is a WORKSPACE DEFAULT: matched to a
+ * credit by its title (credit codes differ across Mostadam schemes) and copied
+ * into a project the first time that project uses it. A project's copy is its
+ * own to edit; edits never touch the default or other projects.
+ */
+export const checklistTemplates = pgTable(
+  "checklist_template",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    /** Null for a workspace default; set for a project's own copy. */
+    projectCreditId: text("project_credit_id").references(() => projectCredits.id),
+    /** The credit title a default applies to, e.g. "Indoor Air Quality". */
+    creditTitle: text("credit_title").notNull(),
+    title: text("title").notNull(),
+    /** The declaration printed above the signature line. */
+    confirmation: text("confirmation").notNull(),
+    /**
+     * Text identifying, among the credit's required documents, the plan the AI
+     * reads ("IAQ Management Plan") and the document the completed sheet
+     * becomes ("Completed IAQ Checklist"). Matched case-insensitively as a
+     * substring, so a re-parsed catalog keeps working.
+     */
+    planDocument: text("plan_document"),
+    sheetDocument: text("sheet_document"),
+    /**
+     * How the printed sheet is laid out, per form, because each site team's
+     * form differs (2026-10-08): IAQ prints N/A inside Remarks; ESC has its own
+     * NA column and calls the last column "Notes/Comments/Non-Conformances".
+     */
+    naColumn: boolean("na_column").notNull().default(false),
+    remarksLabel: text("remarks_label").notNull().default("Remarks"),
+    /** Header fields, in order, as a JSON list of: ref_no, date, time, inspector, area. */
+    headerFields: text("header_fields").notNull().default('["date","inspector","area"]'),
+    /**
+     * Sign-off positions as a JSON list, e.g. ["Sustainability Manager",
+     * "Environmental Manager"]: one "Checked & verified by" block each. Empty
+     * list = a single Signature / Date line under the confirmation statement.
+     */
+    signatories: text("signatories").notNull().default("[]"),
+    /**
+     * Print a corrective-action log (Sr#, Observation, Recommendation, Photo,
+     * Corrective Action Taken, Photo, Obs./Closing Date, Status) instead of
+     * the plain photo list. On for ESC; the heading is the form's own.
+     */
+    observationLog: boolean("observation_log").notNull().default(false),
+    observationTitle: text("observation_title").notNull().default("Observations"),
+    createdAt: integer("created_at").notNull().default(now),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => [
+    uniqueIndex("checklist_template_project_credit_uq")
+      .on(t.projectCreditId)
+      .where(sql`${t.projectCreditId} is not null`),
+  ],
+);
+
+export const checklistSections = pgTable("checklist_section", {
+  id: text("id").primaryKey(),
+  templateId: text("template_id")
+    .notNull()
+    .references(() => checklistTemplates.id, { onDelete: "cascade" }),
+  seq: integer("seq").notNull(),
+  heading: text("heading").notNull(),
+});
+
+export const checklistItems = pgTable("checklist_item", {
+  id: text("id").primaryKey(),
+  sectionId: text("section_id")
+    .notNull()
+    .references(() => checklistSections.id, { onDelete: "cascade" }),
+  seq: integer("seq").notNull(),
+  text: text("text").notNull(),
+  /**
+   * Switched off rather than deleted: past inspections keep their answers, and
+   * the item can come back. Off items are left out of new inspections.
+   */
+  active: boolean("active").notNull().default(true),
+  /**
+   * The answer that means compliant: "yes" (a measure in place), "no" (a
+   * problem absent, e.g. "Is there any spill or leak at site?"), or null for a
+   * plain observation ("Any rain in the last 24 hours?"). The AI suggests Yes
+   * only where Yes is compliant, so it can never assert that a problem exists.
+   */
+  compliantAnswer: text("compliant_answer").default("yes"),
+});
+
+/**
+ * One filled copy of a project's form: a dated inspection. The AI drafts the
+ * answers; a person reviews them; only what they save goes on the PDF.
+ */
+export const checklistInspections = pgTable("checklist_inspection", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id")
+    .notNull()
+    .references(() => workspaces.id),
+  templateId: text("template_id")
+    .notNull()
+    .references(() => checklistTemplates.id),
+  /** YYYY-MM-DD, as entered. */
+  inspectionDate: text("inspection_date"),
+  inspector: text("inspector"),
+  area: text("area"),
+  inspectionTime: text("inspection_time"),
+  /** The team's own reference, e.g. "MBL-JCD-ESC-001". */
+  refNo: text("ref_no"),
+  /** pending | done | skipped | failed — the AI draft, not the review. */
+  aiState: text("ai_state").notNull().default("pending"),
+  /** Why the draft was skipped or failed, or which files it read (JSON list). */
+  aiNote: text("ai_note"),
+  reviewedBy: text("reviewed_by").references(() => users.id),
+  reviewedAt: integer("reviewed_at"),
+  createdAt: integer("created_at").notNull().default(now),
+});
+
+/**
+ * One answer per item of an inspection. The item's number, section and text
+ * are copied in when the inspection starts, so editing the form later never
+ * rewrites a past inspection.
+ */
+export const checklistResponses = pgTable(
+  "checklist_response",
+  {
+    id: text("id").primaryKey(),
+    inspectionId: text("inspection_id")
+      .notNull()
+      .references(() => checklistInspections.id, { onDelete: "cascade" }),
+    itemId: text("item_id").references(() => checklistItems.id),
+    itemNo: text("item_no").notNull(),
+    sectionNo: text("section_no").notNull(),
+    sectionHeading: text("section_heading").notNull(),
+    itemText: text("item_text").notNull(),
+    /** The item's compliant answer, copied in with its text. */
+    compliantAnswer: text("compliant_answer"),
+    /** The AI's suggestion: "yes" | "na" | null (no suggestion). Never "no". */
+    aiAnswer: text("ai_answer"),
+    /** The plan sentence behind the suggestion, verbatim. */
+    aiQuote: text("ai_quote"),
+    /** The answer that prints: "yes" | "no" | "na" | null (left blank). */
+    answer: text("answer"),
+    remark: text("remark"),
+  },
+  (t) => [index("checklist_response_inspection_idx").on(t.inspectionId)],
+);
+
+/**
+ * The corrective-action log of a project's form (Sprint 2 item 3): a running
+ * list per credit, not per inspection, so an issue stays open across weekly
+ * inspections until someone closes it. Opened automatically when a review
+ * saves a non-compliant answer, or added by hand. The AI drafts the
+ * recommendation; photos, corrective action and closing are a person's.
+ */
+export const checklistObservations = pgTable(
+  "checklist_observation",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    /** The project's own copy of the form: the log belongs to that credit. */
+    templateId: text("template_id")
+      .notNull()
+      .references(() => checklistTemplates.id, { onDelete: "cascade" }),
+    /** The inspection it was raised in; null when added by hand. */
+    inspectionId: text("inspection_id").references(() => checklistInspections.id, { onDelete: "set null" }),
+    /** The checklist item it came from ("4.5"), for de-duplication; null if by hand. */
+    itemNo: text("item_no"),
+    /**
+     * The form item it came from. Duplicate checks match on this, not on the
+     * printed number: numbers shift when the form is edited (an item switched
+     * off or moved), the item does not.
+     */
+    itemId: text("item_id").references(() => checklistItems.id, { onDelete: "set null" }),
+    observation: text("observation").notNull(),
+    recommendation: text("recommendation"),
+    /** "ai" while the recommendation is the AI's untouched draft; "person" once edited. */
+    recommendationSource: text("recommendation_source"),
+    /** pending | done | failed | skipped — the AI recommendation draft. */
+    aiState: text("ai_state"),
+    beforePhotoId: text("before_photo_id").references(() => evidenceDocs.id, { onDelete: "set null" }),
+    correctiveAction: text("corrective_action"),
+    afterPhotoId: text("after_photo_id").references(() => evidenceDocs.id, { onDelete: "set null" }),
+    /** YYYY-MM-DD. */
+    observedOn: text("observed_on"),
+    closedOn: text("closed_on"),
+    /** open | closed */
+    status: text("status").notNull().default("open"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [index("checklist_observation_template_idx").on(t.templateId)],
+);
+
 export type Workspace = typeof workspaces.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type RatingSystem = typeof ratingSystems.$inferSelect;
