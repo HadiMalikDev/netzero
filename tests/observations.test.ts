@@ -147,6 +147,24 @@ describeDb("corrective-action log", () => {
     expect(await raiseObservations(later.id)).toHaveLength(1);
   });
 
+  it("re-saving a reviewed inspection does not reopen an issue it raised that has since been closed", async () => {
+    const t0 = (await ensureProjectTemplate(pcId, "Construction Environmental Management"))!;
+    await db.delete(checklistObservations).where(eq(checklistObservations.templateId, t0.id));
+    const { id } = await answerAndSave({ "4.5": ["yes", "Diesel leak"] });
+    expect(await raiseObservations(id)).toHaveLength(1);
+    const [leak] = await listObservations(t0.id);
+    await updateObservation(t0.id, leak.id, { observation: leak.observation, recommendation: "", correctiveAction: "Cleaned up.", observedOn: leak.observedOn, closedOn: "2026-06-02", status: "closed" });
+
+    // The reviewer fixes a typo in a remark and saves the same inspection again.
+    const insp = (await getInspection(id))!;
+    const r45 = insp.responses.find((r) => r.itemNo === "4.5")!;
+    await saveInspection(id, { inspectionDate: "2026-05-30", inspector: null, area: null, answers: { [r45.id]: { answer: "yes", remark: "Diesel leak (typo fixed)" } } }, "user_solo");
+    expect(await raiseObservations(id)).toHaveLength(0);
+    const log = await listObservations(t0.id);
+    expect(log).toHaveLength(1);
+    expect(log[0].status).toBe("closed");
+  });
+
   it("matches an open issue to its form item, not its printed number, when the form is edited", async () => {
     // Fresh log for this case.
     const t0 = (await ensureProjectTemplate(pcId, "Construction Environmental Management"))!;

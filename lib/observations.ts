@@ -95,7 +95,8 @@ export async function listObservations(templateId: string): Promise<ObservationR
 /**
  * Raise an observation for every non-compliant answer of a saved inspection,
  * unless the log already has an OPEN one for that form item (a known issue is
- * not logged twice while it is being dealt with). Only on forms with the log
+ * not logged twice while it is being dealt with) or this inspection already
+ * raised one for it (a re-saved review never reopens a closed issue). Only on forms with the log
  * switched on. Returns the ids raised, for the AI to draft recommendations.
  */
 export async function raiseObservations(inspectionId: string): Promise<string[]> {
@@ -108,10 +109,18 @@ export async function raiseObservations(inspectionId: string): Promise<string[]>
     .from(checklistObservations)
     .where(and(eq(checklistObservations.templateId, insp.templateId), eq(checklistObservations.status, "open")));
   const openItems = new Set(open.map((o) => o.itemId).filter(Boolean));
+  // An inspection raises an item at most once. Saving its review again (to fix
+  // a remark, say) must not reopen an issue it already raised and someone
+  // has since closed.
+  const already = await db
+    .select({ itemId: checklistObservations.itemId })
+    .from(checklistObservations)
+    .where(eq(checklistObservations.inspectionId, inspectionId));
+  const raisedHere = new Set(already.map((o) => o.itemId).filter(Boolean));
   const raised: string[] = [];
   for (const r of insp.responses) {
     if (!r.answer || !isNonCompliant(r.compliantAnswer, r.answer)) continue;
-    if (r.itemId && openItems.has(r.itemId)) continue;
+    if (r.itemId && (openItems.has(r.itemId) || raisedHere.has(r.itemId))) continue;
     const id = randomUUID();
     await db.insert(checklistObservations).values({
       id,
