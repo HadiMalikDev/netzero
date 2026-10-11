@@ -12,7 +12,13 @@ import { evidenceDocs, projectCredits } from "@/db/schema";
 import { requireUser } from "@/lib/auth/session";
 import { runInspectionDraft } from "@/lib/ai/inspection-draft";
 import { draftRecommendations } from "@/lib/ai/observation-recommendation";
-import { addObservation, raiseObservations, updateObservation, type ObservationStatus } from "@/lib/observations";
+import {
+  addObservation,
+  raiseObservations,
+  setObservationPhotos,
+  updateObservation,
+  type ObservationStatus,
+} from "@/lib/observations";
 import {
   addItem,
   addSection,
@@ -255,17 +261,25 @@ export async function updateObservationAction(formData: FormData): Promise<void>
   if (!credit) throw new Error("credit not found");
   const template = await projectTemplate(credit.projectCreditId);
   if (!template) throw new Error("no form");
-  const before = await savePhoto(formData.get("beforePhoto"), projectId, credit.projectCreditId);
-  const afterPhoto = await savePhoto(formData.get("afterPhoto"), projectId, credit.projectCreditId);
-  await updateObservation(template.id, String(formData.get("observationId") ?? ""), {
+  // The edit is checked and saved first; photos are stored only once it has
+  // been accepted, so a rejected edit (an emptied observation, another form's
+  // row) never leaves a stray file on the credit.
+  const observationId = String(formData.get("observationId") ?? "");
+  const ok = await updateObservation(template.id, observationId, {
     observation: String(formData.get("observation") ?? ""),
     recommendation: String(formData.get("recommendation") ?? ""),
     correctiveAction: String(formData.get("correctiveAction") ?? ""),
     observedOn: String(formData.get("observedOn") ?? ""),
     closedOn: String(formData.get("closedOn") ?? ""),
     status: (String(formData.get("status") ?? "") === "closed" ? "closed" : "open") as ObservationStatus,
-    ...(before ? { beforePhotoId: before } : {}),
-    ...(afterPhoto ? { afterPhotoId: afterPhoto } : {}),
   });
+  if (ok) {
+    const before = await savePhoto(formData.get("beforePhoto"), projectId, credit.projectCreditId);
+    const afterPhoto = await savePhoto(formData.get("afterPhoto"), projectId, credit.projectCreditId);
+    await setObservationPhotos(template.id, observationId, {
+      ...(before ? { beforePhotoId: before } : {}),
+      ...(afterPhoto ? { afterPhotoId: afterPhoto } : {}),
+    });
+  }
   backToInspections(projectId, code);
 }

@@ -203,6 +203,24 @@ export async function updateObservation(templateId: string, id: string, e: Obser
   return true;
 }
 
+/** Attach photos to an observation of this form. False if it is not this form's. */
+export async function setObservationPhotos(
+  templateId: string,
+  id: string,
+  photos: { beforePhotoId?: string; afterPhotoId?: string },
+): Promise<boolean> {
+  if (!photos.beforePhotoId && !photos.afterPhotoId) return true;
+  const updated = await db
+    .update(checklistObservations)
+    .set({
+      ...(photos.beforePhotoId ? { beforePhotoId: photos.beforePhotoId } : {}),
+      ...(photos.afterPhotoId ? { afterPhotoId: photos.afterPhotoId } : {}),
+    })
+    .where(and(eq(checklistObservations.id, id), eq(checklistObservations.templateId, templateId)))
+    .returning({ id: checklistObservations.id });
+  return updated.length > 0;
+}
+
 /** Store the AI's recommendation draft, unless a person has written one meanwhile. */
 export async function applyRecommendation(id: string, draft: { state: "done"; text: string } | { state: "failed" | "skipped" }) {
   const [cur] = await db

@@ -22,6 +22,7 @@ import {
   listObservations,
   observationText,
   raiseObservations,
+  setObservationPhotos,
   updateObservation,
 } from "@/lib/observations";
 import { normalizeRecommendation } from "@/lib/ai/observation-recommendation";
@@ -210,6 +211,8 @@ describeDb("corrective-action log", () => {
     o = (await listObservations(t.id)).find((x) => x.id === id)!;
     expect(o).toMatchObject({ recommendation: "Move it today; add a drip tray.", recommendationSource: "person", status: "open", closedOn: null });
 
+    expect(await setObservationPhotos(t.id, "not-an-id", { beforePhotoId: "x" })).toBe(false);
+    expect(await setObservationPhotos(t.id, id, {})).toBe(true); // nothing to attach
     expect(await addObservation(t.id, "   ", null)).toBeNull();
     expect(await updateObservation(t.id, "not-an-id", { observation: "x", recommendation: "", correctiveAction: "", observedOn: null, closedOn: null, status: "open" })).toBe(false);
   });
