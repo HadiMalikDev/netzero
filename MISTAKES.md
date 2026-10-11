@@ -197,3 +197,20 @@ Then told Hadi it was "checked through the real forms", which overstated what wa
 **Prevention:** Reuse an existing control for the same job before writing a new one. Any page a
 person clicks through gets a real-browser check (Playwright, JS on) before it is called done, and
 reports say exactly how it was checked: "curl POST" is not "the real form in a browser".
+
+## 2026-10-11 — Photos with macOS screenshot or Arabic names "missing on disk"; upload jumped to the top
+
+**What happened:** On Railway, uploaded photos named like "Screenshot … 1.37.18 PM.png" showed as broken
+and opened as "Evidence file missing on disk"; after any upload the review page jumped back to the
+top. The files were on disk. The evidence route put the original name in Content-Disposition, and
+HTTP headers are Latin-1: macOS writes a narrow no-break space (U+202F) before "PM", Arabic names
+are outside Latin-1 too. `new Response` threw, and the route's catch-all reported every error as a
+missing file. The jump came from the upload action redirecting back to the page.
+
+**Root cause:** Every test file I uploaded had an ASCII name, and the route's error handling hid
+the real exception behind a misleading message. The route dates from Sprint 1, so it affected every
+evidence file with such a name.
+
+**Prevention:** Test uploads with real-world names (macOS screenshot names, Arabic, spaces). Never
+catch broadly around code that can fail for more than one reason; catch only the failure the message
+describes. Prefer refreshing in place over redirecting back to the same page.

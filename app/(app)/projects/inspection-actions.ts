@@ -306,6 +306,8 @@ export async function uploadInspectionPhotosAction(formData: FormData): Promise<
     redirect(`${base(projectId, code)}/${inspectionId}?photoError=${wrong.length ? "type" : "none"}#photos`);
   }
   for (const f of files) await savePhoto(f, projectId, credit.projectCreditId);
+  // No redirect on success: refreshing the page in place keeps the reader
+  // where they were (a redirect sent them back to the top, Hadi 2026-10-11).
   revalidatePath(`/projects/${projectId}/credits/${encodeURIComponent(code)}`);
-  redirect(`${base(projectId, code)}/${inspectionId}#photos`);
+  revalidatePath(`${base(projectId, code)}/${inspectionId}`);
 }

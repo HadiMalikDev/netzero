@@ -5,6 +5,7 @@ import type { NextRequest } from "next/server";
 import { db } from "@/db";
 import { evidenceDocs } from "@/db/schema";
 import { currentUser } from "@/lib/auth/session";
+import { contentDisposition } from "@/lib/http";
 
 /**
  * Serves one uploaded evidence file, so an attachment listed under a credit can
@@ -54,22 +55,22 @@ export async function GET(
 
   const ext = extname(doc.fileName).toLowerCase();
   const inlineType = INLINE_TYPES[ext];
-  // Quote-strip and drop any path segments a crafted upload name might carry.
-  const safeName = basename(doc.fileName).replace(/["\\\r\n]/g, "");
-
+  // Only a failed read means the file is missing. The response is built
+  // outside the try, so any other error is reported as what it is instead of
+  // as a missing file (a non-Latin-1 name used to land here as a 410).
+  let buf: Buffer;
   try {
-    const buf = await readFile(doc.filePath);
-    return new Response(new Uint8Array(buf), {
-      headers: {
-        "Content-Type": inlineType ?? "application/octet-stream",
-        "Content-Disposition": `${
-          inlineType ? "inline" : "attachment"
-        }; filename="${safeName}"`,
-        "Cache-Control": "private, max-age=3600",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
+    buf = await readFile(doc.filePath);
   } catch {
     return new Response("Evidence file missing on disk", { status: 410 });
   }
+  return new Response(new Uint8Array(buf), {
+    headers: {
+      "Content-Type": inlineType ?? "application/octet-stream",
+      // basename drops any path segments a crafted upload name might carry.
+      "Content-Disposition": contentDisposition(inlineType ? "inline" : "attachment", basename(doc.fileName)),
+      "Cache-Control": "private, max-age=3600",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
