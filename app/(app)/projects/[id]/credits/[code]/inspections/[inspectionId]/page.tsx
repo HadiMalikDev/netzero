@@ -7,6 +7,7 @@ import { getInspection, type Answer, type HeaderField, type ResponseRow } from "
 import { formatUploadedAt } from "@/lib/format";
 import { rerunDraftAction, saveInspectionAction, uploadInspectionPhotosAction } from "../../../../../inspection-actions";
 import { isImageFile } from "@/lib/report/checklist";
+import { UploadControl } from "@/components/EvidenceChecklist";
 
 /**
  * Review one inspection (Sprint 2 item 3). Every item shows the AI's
@@ -239,25 +240,19 @@ export default async function InspectionReviewPage({
             <h2 className="text-sm font-semibold text-slate-800">Photos</h2>
             <p className="text-sm text-slate-500">
               Site photos for this inspection. They are saved on {credit.code} as additional attachments, so they
-              show on the credit and in its PDFs. Save your answers before uploading: the upload reloads this page.
+              show on the credit and in its PDFs. Save your answers before adding photos: adding reloads this page.
             </p>
           </div>
-          <form action={uploadInspectionPhotosAction} className="flex items-center gap-2">
-            {hidden}
-            <input
-              type="file"
-              name="photos"
-              multiple
-              accept=".png,.jpg,.jpeg,image/png,image/jpeg"
-              className="text-xs text-slate-600"
-            />
-            <button
-              type="submit"
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Upload photos
-            </button>
-          </form>
+          {/* One button: it opens the picker and uploads as soon as photos are
+              chosen (the credit page's Attach control). A separate picker and
+              Upload button let the button be pressed with nothing chosen. */}
+          <UploadControl
+            fields={{ projectId: id, code, inspectionId: insp.id }}
+            label="Add photos"
+            uploadAction={uploadInspectionPhotosAction}
+            inputName="photos"
+            accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+          />
         </div>
         {photoError ? (
           <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">

@@ -119,10 +119,16 @@ export function UploadControl({
   fields,
   label,
   uploadAction,
+  inputName = "file",
+  accept,
 }: {
   fields: Record<string, string | number>;
   label: string;
   uploadAction: Action;
+  /** The file field's name, for actions that read another one. */
+  inputName?: string;
+  /** Restrict the picker, e.g. ".png,.jpg,.jpeg". */
+  accept?: string;
 }) {
   const form = useRef<HTMLFormElement>(null);
   return (
@@ -134,8 +140,9 @@ export function UploadControl({
         <SubmitLabel idle={label} />
         <input
           type="file"
-          name="file"
+          name={inputName}
           multiple
+          accept={accept}
           className="hidden"
           onChange={(e) => {
             if (e.target.files?.length) form.current?.requestSubmit();
