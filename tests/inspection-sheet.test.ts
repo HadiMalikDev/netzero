@@ -224,15 +224,30 @@ describe("InspectionSheet PDF", () => {
     expect(m.observations?.rows).toHaveLength(2);
     const buf = await renderToBuffer(InspectionSheet({ model: m, images: new Map([["photo", { data: PNG_1x1, format: "png" }]]) }));
     const { text, pages } = await textOf(buf);
-    expect(pages).toBe(2);
+    expect(pages).toBe(3); // checklist, the landscape log, then the credit's photos
     expect(text).toMatch(/Sr\.# Observation Recommendation Photo Corrective Action Taken Photo Obs\. Date \/ Closing Date Status Environmental Observations/);
     expect(text).toContain("1 1.5 Is there any damage in perimeter fencing? — Yes: Panel down Re-fix the panel and re-inspect. Panel re-fixed. 30 May 2026 2 Jun 2026 Closed");
     expect(text).toContain("2 Waste skips full 1 Jun 2026 Open");
-    expect(text).not.toContain("DESCRIPTION PHOTOS"); // the log replaces the plain photo list
     const pdf = await getDocumentProxy(new Uint8Array(buf));
-    const p2 = await pdf.getPage(2);
-    const [, , w, h] = p2.view;
-    expect(w).toBeGreaterThan(h); // landscape
+    const [, , w2, h2] = (await pdf.getPage(2)).view;
+    expect(w2).toBeGreaterThan(h2); // the log is landscape
+    const [, , w3, h3] = (await pdf.getPage(3)).view;
+    expect(w3).toBeLessThan(h3); // the photo list is portrait, after it
+    const p3 = (await (await pdf.getPage(3)).getTextContent()).items.map((i) => ("str" in i ? i.str : "")).join(" ");
+    expect(p3).toMatch(/Photographs/);
+    expect(p3).toMatch(/Dust-screen\.png/);
+  });
+
+  it("an ESC sheet with no photos on the credit has no photo page", async () => {
+    const esc: InspectionDetail = {
+      ...inspection,
+      template: { ...inspection.template, naColumn: true, observationLog: true, observationTitle: "Environmental Observations" },
+    };
+    const bare = { ...credit, requirements: [{ ...credit.requirements[0], attachments: [] }] } as unknown as CreditView;
+    const { text, pages } = await textOf(await renderToBuffer(InspectionSheet({ model: model({ inspection: esc, credit: bare, observations: [] }), images: new Map() })));
+    expect(pages).toBe(2);
+    expect(text).toContain("No observations recorded.");
+    expect(text).not.toContain("Photographs");
   });
 
   it("renders with no photographs on one page", async () => {

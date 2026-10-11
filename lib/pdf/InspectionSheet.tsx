@@ -193,6 +193,39 @@ function Fill({ label, value, last, half }: { label: string; value: string | nul
   );
 }
 
+/** The Description | Photos table: every photo on the credit for the paths pursued. */
+function PhotoTable({ photos, images }: { photos: SheetModel["photos"]; images: ImageBytes }) {
+  return (
+    <View style={s.table}>
+      <View style={[s.tr, s.trHead]} fixed>
+        <Text style={[s.ph, { flex: 1 }]}>Description</Text>
+        <Text style={[s.ph, { width: 230, borderLeftWidth: 1, borderLeftColor: C.line }]}>Photos</Text>
+      </View>
+      {photos.map((p) => {
+        const img = images.get(p.fileId);
+        return (
+          <View key={p.fileId} style={s.tr} wrap={false}>
+            <View style={s.pDesc}>
+              <Text style={s.pName}>{safe(p.fileName)}</Text>
+              <Text style={s.pMeta}>{safe(p.attachedTo)}</Text>
+              <Text style={s.pMeta}>Uploaded {formatUploadedAt(p.createdAt)}</Text>
+            </View>
+            <View style={s.pPhoto}>
+              {img ? (
+                // @react-pdf's Image has no alt prop; the description cell is the text.
+                // eslint-disable-next-line jsx-a11y/alt-text
+                <Image style={s.pImg} src={img} />
+              ) : (
+                <Text style={[s.pMeta, s.note]}>[image could not be read]</Text>
+              )}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 export interface InspectionSheetProps {
   model: SheetModel;
   images: ImageBytes;
@@ -277,50 +310,33 @@ export function InspectionSheet({ model, images }: InspectionSheetProps) {
         </View>
 
         {model.observations ? null : (
-        <View break={model.photos.length > 0} style={model.photos.length ? {} : { marginTop: 24 }}>
-          <Text style={s.h2}>Photographs</Text>
-          {model.photos.length === 0 ? (
-            <Text style={s.note}>
-              No PNG or JPEG files are attached to this credit yet. Photographs uploaded against its
-              required documents will appear here, with their upload date.
-            </Text>
-          ) : (
-            <View style={s.table}>
-              <View style={[s.tr, s.trHead]} fixed>
-                <Text style={[s.ph, { flex: 1 }]}>Description</Text>
-                <Text style={[s.ph, { width: 230, borderLeftWidth: 1, borderLeftColor: C.line }]}>Photos</Text>
-              </View>
-              {model.photos.map((p) => {
-                const img = images.get(p.fileId);
-                return (
-                  <View key={p.fileId} style={s.tr} wrap={false}>
-                    <View style={s.pDesc}>
-                      <Text style={s.pName}>{safe(p.fileName)}</Text>
-                      <Text style={s.pMeta}>{safe(p.attachedTo)}</Text>
-                      <Text style={s.pMeta}>Uploaded {formatUploadedAt(p.createdAt)}</Text>
-                    </View>
-                    <View style={s.pPhoto}>
-                      {img ? (
-                        // @react-pdf's Image has no alt prop; the description cell is the text.
-                        // eslint-disable-next-line jsx-a11y/alt-text
-                        <Image style={s.pImg} src={img} />
-                      ) : (
-                        <Text style={[s.pMeta, s.note]}>[image could not be read]</Text>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </View>
-
+          <View break={model.photos.length > 0} style={model.photos.length ? {} : { marginTop: 24 }}>
+            <Text style={s.h2}>Photographs</Text>
+            {model.photos.length === 0 ? (
+              <Text style={s.note}>
+                No PNG or JPEG files are attached to this credit yet. Photographs uploaded against its
+                required documents will appear here, with their upload date.
+              </Text>
+            ) : (
+              <PhotoTable photos={model.photos} images={images} />
+            )}
+          </View>
         )}
 
         <Footer left={footer} />
       </Page>
       {model.observations ? (
         <ObservationLogPage title={model.observations.title} rows={model.observations.rows} images={images} footer={footer} />
+      ) : null}
+      {/* A form with a log (ESC) prints the credit's other photos after it —
+          those uploaded during inspections or against its documents — so no
+          site photo is left off the sheet. Omitted when there are none. */}
+      {model.observations && model.photos.length > 0 ? (
+        <Page size="A4" style={s.page}>
+          <Text style={s.h2}>Photographs</Text>
+          <PhotoTable photos={model.photos} images={images} />
+          <Footer left={footer} />
+        </Page>
       ) : null}
     </Document>
   );

@@ -284,6 +284,9 @@ the IAQ PDF (2 images); a .txt plus a .png stored nothing and showed the
 message; on SS-03 a review-page photo is listed under Additional attachments
 and an observation's before photo is not. 219 tests passing with the database.
 
-**Open:** the ESC sheet prints the observations log instead of a photo list,
-so photos uploaded from an ESC review are on the credit but not on the ESC
-sheet.
+**ESC photos (Hadi: yes, 2026-10-11):** the ESC sheet now prints the credit's
+photos on their own page after the observations log — those uploaded during
+inspections or against its documents, never the before / after photos, which
+stay in the log. No photos, no page.
+[ESC sheet: checklist, log, then photos](./evidence/after-esc-log-then-photos.pdf)
+(placeholder images).
