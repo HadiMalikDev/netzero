@@ -345,6 +345,8 @@ export async function startInspection(templateId: string): Promise<string> {
 
 export interface ResponseRow {
   id: string;
+  /** The form item this answer belongs to (null only if it was removed). */
+  itemId: string | null;
   itemNo: string;
   sectionNo: string;
   sectionHeading: string;
@@ -411,6 +413,7 @@ export async function getInspection(inspectionId: string): Promise<InspectionDet
   const responses: ResponseRow[] = rows
     .map((r) => ({
       id: r.id,
+      itemId: r.itemId,
       itemNo: r.itemNo,
       sectionNo: r.sectionNo,
       sectionHeading: r.sectionHeading,

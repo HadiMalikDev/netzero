@@ -548,6 +548,12 @@ export const checklistObservations = pgTable(
     inspectionId: text("inspection_id").references(() => checklistInspections.id, { onDelete: "set null" }),
     /** The checklist item it came from ("4.5"), for de-duplication; null if by hand. */
     itemNo: text("item_no"),
+    /**
+     * The form item it came from. Duplicate checks match on this, not on the
+     * printed number: numbers shift when the form is edited (an item switched
+     * off or moved), the item does not.
+     */
+    itemId: text("item_id").references(() => checklistItems.id, { onDelete: "set null" }),
     observation: text("observation").notNull(),
     recommendation: text("recommendation"),
     /** "ai" while the recommendation is the AI's untouched draft; "person" once edited. */

@@ -94,21 +94,24 @@ export async function listObservations(templateId: string): Promise<ObservationR
 
 /**
  * Raise an observation for every non-compliant answer of a saved inspection,
- * unless the log already has an OPEN one for that item (a known issue is not
- * logged twice while it is being dealt with). Only on forms with the log
+ * unless the log already has an OPEN one for that form item (a known issue is
+ * not logged twice while it is being dealt with). Only on forms with the log
  * switched on. Returns the ids raised, for the AI to draft recommendations.
  */
 export async function raiseObservations(inspectionId: string): Promise<string[]> {
   const insp = await getInspection(inspectionId);
   if (!insp || !insp.template.observationLog) return [];
+  // Matched on the form item, never on its printed number, which shifts when
+  // the form is edited.
   const open = await db
-    .select({ itemNo: checklistObservations.itemNo })
+    .select({ itemId: checklistObservations.itemId })
     .from(checklistObservations)
     .where(and(eq(checklistObservations.templateId, insp.templateId), eq(checklistObservations.status, "open")));
-  const openItems = new Set(open.map((o) => o.itemNo).filter(Boolean));
+  const openItems = new Set(open.map((o) => o.itemId).filter(Boolean));
   const raised: string[] = [];
   for (const r of insp.responses) {
-    if (!r.answer || !isNonCompliant(r.compliantAnswer, r.answer) || openItems.has(r.itemNo)) continue;
+    if (!r.answer || !isNonCompliant(r.compliantAnswer, r.answer)) continue;
+    if (r.itemId && openItems.has(r.itemId)) continue;
     const id = randomUUID();
     await db.insert(checklistObservations).values({
       id,
@@ -116,12 +119,13 @@ export async function raiseObservations(inspectionId: string): Promise<string[]>
       templateId: insp.templateId,
       inspectionId,
       itemNo: r.itemNo,
+      itemId: r.itemId,
       observation: observationText(r.itemNo, r.itemText, r.answer, r.remark),
       observedOn: isoDate(insp.inspectionDate) ?? today(),
       status: "open",
       aiState: "pending",
     });
-    openItems.add(r.itemNo);
+    if (r.itemId) openItems.add(r.itemId);
     raised.push(id);
   }
   return raised;

@@ -42,6 +42,7 @@ const credit = {
 
 const r = (itemNo: string, sectionNo: string, sectionHeading: string, itemText: string, over: Partial<ResponseRow> = {}): ResponseRow => ({
   id: itemNo,
+  itemId: null,
   itemNo,
   sectionNo,
   sectionHeading,

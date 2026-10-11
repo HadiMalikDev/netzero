@@ -14,7 +14,7 @@ import {
   rsVersions,
   workspaces,
 } from "@/db/schema";
-import { ensureProjectTemplate, getInspection, saveInspection, startInspection } from "@/lib/checklists";
+import { editItem, ensureProjectTemplate, getForm, getInspection, saveInspection, startInspection } from "@/lib/checklists";
 import {
   addObservation,
   applyRecommendation,
@@ -145,6 +145,38 @@ describeDb("corrective-action log", () => {
     expect(closed.closedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/); // closing without a date records today
     const later = await answerAndSave({ "1.5": ["yes", "Down again"] });
     expect(await raiseObservations(later.id)).toHaveLength(1);
+  });
+
+  it("matches an open issue to its form item, not its printed number, when the form is edited", async () => {
+    // Fresh log for this case.
+    const t0 = (await ensureProjectTemplate(pcId, "Construction Environmental Management"))!;
+    await db.delete(checklistObservations).where(eq(checklistObservations.templateId, t0.id));
+
+    // Fence damage (item numbered 1.5) is raised and left open.
+    const first = await answerAndSave({ "1.5": ["yes", "Panel down"] });
+    expect(await raiseObservations(first.id)).toHaveLength(1);
+
+    // Switching off 1.1 renumbers the section: fence damage becomes 1.4 and
+    // the dust question ("Is there a dust problem…", No-compliant) becomes 1.5.
+    const form = await getForm(t0.id);
+    await editItem(t0.id, form[0].items[0].id, "toggle");
+    const renumbered = (await getForm(t0.id))[0].items.filter((i) => i.active);
+    expect(renumbered[3].text).toBe("Is there any damage in perimeter fencing?");
+    expect(renumbered[3].no).toBe("1.4");
+    expect(renumbered[4].text).toBe("Is there a dust problem prevailing on the construction site");
+    expect(renumbered[4].no).toBe("1.5");
+
+    // Same fence issue again (now 1.4): not logged twice. Dust problem (now 1.5): logged.
+    const second = await answerAndSave({ "1.4": ["yes", "Still down"], "1.5": ["yes", "Dust over the east boundary"] });
+    const raised = await raiseObservations(second.id);
+    expect(raised).toHaveLength(1);
+    const log = await listObservations(t0.id);
+    // The fence was raised as 1.5 before the edit; the dust problem is the item now numbered 1.5.
+    expect(log.map((o) => o.observation.split(" —")[0])).toEqual([
+      "1.5 Is there any damage in perimeter fencing?",
+      "1.5 Is there a dust problem prevailing on the construction site",
+    ]);
+    await editItem(t0.id, form[0].items[0].id, "toggle"); // restore the form for later cases
   });
 
   it("keeps a person's recommendation over a late AI draft, and marks an edited draft as the person's", async () => {
