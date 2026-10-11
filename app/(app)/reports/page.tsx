@@ -1,5 +1,6 @@
-import { NotInSlicePage } from "../_components/NotInSlicePage";
+import { ProjectResolverPage } from "../_components/ProjectResolverPage";
 
-export default function ReportsPage() {
-  return <NotInSlicePage title="Reports" />;
+/** Top-level "Reports" resolves to the current project's Reports screen. */
+export default function ReportsResolverPage() {
+  return <ProjectResolverPage title="Reports" subpath="reports" />;
 }

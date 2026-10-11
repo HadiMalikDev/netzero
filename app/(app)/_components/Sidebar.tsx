@@ -70,7 +70,13 @@ const GROUPS: NavGroup[] = [
         wired: true,
         projectScoped: true,
       },
-      { label: "Reports", href: "/reports", icon: ReportsIcon, wired: false },
+      {
+        label: "Reports",
+        href: "/reports",
+        icon: ReportsIcon,
+        wired: true,
+        projectScoped: true,
+      },
     ],
   },
   {

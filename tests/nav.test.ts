@@ -8,6 +8,7 @@ import {
 
 const CREDITS = { href: "/credits", projectScoped: true };
 const DOCUMENTS = { href: "/documents", projectScoped: true };
+const REPORTS = { href: "/reports", projectScoped: true };
 const PROJECTS = { href: "/projects" };
 const DASHBOARD = { href: "/dashboard" };
 
@@ -32,6 +33,11 @@ describe("activeProjectId", () => {
 });
 
 describe("navHref", () => {
+  it("keeps Reports inside the open project, and resolves it from elsewhere", () => {
+    expect(navHref(REPORTS, `/projects/${P}/credits/HC-10`)).toBe(`/projects/${P}/reports`);
+    expect(navHref(REPORTS, "/dashboard")).toBe("/reports");
+  });
+
   it("keeps a project-scoped entry inside the open project", () => {
     // The reported bug: from inside project B these walked to project A.
     expect(navHref(CREDITS, `/projects/${P}`)).toBe(`/projects/${P}/credits`);

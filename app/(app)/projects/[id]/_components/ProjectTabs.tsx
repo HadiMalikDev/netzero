@@ -11,6 +11,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
     { label: "Credits", href: `${base}/credits` },
     { label: "Documents", href: `${base}/documents` },
     { label: "AI Assistant", href: `${base}/assistant` },
+    { label: "Reports", href: `${base}/reports` },
   ];
   return (
     <div className="mb-6 flex gap-1 border-b border-slate-200">

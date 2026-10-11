@@ -1,6 +1,6 @@
 # Sprint 2 — Generated compliance checklists
 
-Raised: 2026-10-07 · Built: 2026-10-07 · Status: **3 of 3 shipped on `feat/compliance-checklist-pdf`, not yet merged**
+Raised: 2026-10-07 · Built: 2026-10-07 · Status: **4 of 4 shipped on `feat/compliance-checklist-pdf`, not yet merged**
 
 Project context: Jeddah Central Oceanarium — Mostadam Commercial D+C v1.0-2019.
 
@@ -18,6 +18,7 @@ ships, a "Done" section is appended to its `task.md` in the same commit.
 | 1 | [IAQ / ESC compliance checklist, generated as a PDF](./01-compliance-checklist-pdf/task.md) | Feature | **Shipped** — six commits, Done section in its `task.md` |
 | 2 | [IAQ inspection sheet in the site team's format](./02-iaq-inspection-sheet/task.md) | Feature | **Shipped**, then superseded by item 3 (its code template moved into the database) |
 | 3 | [Checklist forms in the database, AI-drafted and human-reviewed](./03-checklist-templates-in-db/task.md) | Feature | **Shipped** — seven commits, Done section in its `task.md` |
+| 4 | [Reports page: every generated report in one place](./04-reports-page/task.md) | Feature | **Shipped** |
 
 ## Checked without a browser
 
