@@ -138,6 +138,9 @@ export default async function FormEditorPage({
                         defaultValue={it.text}
                         className={`input flex-1 ${it.active ? "" : "text-slate-400 line-through"}`}
                       />
+                      {/* Save comes first: pressing Enter in the text box submits through the
+                          form's first button, and that must save the wording. */}
+                      <button type="submit" name="op" value="save" className={small}>Save</button>
                       <select
                         name="compliant"
                         defaultValue={it.compliantAnswer ?? ""}
@@ -149,7 +152,6 @@ export default async function FormEditorPage({
                         <option value="">Observation</option>
                       </select>
                       <button type="submit" name="op" value="compliance" className={small}>Set</button>
-                      <button type="submit" name="op" value="save" className={small}>Save</button>
                       <button type="submit" name="op" value="toggle" className={small}>
                         {it.active ? "Switch off" : "Switch on"}
                       </button>
