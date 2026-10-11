@@ -181,3 +181,19 @@ A layout bug is invisible to both.
 
 **Prevention:** Any `sr-only` / `absolute` element gets a `relative` parent in the same change. For
 a new page, check layout too: either a browser check, or say plainly that layout was not checked.
+
+## 2026-10-11 — "Upload photos" shipped as a two-step control and was only tested without a browser
+
+**What happened:** Hadi clicked "Upload photos" on the inspection review page and got "Choose one or
+more photos to upload." The section had a native file picker and a separate Upload button; clicking
+the button without first using the picker is the natural move, and it sends nothing. Uploads with
+files picked worked (re-checked in a real browser, up to 8 MB).
+
+**Root cause:** Built a new two-step upload instead of reusing the app's existing one-click
+`UploadControl` (Attach opens the picker and uploads on choose), and verified only by POSTing the
+form with curl, which attaches files directly and so can never reveal a control people use wrongly.
+Then told Hadi it was "checked through the real forms", which overstated what was tested.
+
+**Prevention:** Reuse an existing control for the same job before writing a new one. Any page a
+person clicks through gets a real-browser check (Playwright, JS on) before it is called done, and
+reports say exactly how it was checked: "curl POST" is not "the real form in a browser".
