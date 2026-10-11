@@ -56,9 +56,13 @@ function Row({ r }: { r: ResponseRow }) {
       <td className="w-60 px-4 py-3">
         <div className="flex gap-1">
           {CHOICES.map((c) => (
+            // `relative` keeps the visually hidden radio (sr-only = position:
+            // absolute) inside its button. Without it the 128 hidden inputs were
+            // placed against the page, below the app's fixed-height frame, and
+            // made the whole window scroll on top of the page's own scroll area.
             <label
               key={c.value || "blank"}
-              className="flex cursor-pointer items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 has-checked:border-brand-500 has-checked:bg-brand-50 has-checked:text-brand-700"
+              className="relative flex cursor-pointer items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 has-checked:border-brand-500 has-checked:bg-brand-50 has-checked:text-brand-700"
             >
               <input
                 type="radio"

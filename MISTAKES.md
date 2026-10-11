@@ -166,3 +166,18 @@ the parsed manual.
 **Prevention:** A generated document describes itself. Take its stage (and similar attributes)
 from the catalog entry for the document it becomes, and use project state only for things that
 are about the project.
+
+## 2026-10-11 — Review page made the whole window scroll (two scrollbars)
+
+**What happened:** Hadi opened an inspection review on Railway and saw two scrollbars, with the
+sidebar ending part-way down. The Yes / No / N/A buttons were labels wrapping radios hidden with
+Tailwind's `sr-only`, which is `position: absolute`. No ancestor was positioned, so the 128 hidden
+inputs were laid out against the page, below the app's fixed-height frame, and stretched the
+document.
+
+**Root cause:** Used `sr-only` on a form control without a positioned parent, and verified the page
+only by its HTML and form submissions (curl, at Hadi's request for that task), never by layout.
+A layout bug is invisible to both.
+
+**Prevention:** Any `sr-only` / `absolute` element gets a `relative` parent in the same change. For
+a new page, check layout too: either a browser check, or say plainly that layout was not checked.
