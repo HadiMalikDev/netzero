@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../../../_components/PageChrome";
-import { Button, Card } from "@/components/ui";
+import { Card } from "@/components/ui";
 import { getCreditByCode, getProject } from "@/lib/data";
 import { getInspection, type Answer, type HeaderField, type ResponseRow } from "@/lib/checklists";
 import { formatUploadedAt } from "@/lib/format";
 import { rerunDraftAction, saveInspectionAction, uploadInspectionPhotosAction } from "../../../../../inspection-actions";
 import { isImageFile } from "@/lib/report/checklist";
+import { SaveReviewButton } from "./SaveReviewButton";
 import { UploadControl } from "@/components/EvidenceChecklist";
 
 /**
@@ -91,7 +92,6 @@ export default async function InspectionReviewPage({
 }: PageProps<"/projects/[id]/credits/[code]/inspections/[inspectionId]">) {
   const { id, code: rawCode, inspectionId } = await params;
   const sp = await searchParams;
-  const saved = sp?.saved === "1";
   const photoError = sp?.photoError;
   const code = decodeURIComponent(rawCode);
   const project = await getProject(id);
@@ -145,11 +145,6 @@ export default async function InspectionReviewPage({
         }
       />
 
-      {saved ? (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
-          Saved. These answers are what the PDF prints.
-        </div>
-      ) : null}
 
       <Card className="mb-4 px-5 py-4 text-sm">
         {insp.aiState === "pending" ? (
@@ -230,7 +225,7 @@ export default async function InspectionReviewPage({
               ? `Last reviewed by ${insp.reviewedByName ?? "—"} on ${formatUploadedAt(insp.reviewedAt)}.`
               : "Not reviewed yet. Saving confirms every answer above under your name."}
           </p>
-          <Button type="submit">Save review</Button>
+          <SaveReviewButton />
         </div>
       </form>
       <section id="photos" className="mt-6">

@@ -120,7 +120,9 @@ export async function saveInspectionAction(formData: FormData): Promise<void> {
   const raised = await raiseObservations(inspectionId);
   if (raised.length) after(() => draftRecommendations(raised));
   revalidatePath(base(projectId, code));
-  redirect(`${base(projectId, code)}/${inspectionId}?saved=1`);
+  // Refresh in place: the reader stays where they clicked, and the button
+  // shows the result beside it (a redirect sent them to the top).
+  revalidatePath(`${base(projectId, code)}/${inspectionId}`);
 }
 
 // ---------- form editor ----------
