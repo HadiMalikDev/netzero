@@ -283,3 +283,29 @@ export async function updateObservationAction(formData: FormData): Promise<void>
   }
   backToInspections(projectId, code);
 }
+
+/**
+ * Photos taken during an inspection, uploaded from its review page. Stored as
+ * the credit's additional attachments — the same place the credit page's
+ * "Additional attachments" upload puts them — so they show on the credit and
+ * in its PDFs. PNG or JPEG, several at once.
+ */
+export async function uploadInspectionPhotosAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  const code = String(formData.get("code") ?? "");
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const credit = await getCreditByCode(projectId, code);
+  if (!credit) throw new Error("credit not found");
+  if (!(await ownedInspection(inspectionId, projectId))) throw new Error("inspection not found");
+  const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  // Check every file before storing any, so one wrong type stores nothing,
+  // and say so on the page rather than failing the request.
+  const wrong = files.filter((f) => !PHOTO_TYPES[f.name.slice(f.name.lastIndexOf(".")).toLowerCase()]);
+  if (wrong.length || files.length === 0) {
+    redirect(`${base(projectId, code)}/${inspectionId}?photoError=${wrong.length ? "type" : "none"}#photos`);
+  }
+  for (const f of files) await savePhoto(f, projectId, credit.projectCreditId);
+  revalidatePath(`/projects/${projectId}/credits/${encodeURIComponent(code)}`);
+  redirect(`${base(projectId, code)}/${inspectionId}#photos`);
+}

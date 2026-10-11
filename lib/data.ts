@@ -4,6 +4,8 @@ import { db } from "@/db";
 import {
   catalogCredits,
   catalogRequirements,
+  checklistObservations,
+  checklistTemplates,
   evidenceDocs,
   evidenceReviews,
   projectCredits,
@@ -305,9 +307,21 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
     )
     .where(inArray(evidenceDocs.projectCreditId, pcIds))
     .orderBy(evidenceDocs.createdAt);
+  // Before / after photos of an inspection's observations are stored as the
+  // credit's files, but they belong to their observation row, not to the
+  // credit's additional attachments (Hadi, 2026-10-11).
+  const observationPhotos = await db
+    .select({ before: checklistObservations.beforePhotoId, after: checklistObservations.afterPhotoId })
+    .from(checklistObservations)
+    .innerJoin(checklistTemplates, eq(checklistObservations.templateId, checklistTemplates.id))
+    .where(inArray(checklistTemplates.projectCreditId, pcIds));
+  const notAdditional = new Set(
+    observationPhotos.flatMap((o) => [o.before, o.after]).filter((x): x is string => Boolean(x)),
+  );
   const evByEntry = new Map<string, EvidenceAttachment[]>();
   const evByCredit = new Map<string, EvidenceAttachment[]>();
   for (const e of evidence) {
+    if (!e.entryId && notAdditional.has(e.id)) continue;
     // No requirement => a credit-level additional attachment.
     const [map, key] = e.entryId
       ? [evByEntry, e.entryId]

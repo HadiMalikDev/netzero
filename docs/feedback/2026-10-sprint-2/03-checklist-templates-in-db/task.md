@@ -259,3 +259,31 @@ Checks: 210 tests passing with the database (log logic, de-duplication, closing,
 recommendation ownership, landscape PDF), tsc clean, lint 0 errors, build
 succeeds; a fresh database gets the ESC form with its log switched on. All
 test data and files were removed afterwards.
+
+---
+
+## Added — 2026-10-11: photos during an inspection
+
+> Can't manually upload photos while going to inspections. All photos added
+> should show up as additional photos in the credit (apart from the
+> before/after ones).
+
+- The review page has a **Photos** section: upload one or more PNG/JPEG site
+  photos while inspecting. They are stored as the credit's **additional
+  attachments**, so they appear on the credit page and in its PDFs (the IAQ
+  sheet's photo list, the compliance checklist). Thumbnails of the credit's
+  additional photos show in the section. A wrong file type stores nothing and
+  says so on the page.
+- **Before / after photos** of the ESC observations log are no longer listed
+  among the credit's additional attachments, and so no longer print in the
+  compliance checklist's photo list; they stay with their observation.
+
+Checked through the real forms on Jeddah: two photos uploaded from an HC-10
+review appeared as thumbnails, under the credit's Additional attachments and in
+the IAQ PDF (2 images); a .txt plus a .png stored nothing and showed the
+message; on SS-03 a review-page photo is listed under Additional attachments
+and an observation's before photo is not. 219 tests passing with the database.
+
+**Open:** the ESC sheet prints the observations log instead of a photo list,
+so photos uploaded from an ESC review are on the credit but not on the ESC
+sheet.

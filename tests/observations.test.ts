@@ -8,6 +8,7 @@ import {
   checklistInspections,
   checklistObservations,
   checklistTemplates,
+  evidenceDocs,
   projectCredits,
   projects,
   ratingSystems,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/observations";
 import { normalizeRecommendation } from "@/lib/ai/observation-recommendation";
 import { WORKSPACE_ID } from "@/lib/catalog";
+import { getProjectCredits } from "@/lib/data";
 
 describe("isNonCompliant", () => {
   it("is No on a Yes-compliant item, or Yes on a No-compliant one — never N/A, blank or an observation", () => {
@@ -77,6 +79,7 @@ describeDb("corrective-action log", () => {
   });
 
   afterAll(async () => {
+    await db.delete(evidenceDocs).where(eq(evidenceDocs.projectCreditId, pcId));
     const [t] = await db.select({ id: checklistTemplates.id }).from(checklistTemplates).where(eq(checklistTemplates.projectCreditId, pcId));
     if (t) {
       await db.delete(checklistObservations).where(eq(checklistObservations.templateId, t.id));
@@ -197,6 +200,23 @@ describeDb("corrective-action log", () => {
       "1.5 Is there any damage in perimeter fencing?",
     ]);
     await editItem(t0.id, form[0].items[0].id, "toggle"); // restore the form for later cases
+  });
+
+  it("before / after photos are not the credit's additional attachments; other credit photos are", async () => {
+    const t = (await ensureProjectTemplate(pcId, "Construction Environmental Management"))!;
+    const site = randomUUID();
+    const before = randomUUID();
+    await db.insert(evidenceDocs).values([
+      { id: site, workspaceId: WORKSPACE_ID, projectCreditId: pcId, fileName: "site-walk.png", filePath: "/nowhere/site.png", fileSize: 1 },
+      { id: before, workspaceId: WORKSPACE_ID, projectCreditId: pcId, fileName: "fence-before.png", filePath: "/nowhere/before.png", fileSize: 1 },
+    ]);
+    const obs = (await addObservation(t.id, "Fence panel down", "2026-10-11"))!;
+    expect(await setObservationPhotos(t.id, obs, { beforePhotoId: before })).toBe(true);
+
+    const credit = (await getProjectCredits(projectId)).find((c) => c.projectCreditId === pcId)!;
+    expect(credit.additionalAttachments.map((a) => a.fileName)).toEqual(["site-walk.png"]);
+    // The photo still belongs to its observation.
+    expect((await listObservations(t.id)).find((o) => o.id === obs)!.beforePhoto?.fileName).toBe("fence-before.png");
   });
 
   it("keeps a person's recommendation over a late AI draft, and marks an edited draft as the person's", async () => {

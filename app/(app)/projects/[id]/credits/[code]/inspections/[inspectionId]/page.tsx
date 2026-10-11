@@ -5,7 +5,8 @@ import { Button, Card } from "@/components/ui";
 import { getCreditByCode, getProject } from "@/lib/data";
 import { getInspection, type Answer, type HeaderField, type ResponseRow } from "@/lib/checklists";
 import { formatUploadedAt } from "@/lib/format";
-import { rerunDraftAction, saveInspectionAction } from "../../../../../inspection-actions";
+import { rerunDraftAction, saveInspectionAction, uploadInspectionPhotosAction } from "../../../../../inspection-actions";
+import { isImageFile } from "@/lib/report/checklist";
 
 /**
  * Review one inspection (Sprint 2 item 3). Every item shows the AI's
@@ -88,7 +89,9 @@ export default async function InspectionReviewPage({
   searchParams,
 }: PageProps<"/projects/[id]/credits/[code]/inspections/[inspectionId]">) {
   const { id, code: rawCode, inspectionId } = await params;
-  const saved = (await searchParams)?.saved === "1";
+  const sp = await searchParams;
+  const saved = sp?.saved === "1";
+  const photoError = sp?.photoError;
   const code = decodeURIComponent(rawCode);
   const project = await getProject(id);
   if (!project) notFound();
@@ -105,6 +108,9 @@ export default async function InspectionReviewPage({
     else sections.push({ no: r.sectionNo, heading: r.sectionHeading, rows: [r] });
   }
   const suggested = insp.responses.filter((r) => r.aiAnswer).length;
+  // The credit's additional photos: where this page's uploads go. Before /
+  // after photos of observations are not among them (they belong to the log).
+  const photos = credit.additionalAttachments.filter((a) => isImageFile(a.fileName));
   const sources: string[] = insp.aiState === "done" && insp.aiNote ? JSON.parse(insp.aiNote) : [];
   const hidden = (
     <>
@@ -226,6 +232,58 @@ export default async function InspectionReviewPage({
           <Button type="submit">Save review</Button>
         </div>
       </form>
+      <section id="photos" className="mt-6">
+      <Card className="px-5 py-4">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">Photos</h2>
+            <p className="text-sm text-slate-500">
+              Site photos for this inspection. They are saved on {credit.code} as additional attachments, so they
+              show on the credit and in its PDFs. Save your answers before uploading: the upload reloads this page.
+            </p>
+          </div>
+          <form action={uploadInspectionPhotosAction} className="flex items-center gap-2">
+            {hidden}
+            <input
+              type="file"
+              name="photos"
+              multiple
+              accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+              className="text-xs text-slate-600"
+            />
+            <button
+              type="submit"
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Upload photos
+            </button>
+          </form>
+        </div>
+        {photoError ? (
+          <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {photoError === "type"
+              ? "Nothing was uploaded: photos must be PNG or JPEG."
+              : "Choose one or more photos to upload."}
+          </p>
+        ) : null}
+        {photos.length === 0 ? (
+          <p className="text-sm text-slate-400">No photos on this credit yet.</p>
+        ) : (
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            {photos.map((p) => (
+              <li key={p.id} className="text-xs text-slate-500">
+                <a href={`/api/evidence/${p.id}`} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- an evidence file served by our own route */}
+                  <img src={`/api/evidence/${p.id}`} alt={p.fileName} className="h-24 w-full rounded border border-slate-200 object-cover" />
+                </a>
+                <div className="mt-1 truncate" title={p.fileName}>{p.fileName}</div>
+                <div>{formatUploadedAt(p.createdAt)}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      </section>
     </PageChrome>
   );
 }
