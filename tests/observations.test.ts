@@ -190,9 +190,10 @@ describeDb("corrective-action log", () => {
     expect(raised).toHaveLength(1);
     const log = await listObservations(t0.id);
     // The fence was raised as 1.5 before the edit; the dust problem is the item now numbered 1.5.
-    expect(log.map((o) => o.observation.split(" —")[0])).toEqual([
-      "1.5 Is there any damage in perimeter fencing?",
+    // Both are raised within the same second in a test run, so compare as a set.
+    expect(log.map((o) => o.observation.split(" —")[0]).sort()).toEqual([
       "1.5 Is there a dust problem prevailing on the construction site",
+      "1.5 Is there any damage in perimeter fencing?",
     ]);
     await editItem(t0.id, form[0].items[0].id, "toggle"); // restore the form for later cases
   });
