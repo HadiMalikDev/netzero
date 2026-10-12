@@ -578,7 +578,8 @@ export const checklistObservations = pgTable(
  * its row (2026-10-12). The file itself is the credit's evidence (an
  * additional attachment, so it shows on the credit and in its PDFs); this row
  * says which item it shows, so the inspection PDF can label it "1.1 Filters
- * at supply air intake". Removing the file removes the link.
+ * at supply air intake". One photo may be linked to several items. Removing
+ * the file removes its links.
  */
 export const checklistResponsePhotos = pgTable(
   "checklist_response_photo",
@@ -594,7 +595,9 @@ export const checklistResponsePhotos = pgTable(
   },
   (t) => [
     index("checklist_response_photo_response_idx").on(t.responseId),
-    uniqueIndex("checklist_response_photo_doc_uq").on(t.evidenceDocId),
+    // A photo can show several items (one wide site shot), but is linked to
+    // the same item once (2026-10-12).
+    uniqueIndex("checklist_response_photo_response_doc_uq").on(t.responseId, t.evidenceDocId),
   ],
 );
 

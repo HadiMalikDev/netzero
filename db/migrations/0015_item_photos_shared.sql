@@ -1,0 +1,2 @@
+DROP INDEX "checklist_response_photo_doc_uq";--> statement-breakpoint
+CREATE UNIQUE INDEX "checklist_response_photo_response_doc_uq" ON "checklist_response_photo" USING btree ("response_id","evidence_doc_id");

@@ -6,9 +6,9 @@ import { getCreditByCode, getProject } from "@/lib/data";
 import { getInspection, type Answer, type HeaderField, type ResponseRow } from "@/lib/checklists";
 import { formatUploadedAt } from "@/lib/format";
 import { rerunDraftAction, saveInspectionAction, uploadInspectionPhotosAction } from "../../../../../inspection-actions";
-import { isImageFile } from "@/lib/report/checklist";
+import { creditPhotos, isImageFile } from "@/lib/report/checklist";
 import { SaveReviewButton } from "./SaveReviewButton";
-import { ItemPhotos } from "./ItemPhotos";
+import { ItemPhotos, type CreditPhotoOption } from "./ItemPhotos";
 import { UploadControl } from "@/components/EvidenceChecklist";
 
 /**
@@ -35,7 +35,9 @@ const HEADER_INPUT: Record<HeaderField, { label: string; name: string; type: str
   area: { label: "Area / level", name: "area", type: "text" },
 };
 
-function Row({ r, ctx }: { r: ResponseRow; ctx: { projectId: string; code: string; inspectionId: string } }) {
+type RowCtx = { projectId: string; code: string; inspectionId: string; creditPhotos: CreditPhotoOption[] };
+
+function Row({ r, ctx }: { r: ResponseRow; ctx: RowCtx }) {
   const overridden = r.aiAnswer != null && r.answer !== r.aiAnswer;
   return (
     <tr className="align-top">
@@ -114,6 +116,12 @@ export default async function InspectionReviewPage({
   // The credit's additional photos: where this page's uploads go. Before /
   // after photos of observations are not among them (they belong to the log).
   const photos = credit.additionalAttachments.filter((a) => isImageFile(a.fileName));
+  // What a row's photo picker offers: every photo on the credit that its PDFs
+  // print (pursued paths only, no observation before / after), newest first.
+  const pickable: CreditPhotoOption[] = creditPhotos(credit)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map((p) => ({ id: p.fileId, fileName: p.fileName, attachedTo: p.attachedTo }));
+  const rowCtx: RowCtx = { projectId: id, code, inspectionId: insp.id, creditPhotos: pickable };
   const sources: string[] = insp.aiState === "done" && insp.aiNote ? JSON.parse(insp.aiNote) : [];
   const hidden = (
     <>
@@ -214,7 +222,7 @@ export default async function InspectionReviewPage({
                   <td colSpan={3} className="px-4 py-2 text-sm font-semibold text-slate-800">{s.heading}</td>
                 </tr>
                 {s.rows.map((r) => (
-                  <Row key={r.id} r={r} ctx={{ projectId: id, code, inspectionId: insp.id }} />
+                  <Row key={r.id} r={r} ctx={rowCtx} />
                 ))}
               </tbody>
             ))}

@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -28,8 +28,9 @@ import {
   editSection,
   ensureProjectTemplate,
   getInspection,
-  itemPhoto,
   linkItemPhoto,
+  setItemPhotos,
+  unlinkItemPhoto,
   parseAnswer,
   projectTemplate,
   saveInspection,
@@ -39,6 +40,7 @@ import {
   type SectionOp,
 } from "@/lib/checklists";
 import { getCreditByCode, WORKSPACE_ID } from "@/lib/data";
+import { creditPhotos } from "@/lib/report/checklist";
 
 /**
  * Inspection-sheet actions (Sprint 2 item 3): start an inspection (the AI
@@ -321,6 +323,8 @@ export async function uploadInspectionPhotosAction(formData: FormData): Promise<
 export interface ItemPhotoResult {
   ok: boolean;
   error?: string;
+  /** Upload only: the new photos' evidence ids, so the modal can show them selected. */
+  ids?: string[];
 }
 
 /**
@@ -343,16 +347,24 @@ export async function uploadItemPhotoAction(formData: FormData): Promise<ItemPho
   if (!files.length) return { ok: false, error: "No photo received" };
   if (files.some((f) => !PHOTO_TYPES[f.name.slice(f.name.lastIndexOf(".")).toLowerCase()]))
     return { ok: false, error: "Photos must be PNG or JPEG" };
+  const ids: string[] = [];
   for (const f of files) {
     const id = await savePhoto(f, projectId, credit.projectCreditId);
-    if (id) await linkItemPhoto(responseId, id);
+    if (id) {
+      await linkItemPhoto(responseId, id);
+      ids.push(id);
+    }
   }
   revalidatePath(`/projects/${projectId}/credits/${encodeURIComponent(code)}`);
   revalidatePath(`${base(projectId, code)}/${inspectionId}`);
-  return { ok: true };
+  return { ok: true, ids };
 }
 
-/** Remove one item photo: the file, its credit attachment and its link. */
+/**
+ * Take one photo off an item. Only the link goes: the photo stays on the
+ * credit and on any other item it shows (a shared site shot). Deleting a
+ * photo for good is done on the credit page.
+ */
 export async function removeItemPhotoAction(formData: FormData): Promise<ItemPhotoResult> {
   await requireUser();
   const projectId = String(formData.get("projectId") ?? "");
@@ -362,12 +374,35 @@ export async function removeItemPhotoAction(formData: FormData): Promise<ItemPho
   const docId = String(formData.get("docId") ?? "");
   const insp = await ownedInspection(inspectionId, projectId);
   if (!insp || !insp.responses.some((r) => r.id === responseId)) return { ok: false, error: "Item not found" };
-  const photo = await itemPhoto(responseId, docId);
-  if (!photo) return { ok: false, error: "Photo not found" };
-  // The link goes with the file (ON DELETE CASCADE).
-  await db.delete(evidenceDocs).where(and(eq(evidenceDocs.id, photo.id), eq(evidenceDocs.workspaceId, WORKSPACE_ID)));
-  await rm(photo.filePath, { force: true });
-  revalidatePath(`/projects/${projectId}/credits/${encodeURIComponent(code)}`);
+  if (!(await unlinkItemPhoto(responseId, docId))) return { ok: false, error: "Photo not found on this item" };
+  revalidatePath(`${base(projectId, code)}/${inspectionId}`);
+  return { ok: true };
+}
+
+/**
+ * The photo modal's selection for one item: the item's photos become exactly
+ * these. Every id must be one of the photos the modal offers — the credit's
+ * photos on the path being pursued, never an ESC observation's before / after
+ * photo — so a crafted request cannot attach another credit's file.
+ */
+export async function setItemPhotosAction(formData: FormData): Promise<ItemPhotoResult> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  const code = String(formData.get("code") ?? "");
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const responseId = String(formData.get("responseId") ?? "");
+  const insp = await ownedInspection(inspectionId, projectId);
+  const row = insp?.responses.find((r) => r.id === responseId);
+  if (!insp || !row) return { ok: false, error: "Item not found" };
+  const credit = await getCreditByCode(projectId, code);
+  if (!credit || credit.projectCreditId !== insp.projectCreditId) return { ok: false, error: "Credit not found" };
+  const offered = new Set(creditPhotos(credit).map((p) => p.fileId));
+  const chosen = [...new Set(formData.getAll("docId").map(String))];
+  if (chosen.some((id) => !offered.has(id))) return { ok: false, error: "That photo is not on this credit" };
+  // A linked photo the modal did not offer (its either/or path was dropped
+  // since) was not shown, so the selection says nothing about it: keep it.
+  const unseen = row.photos.map((p) => p.id).filter((id) => !offered.has(id));
+  await setItemPhotos(responseId, [...chosen, ...unseen]);
   revalidatePath(`${base(projectId, code)}/${inspectionId}`);
   return { ok: true };
 }

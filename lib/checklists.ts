@@ -711,27 +711,45 @@ export async function editFormText(
 
 // ---------- item photos ----------
 
-/** Link a stored evidence file to the item (response) it shows. */
+/** Link a stored evidence file to the item (response) it shows. Linking twice is a no-op. */
 export async function linkItemPhoto(responseId: string, evidenceDocId: string): Promise<void> {
-  await db.insert(checklistResponsePhotos).values({ id: randomUUID(), responseId, evidenceDocId });
+  await db
+    .insert(checklistResponsePhotos)
+    .values({ id: randomUUID(), responseId, evidenceDocId })
+    .onConflictDoNothing({ target: [checklistResponsePhotos.responseId, checklistResponsePhotos.evidenceDocId] });
 }
 
-/** The evidence file, if it is a photo linked to this response. */
-export async function itemPhoto(responseId: string, evidenceDocId: string) {
-  const [row] = await db
-    .select({ id: evidenceDocs.id, filePath: evidenceDocs.filePath })
-    .from(checklistResponsePhotos)
-    .innerJoin(evidenceDocs, eq(checklistResponsePhotos.evidenceDocId, evidenceDocs.id))
+/** Take a photo off an item. The file stays on the credit (and on any other item). */
+export async function unlinkItemPhoto(responseId: string, evidenceDocId: string): Promise<boolean> {
+  const gone = await db
+    .delete(checklistResponsePhotos)
     .where(and(eq(checklistResponsePhotos.responseId, responseId), eq(checklistResponsePhotos.evidenceDocId, evidenceDocId)))
-    .limit(1);
-  return row ?? null;
+    .returning({ id: checklistResponsePhotos.id });
+  return gone.length > 0;
 }
 
 /**
- * How each item photo of a form is labelled in an inspection's PDF: the item
- * ("1.1 Filters at supply air intake"), plus the inspection's date when the
- * photo was taken in another inspection of the same form. `current` comes
- * first, in item order, so this inspection's photos lead the photo table.
+ * Make an item's photos exactly `evidenceDocIds` (the modal's selection):
+ * links the new ones, unlinks the deselected ones, leaves files alone. The
+ * caller checks every id is one of the credit's photos.
+ */
+export async function setItemPhotos(responseId: string, evidenceDocIds: string[]): Promise<void> {
+  const want = new Set(evidenceDocIds);
+  const have = await db
+    .select({ evidenceDocId: checklistResponsePhotos.evidenceDocId })
+    .from(checklistResponsePhotos)
+    .where(eq(checklistResponsePhotos.responseId, responseId));
+  const had = new Set(have.map((h) => h.evidenceDocId));
+  for (const id of had) if (!want.has(id)) await unlinkItemPhoto(responseId, id);
+  for (const id of want) if (!had.has(id)) await linkItemPhoto(responseId, id);
+}
+
+/**
+ * How each item photo of a form is labelled in an inspection's PDF: the items
+ * it shows ("1.1 Filters at supply air intake; 1.2 Filters at return air
+ * openings"), in item order. A photo used in this inspection is labelled with
+ * this inspection's items only and marked `current`, so it leads the photo
+ * table; one used only in other inspections names their dates.
  */
 export async function itemPhotoLabels(
   templateId: string,
@@ -749,15 +767,21 @@ export async function itemPhotoLabels(
     .innerJoin(checklistResponses, eq(checklistResponsePhotos.responseId, checklistResponses.id))
     .innerJoin(checklistInspections, eq(checklistResponses.inspectionId, checklistInspections.id))
     .where(eq(checklistInspections.templateId, templateId));
+  const byDoc = new Map<string, typeof rows>();
+  for (const r of rows) byDoc.set(r.evidenceDocId, [...(byDoc.get(r.evidenceDocId) ?? []), r]);
   const out = new Map<string, { label: string; current: boolean; itemNo: string }>();
-  for (const r of rows) {
-    const current = r.inspectionId === currentInspectionId;
-    const item = `${r.itemNo} ${r.itemText}`;
-    out.set(r.evidenceDocId, {
-      label: current ? item : `${item} (inspection of ${r.inspectionDate ?? "an undated inspection"})`,
-      current,
-      itemNo: r.itemNo,
-    });
+  for (const [docId, links] of byDoc) {
+    const here = links.filter((l) => l.inspectionId === currentInspectionId);
+    const use = (here.length ? here : links).sort((a, b) => compareItemNo(a.itemNo, b.itemNo));
+    const label = use
+      .map((l) =>
+        here.length
+          ? `${l.itemNo} ${l.itemText}`
+          : `${l.itemNo} ${l.itemText} (inspection of ${l.inspectionDate ?? "an undated inspection"})`,
+      )
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .join("; ");
+    out.set(docId, { label, current: here.length > 0, itemNo: use[0].itemNo });
   }
   return out;
 }

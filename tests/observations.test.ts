@@ -15,7 +15,18 @@ import {
   rsVersions,
   workspaces,
 } from "@/db/schema";
-import { editItem, ensureProjectTemplate, getForm, getInspection, itemPhotoLabels, linkItemPhoto, saveInspection, startInspection } from "@/lib/checklists";
+import {
+  editItem,
+  ensureProjectTemplate,
+  getForm,
+  getInspection,
+  itemPhotoLabels,
+  linkItemPhoto,
+  saveInspection,
+  setItemPhotos,
+  startInspection,
+  unlinkItemPhoto,
+} from "@/lib/checklists";
 import {
   addObservation,
   applyRecommendation,
@@ -249,6 +260,44 @@ describeDb("corrective-action log", () => {
     // Deleting the file removes the link with it.
     await db.delete(evidenceDocs).where(eq(evidenceDocs.id, b));
     expect((await getInspection(now))!.responses.find((r) => r.itemNo === "1.5")!.photos).toEqual([]);
+  });
+
+  it("item photos: one photo shows several items; the picker's selection replaces; taking one off keeps the file", async () => {
+    const t = (await ensureProjectTemplate(pcId, "Construction Environmental Management"))!;
+    const now = await startInspection(t.id);
+    const rows = (await getInspection(now))!.responses;
+    const r11 = rows.find((r) => r.itemNo === "1.1")!;
+    const r12 = rows.find((r) => r.itemNo === "1.2")!;
+    const shared = randomUUID(), other = randomUUID();
+    await db.insert(evidenceDocs).values([
+      { id: shared, workspaceId: WORKSPACE_ID, projectCreditId: pcId, fileName: "east-gate.jpg", filePath: "/nowhere/s.jpg", fileSize: 1 },
+      { id: other, workspaceId: WORKSPACE_ID, projectCreditId: pcId, fileName: "wash-bay.jpg", filePath: "/nowhere/o.jpg", fileSize: 1 },
+    ]);
+
+    await setItemPhotos(r11.id, [shared]);
+    await setItemPhotos(r12.id, [shared, other]);
+    await linkItemPhoto(r12.id, shared); // linking twice is a no-op
+    const photosOf = async (no: string) =>
+      (await getInspection(now))!.responses.find((r) => r.itemNo === no)!.photos.map((p) => p.fileName).sort();
+    expect(await photosOf("1.1")).toEqual(["east-gate.jpg"]);
+    expect(await photosOf("1.2")).toEqual(["east-gate.jpg", "wash-bay.jpg"]);
+
+    // The PDF names every item a shared photo shows, in item order.
+    const labels = await itemPhotoLabels(t.id, now);
+    expect(labels.get(shared)).toEqual({ label: `1.1 ${r11.itemText}; 1.2 ${r12.itemText}`, current: true, itemNo: "1.1" });
+
+    // A new selection replaces the old one: deselected photos come off.
+    await setItemPhotos(r12.id, [other]);
+    expect(await photosOf("1.2")).toEqual(["wash-bay.jpg"]);
+    expect(await photosOf("1.1")).toEqual(["east-gate.jpg"]); // the other item keeps it
+
+    // Taking a photo off an item leaves the file on the credit.
+    expect(await unlinkItemPhoto(r11.id, shared)).toBe(true);
+    expect(await unlinkItemPhoto(r11.id, shared)).toBe(false);
+    expect(await photosOf("1.1")).toEqual([]);
+    const credit = (await getProjectCredits(projectId)).find((c) => c.projectCreditId === pcId)!;
+    expect(credit.additionalAttachments.map((x) => x.id)).toEqual(expect.arrayContaining([shared, other]));
+    expect((await itemPhotoLabels(t.id, now)).has(shared)).toBe(false);
   });
 
   it("keeps a person's recommendation over a late AI draft, and marks an edited draft as the person's", async () => {
