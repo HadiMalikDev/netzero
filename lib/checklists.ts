@@ -4,10 +4,12 @@ import { db } from "@/db";
 import {
   checklistInspections,
   checklistItems,
+  checklistResponsePhotos,
   checklistResponses,
   checklistSections,
   checklistTemplates,
   users,
+  evidenceDocs,
 } from "@/db/schema";
 import { WORKSPACE_ID } from "@/lib/catalog";
 
@@ -356,6 +358,15 @@ export interface ResponseRow {
   aiQuote: string | null;
   answer: Answer | null;
   remark: string | null;
+  /** Site photos taken for this item from its row, oldest first. */
+  photos: ItemPhoto[];
+}
+
+export interface ItemPhoto {
+  /** The evidence file's id (served at /api/evidence/<id>). */
+  id: string;
+  fileName: string;
+  createdAt: number;
 }
 
 export interface InspectionDetail {
@@ -410,6 +421,25 @@ export async function getInspection(inspectionId: string): Promise<InspectionDet
     .select()
     .from(checklistResponses)
     .where(eq(checklistResponses.inspectionId, inspectionId));
+  const photoRows = rows.length
+    ? await db
+        .select({
+          responseId: checklistResponsePhotos.responseId,
+          id: evidenceDocs.id,
+          fileName: evidenceDocs.fileName,
+          createdAt: evidenceDocs.createdAt,
+        })
+        .from(checklistResponsePhotos)
+        .innerJoin(evidenceDocs, eq(checklistResponsePhotos.evidenceDocId, evidenceDocs.id))
+        .where(inArray(checklistResponsePhotos.responseId, rows.map((r) => r.id)))
+        .orderBy(asc(evidenceDocs.createdAt))
+    : [];
+  const photosByResponse = new Map<string, ItemPhoto[]>();
+  for (const p of photoRows) {
+    const arr = photosByResponse.get(p.responseId) ?? [];
+    arr.push({ id: p.id, fileName: p.fileName, createdAt: p.createdAt });
+    photosByResponse.set(p.responseId, arr);
+  }
   const responses: ResponseRow[] = rows
     .map((r) => ({
       id: r.id,
@@ -423,6 +453,7 @@ export async function getInspection(inspectionId: string): Promise<InspectionDet
       aiQuote: r.aiQuote,
       answer: parseAnswer(r.answer),
       remark: r.remark,
+      photos: photosByResponse.get(r.id) ?? [],
     }))
     .sort((a, b) => compareItemNo(a.itemNo, b.itemNo));
   return { ...i, projectCreditId: template.projectCreditId, template, responses };
@@ -676,4 +707,57 @@ export async function editFormText(
     })
     .where(eq(checklistTemplates.id, templateId));
   return true;
+}
+
+// ---------- item photos ----------
+
+/** Link a stored evidence file to the item (response) it shows. */
+export async function linkItemPhoto(responseId: string, evidenceDocId: string): Promise<void> {
+  await db.insert(checklistResponsePhotos).values({ id: randomUUID(), responseId, evidenceDocId });
+}
+
+/** The evidence file, if it is a photo linked to this response. */
+export async function itemPhoto(responseId: string, evidenceDocId: string) {
+  const [row] = await db
+    .select({ id: evidenceDocs.id, filePath: evidenceDocs.filePath })
+    .from(checklistResponsePhotos)
+    .innerJoin(evidenceDocs, eq(checklistResponsePhotos.evidenceDocId, evidenceDocs.id))
+    .where(and(eq(checklistResponsePhotos.responseId, responseId), eq(checklistResponsePhotos.evidenceDocId, evidenceDocId)))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * How each item photo of a form is labelled in an inspection's PDF: the item
+ * ("1.1 Filters at supply air intake"), plus the inspection's date when the
+ * photo was taken in another inspection of the same form. `current` comes
+ * first, in item order, so this inspection's photos lead the photo table.
+ */
+export async function itemPhotoLabels(
+  templateId: string,
+  currentInspectionId: string,
+): Promise<Map<string, { label: string; current: boolean; itemNo: string }>> {
+  const rows = await db
+    .select({
+      evidenceDocId: checklistResponsePhotos.evidenceDocId,
+      itemNo: checklistResponses.itemNo,
+      itemText: checklistResponses.itemText,
+      inspectionId: checklistInspections.id,
+      inspectionDate: checklistInspections.inspectionDate,
+    })
+    .from(checklistResponsePhotos)
+    .innerJoin(checklistResponses, eq(checklistResponsePhotos.responseId, checklistResponses.id))
+    .innerJoin(checklistInspections, eq(checklistResponses.inspectionId, checklistInspections.id))
+    .where(eq(checklistInspections.templateId, templateId));
+  const out = new Map<string, { label: string; current: boolean; itemNo: string }>();
+  for (const r of rows) {
+    const current = r.inspectionId === currentInspectionId;
+    const item = `${r.itemNo} ${r.itemText}`;
+    out.set(r.evidenceDocId, {
+      label: current ? item : `${item} (inspection of ${r.inspectionDate ?? "an undated inspection"})`,
+      current,
+      itemNo: r.itemNo,
+    });
+  }
+  return out;
 }

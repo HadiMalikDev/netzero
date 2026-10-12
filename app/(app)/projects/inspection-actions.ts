@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -28,6 +28,8 @@ import {
   editSection,
   ensureProjectTemplate,
   getInspection,
+  itemPhoto,
+  linkItemPhoto,
   parseAnswer,
   projectTemplate,
   saveInspection,
@@ -312,4 +314,60 @@ export async function uploadInspectionPhotosAction(formData: FormData): Promise<
   // where they were (a redirect sent them back to the top, Hadi 2026-10-11).
   revalidatePath(`/projects/${projectId}/credits/${encodeURIComponent(code)}`);
   revalidatePath(`${base(projectId, code)}/${inspectionId}`);
+}
+
+// ---------- item photos (camera button on each row) ----------
+
+export interface ItemPhotoResult {
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Photos taken for one item from its row. Called directly by the row's
+ * camera control (the rows sit inside the review form, so it cannot be a form
+ * of its own). Stored as the credit's additional attachments and linked to
+ * the item; the page refreshes in place, keeping scroll and unsaved answers.
+ */
+export async function uploadItemPhotoAction(formData: FormData): Promise<ItemPhotoResult> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  const code = String(formData.get("code") ?? "");
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const responseId = String(formData.get("responseId") ?? "");
+  const insp = await ownedInspection(inspectionId, projectId);
+  if (!insp || !insp.responses.some((r) => r.id === responseId)) return { ok: false, error: "Item not found" };
+  const credit = await getCreditByCode(projectId, code);
+  if (!credit || credit.projectCreditId !== insp.projectCreditId) return { ok: false, error: "Credit not found" };
+  const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  if (!files.length) return { ok: false, error: "No photo received" };
+  if (files.some((f) => !PHOTO_TYPES[f.name.slice(f.name.lastIndexOf(".")).toLowerCase()]))
+    return { ok: false, error: "Photos must be PNG or JPEG" };
+  for (const f of files) {
+    const id = await savePhoto(f, projectId, credit.projectCreditId);
+    if (id) await linkItemPhoto(responseId, id);
+  }
+  revalidatePath(`/projects/${projectId}/credits/${encodeURIComponent(code)}`);
+  revalidatePath(`${base(projectId, code)}/${inspectionId}`);
+  return { ok: true };
+}
+
+/** Remove one item photo: the file, its credit attachment and its link. */
+export async function removeItemPhotoAction(formData: FormData): Promise<ItemPhotoResult> {
+  await requireUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  const code = String(formData.get("code") ?? "");
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const responseId = String(formData.get("responseId") ?? "");
+  const docId = String(formData.get("docId") ?? "");
+  const insp = await ownedInspection(inspectionId, projectId);
+  if (!insp || !insp.responses.some((r) => r.id === responseId)) return { ok: false, error: "Item not found" };
+  const photo = await itemPhoto(responseId, docId);
+  if (!photo) return { ok: false, error: "Photo not found" };
+  // The link goes with the file (ON DELETE CASCADE).
+  await db.delete(evidenceDocs).where(and(eq(evidenceDocs.id, photo.id), eq(evidenceDocs.workspaceId, WORKSPACE_ID)));
+  await rm(photo.filePath, { force: true });
+  revalidatePath(`/projects/${projectId}/credits/${encodeURIComponent(code)}`);
+  revalidatePath(`${base(projectId, code)}/${inspectionId}`);
+  return { ok: true };
 }

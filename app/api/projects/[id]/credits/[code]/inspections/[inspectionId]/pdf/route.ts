@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { evidenceDocs } from "@/db/schema";
 import { currentUser } from "@/lib/auth/session";
 import { getVersion } from "@/lib/catalog";
-import { getInspection } from "@/lib/checklists";
+import { getInspection, itemPhotoLabels } from "@/lib/checklists";
 import { getCreditByCode, getProject } from "@/lib/data";
 import { parseStage } from "@/lib/evidence";
 import { formatUploadedAt } from "@/lib/format";
@@ -84,6 +84,7 @@ export async function GET(
     generatedAt: formatGeneratedAt(new Date()),
     reviewedOn: formatUploadedAt(insp.reviewedAt),
     observations: insp.template.observationLog ? await listObservations(insp.templateId) : undefined,
+    photoLabels: await itemPhotoLabels(insp.templateId, insp.id),
   });
 
   const images: ImageBytes = new Map();

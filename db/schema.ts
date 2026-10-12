@@ -573,6 +573,31 @@ export const checklistObservations = pgTable(
   (t) => [index("checklist_observation_template_idx").on(t.templateId)],
 );
 
+/**
+ * A site photo taken for one item of an inspection, from the camera button on
+ * its row (2026-10-12). The file itself is the credit's evidence (an
+ * additional attachment, so it shows on the credit and in its PDFs); this row
+ * says which item it shows, so the inspection PDF can label it "1.1 Filters
+ * at supply air intake". Removing the file removes the link.
+ */
+export const checklistResponsePhotos = pgTable(
+  "checklist_response_photo",
+  {
+    id: text("id").primaryKey(),
+    responseId: text("response_id")
+      .notNull()
+      .references(() => checklistResponses.id, { onDelete: "cascade" }),
+    evidenceDocId: text("evidence_doc_id")
+      .notNull()
+      .references(() => evidenceDocs.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [
+    index("checklist_response_photo_response_idx").on(t.responseId),
+    uniqueIndex("checklist_response_photo_doc_uq").on(t.evidenceDocId),
+  ],
+);
+
 export type Workspace = typeof workspaces.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type RatingSystem = typeof ratingSystems.$inferSelect;

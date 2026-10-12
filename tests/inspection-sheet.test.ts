@@ -5,7 +5,7 @@ import type { CreditView, EvidenceAttachment } from "@/lib/data";
 import type { InspectionDetail, ResponseRow } from "@/lib/checklists";
 import { InspectionSheet } from "@/lib/pdf/InspectionSheet";
 import { registerPdfHyphenation } from "@/lib/pdf/shared";
-import { buildInspectionSheet, formatInspectionDate, sheetStage } from "@/lib/report/inspection-sheet";
+import { buildInspectionSheet, formatInspectionDate, labelItemPhotos, sheetStage } from "@/lib/report/inspection-sheet";
 
 registerPdfHyphenation();
 
@@ -52,6 +52,7 @@ const r = (itemNo: string, sectionNo: string, sectionHeading: string, itemText: 
   aiQuote: null,
   answer: null,
   remark: null,
+  photos: [],
   ...over,
 });
 
@@ -255,5 +256,30 @@ describe("InspectionSheet PDF", () => {
     const { text, pages } = await textOf(await renderToBuffer(InspectionSheet({ model: model({ credit: bare }), images: new Map() })));
     expect(pages).toBe(1);
     expect(text).toContain("No PNG or JPEG files are attached to this credit yet");
+  });
+});
+
+describe("labelItemPhotos", () => {
+  const ph = (fileId: string, createdAt: number) => ({ fileId, fileName: `${fileId}.jpg`, createdAt, attachedTo: "Additional attachment (credit level)" });
+  it("labels item photos with their item, puts this inspection's first in item order, keeps the rest", () => {
+    const out = labelItemPhotos(
+      [ph("general", 1), ph("i2.1", 2), ph("old1.1", 3), ph("i1.10", 4), ph("i1.2", 5)],
+      new Map([
+        ["i2.1", { label: "2.1 Low/no VOC products", current: true, itemNo: "2.1" }],
+        ["i1.10", { label: "1.10 Tenth", current: true, itemNo: "1.10" }],
+        ["i1.2", { label: "1.2 Filters at return air openings", current: true, itemNo: "1.2" }],
+        ["old1.1", { label: "1.1 Filters at supply air intake (inspection of 2026-10-01)", current: false, itemNo: "1.1" }],
+      ]),
+    );
+    expect(out.map((p) => [p.fileId, p.attachedTo])).toEqual([
+      ["i1.2", "1.2 Filters at return air openings"],
+      ["i1.10", "1.10 Tenth"],
+      ["i2.1", "2.1 Low/no VOC products"],
+      ["general", "Additional attachment (credit level)"],
+      ["old1.1", "1.1 Filters at supply air intake (inspection of 2026-10-01)"],
+    ]);
+  });
+  it("leaves photos as they are without labels", () => {
+    expect(labelItemPhotos([ph("a", 1)], undefined)).toEqual([ph("a", 1)]);
   });
 });

@@ -15,7 +15,7 @@ import {
   rsVersions,
   workspaces,
 } from "@/db/schema";
-import { editItem, ensureProjectTemplate, getForm, getInspection, saveInspection, startInspection } from "@/lib/checklists";
+import { editItem, ensureProjectTemplate, getForm, getInspection, itemPhotoLabels, linkItemPhoto, saveInspection, startInspection } from "@/lib/checklists";
 import {
   addObservation,
   applyRecommendation,
@@ -217,6 +217,38 @@ describeDb("corrective-action log", () => {
     expect(credit.additionalAttachments.map((a) => a.fileName)).toEqual(["site-walk.png"]);
     // The photo still belongs to its observation.
     expect((await listObservations(t.id)).find((o) => o.id === obs)!.beforePhoto?.fileName).toBe("fence-before.png");
+  });
+
+  it("item photos: shown on their item, labelled for the PDF, and gone with their file", async () => {
+    const t = (await ensureProjectTemplate(pcId, "Construction Environmental Management"))!;
+    const older = await startInspection(t.id);
+    await saveInspection(older, { inspectionDate: "2026-10-01", inspector: null, area: null, answers: {} }, "user_solo");
+    const now = await startInspection(t.id);
+    const oldResp = (await getInspection(older))!.responses.find((r) => r.itemNo === "1.1")!;
+    const nowResp = (await getInspection(now))!.responses.find((r) => r.itemNo === "1.5")!;
+    const a = randomUUID(), b = randomUUID();
+    await db.insert(evidenceDocs).values([
+      { id: a, workspaceId: WORKSPACE_ID, projectCreditId: pcId, fileName: "stockpile.jpg", filePath: "/nowhere/a.jpg", fileSize: 1 },
+      { id: b, workspaceId: WORKSPACE_ID, projectCreditId: pcId, fileName: "fence.jpg", filePath: "/nowhere/b.jpg", fileSize: 1 },
+    ]);
+    await linkItemPhoto(oldResp.id, a);
+    await linkItemPhoto(nowResp.id, b);
+
+    const insp = (await getInspection(now))!;
+    expect(insp.responses.find((r) => r.itemNo === "1.5")!.photos.map((p) => p.fileName)).toEqual(["fence.jpg"]);
+    expect(insp.responses.find((r) => r.itemNo === "1.1")!.photos).toEqual([]); // the other inspection's photo stays there
+
+    const labels = await itemPhotoLabels(t.id, now);
+    expect(labels.get(b)).toEqual({ label: "1.5 Is there any damage in perimeter fencing?", current: true, itemNo: "1.5" });
+    expect(labels.get(a)).toEqual({ label: "1.1 Are soil stockpiles adequately covered or stabilized (inspection of 2026-10-01)", current: false, itemNo: "1.1" });
+
+    // They are credit attachments too (Hadi: all photos show as additional photos).
+    const credit = (await getProjectCredits(projectId)).find((c) => c.projectCreditId === pcId)!;
+    expect(credit.additionalAttachments.map((x) => x.fileName)).toEqual(expect.arrayContaining(["stockpile.jpg", "fence.jpg"]));
+
+    // Deleting the file removes the link with it.
+    await db.delete(evidenceDocs).where(eq(evidenceDocs.id, b));
+    expect((await getInspection(now))!.responses.find((r) => r.itemNo === "1.5")!.photos).toEqual([]);
   });
 
   it("keeps a person's recommendation over a late AI draft, and marks an edited draft as the person's", async () => {

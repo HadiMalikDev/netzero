@@ -1,7 +1,7 @@
 import type { CreditView } from "@/lib/data";
 import type { ProjectStage } from "@/lib/evidence";
 import { formatPageSpan } from "@/lib/ai/review-notes";
-import type { Answer, HeaderField, InspectionDetail } from "@/lib/checklists";
+import { compareItemNo, type Answer, type HeaderField, type InspectionDetail } from "@/lib/checklists";
 import { creditPhotos, type Photo } from "./checklist";
 import type { ObservationRow } from "@/lib/observations";
 
@@ -102,6 +102,11 @@ export interface SheetInput {
   generatedAt: string;
   /** The form's log, when it has one. */
   observations?: ObservationRow[];
+  /**
+   * Photos taken for an item from its row, by evidence id: labelled with the
+   * item, and this inspection's first (see itemPhotoLabels).
+   */
+  photoLabels?: Map<string, { label: string; current: boolean; itemNo: string }>;
   /** Pre-formatted review date. */
   reviewedOn: string | null;
 }
@@ -149,9 +154,30 @@ export function buildInspectionSheet(input: SheetInput): SheetModel {
     reviewed: { by: insp.reviewedByName, on: input.reviewedOn },
     generatedAt: input.generatedAt,
     sections,
-    photos: creditPhotos(credit),
+    photos: labelItemPhotos(creditPhotos(credit), input.photoLabels),
     observations: insp.template.observationLog
       ? { title: insp.template.observationTitle, rows: input.observations ?? [] }
       : null,
   };
+}
+
+/**
+ * Item photos print under their item ("1.1 Filters at supply air intake"),
+ * as the site team's own photo page does; this inspection's come first, in
+ * item order, then every other photo on the credit as before.
+ */
+export function labelItemPhotos(
+  photos: Photo[],
+  labels?: Map<string, { label: string; current: boolean; itemNo: string }>,
+): Photo[] {
+  if (!labels?.size) return photos;
+  const labelled = photos.map((p) => {
+    const l = labels.get(p.fileId);
+    return { p: l ? { ...p, attachedTo: l.label } : p, l };
+  });
+  const current = labelled
+    .filter((x) => x.l?.current)
+    .sort((a, b) => compareItemNo(a.l!.itemNo, b.l!.itemNo) || a.p.createdAt - b.p.createdAt);
+  const rest = labelled.filter((x) => !x.l?.current);
+  return [...current, ...rest].map((x) => x.p);
 }

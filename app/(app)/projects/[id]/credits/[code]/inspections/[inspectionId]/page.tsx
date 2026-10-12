@@ -8,6 +8,7 @@ import { formatUploadedAt } from "@/lib/format";
 import { rerunDraftAction, saveInspectionAction, uploadInspectionPhotosAction } from "../../../../../inspection-actions";
 import { isImageFile } from "@/lib/report/checklist";
 import { SaveReviewButton } from "./SaveReviewButton";
+import { ItemPhotos } from "./ItemPhotos";
 import { UploadControl } from "@/components/EvidenceChecklist";
 
 /**
@@ -34,7 +35,7 @@ const HEADER_INPUT: Record<HeaderField, { label: string; name: string; type: str
   area: { label: "Area / level", name: "area", type: "text" },
 };
 
-function Row({ r }: { r: ResponseRow }) {
+function Row({ r, ctx }: { r: ResponseRow; ctx: { projectId: string; code: string; inspectionId: string } }) {
   const overridden = r.aiAnswer != null && r.answer !== r.aiAnswer;
   return (
     <tr className="align-top">
@@ -78,6 +79,7 @@ function Row({ r }: { r: ResponseRow }) {
             </label>
           ))}
         </div>
+        <ItemPhotos {...ctx} responseId={r.id} itemNo={r.itemNo} photos={r.photos} />
       </td>
       <td className="w-64 px-4 py-3">
         <input name={`remark:${r.id}`} defaultValue={r.remark ?? ""} placeholder="Note" className="input" />
@@ -212,7 +214,7 @@ export default async function InspectionReviewPage({
                   <td colSpan={3} className="px-4 py-2 text-sm font-semibold text-slate-800">{s.heading}</td>
                 </tr>
                 {s.rows.map((r) => (
-                  <Row key={r.id} r={r} />
+                  <Row key={r.id} r={r} ctx={{ projectId: id, code, inspectionId: insp.id }} />
                 ))}
               </tbody>
             ))}
