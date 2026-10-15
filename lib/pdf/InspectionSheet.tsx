@@ -59,6 +59,9 @@ const s = {
     pImg: { width: 218, maxHeight: 170, objectFit: "contain" },
     pName: { fontSize: 9, fontFamily: "Helvetica-Bold", color: C.ink },
     pMeta: { fontSize: 8, color: C.muted, marginTop: 3 },
+    // What the photo shows (the item numbers and wording, or where it sits on
+    // the credit): as large as the file name, so the clause reads at a glance.
+    pFor: { fontSize: 9, color: C.ink, marginTop: 3 },
     note: { fontSize: 8, color: C.faint },
     // corrective-action log (landscape), in the client's colours
     oTable: { borderWidth: 1, borderColor: "#1f2a1a" },
@@ -207,7 +210,7 @@ function PhotoTable({ photos, images }: { photos: SheetModel["photos"]; images: 
           <View key={p.fileId} style={s.tr} wrap={false}>
             <View style={s.pDesc}>
               <Text style={s.pName}>{safe(p.fileName)}</Text>
-              <Text style={s.pMeta}>{safe(p.attachedTo)}</Text>
+              <Text style={s.pFor}>{safe(p.attachedTo)}</Text>
               <Text style={s.pMeta}>Uploaded {formatUploadedAt(p.createdAt)}</Text>
             </View>
             <View style={s.pPhoto}>
