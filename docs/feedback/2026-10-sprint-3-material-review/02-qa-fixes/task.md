@@ -75,3 +75,37 @@ Evidence: [review error in place](evidence/finding1-review-error-in-place.png),
 Found while checking: after an add, the questionnaire editor takes a few seconds to show the new
 row or type (the page has 48 sections). The QA report's "added type not shown" was this delay,
 not a lost save.
+
+## Decisions for the product findings
+
+Continues the item 01 decision log (D1–D38).
+
+### D39 — Sign-offs on a new revision (finding 5, 2026-10-27)
+- Options offered:
+  - (a) **Clear both.** A resubmission is a new SMQ that has to be signed again: Rev 01 starts
+    with blank names and dates, and Rev 00 keeps its own.
+  - (b) Keep the names, clear the dates.
+  - (c) Keep copying both (as built).
+- **Answer: (a) Clear both.**
+
+### D40 — Deliveries in the tracker across revisions (finding 6, 2026-10-27)
+- Options offered:
+  - (a) **Deliveries on the latest revision only.** One row per revision stays, but only the
+    latest revision's row shows deliveries and delivered totals; older rows say "see Rev 01".
+    Column sums come out right.
+  - (b) Latest revisions only on the Tracker sheet, earlier ones on a separate "Revisions" sheet.
+  - (c) Add a Latest yes/no column for filtering.
+  - (d) Leave as is.
+- **Answer: (a) Deliveries on the latest revision only.**
+
+### D41 — "Use forecast / Use actual" on a yes/no requirement (finding 7, 2026-10-27)
+- Options offered:
+  - (a) **Tick only, then confirm.** Met: tick the requirement. Not met: leave it as it is.
+    Either way, a message says what happened (e.g. "18% is below 20%: requirement 1 left as it
+    was").
+  - (b) Write met / not met (it can untick, as built), with a message after every apply.
+  - (c) No button on yes/no requirements; show the share only.
+- **Answer: (a) Tick only, then confirm.** Number requirements get the same confirmation
+  message.
+
+Status: decided, not built yet.
