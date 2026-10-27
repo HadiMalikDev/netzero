@@ -48,4 +48,30 @@ Then the questions for findings 5–7, with every option and the answers recorde
 - **Delivery date:** not after today. No lower bound: material can arrive on site before its
   submittal is approved.
 - **Sign-off dates** (manufacturer, contractor): not after today.
+- **Date of submission:** not after today (added while building; same rule as the others).
 - "Today" is the Saudi date (UTC+3), as everywhere else in the Material Review.
+- **Errors in place, not by redirect:** a first try sent the page back with `?error=`; that
+  remounts the page and drops what was typed, so the forms run their save in place instead.
+
+## Done (2026-10-27)
+
+Each fix was checked in a real browser (Playwright, JS on) on the QA project, and has tests where
+it has logic. Full run after the last fix: `pnpm test` 211 passed / 49 skipped, `pnpm test:db`
+260 passed, `pnpm lint` 0 errors (the 5 warnings are in files this item doesn't touch),
+`pnpm build` passes.
+
+| Finding | Commit | What changed | How it was checked |
+|---|---|---|---|
+| 9 | `3c3410e` | The product actions check the revision first (`productState`), so a missing name or date no longer says "this revision has been replaced". | DB test; dev error text read in the browser. |
+| 1 | `d6769d3` | The validated actions return an error code (`lib/materials/form-errors.ts`) instead of throwing, and `ActionForm` (`components/ActionForm.tsx`) shows the message beside the form without leaving the page, so what was typed stays. `required` on the questionnaire title and material-type names. | `tests/material-form-errors.test.ts`; in the browser, all twelve forms with bad input: message in place, input kept, no error page; a valid save clears the message. |
+| 2 | `ed3e115` | Review date not after today and not before the submittal's date of submission; sign-offs, deliveries, certificate issue dates and dates of submission not after today. The date inputs carry the same `min`/`max`. | DB tests for each rule; in the browser, the date inputs block the date, and with `max` removed the server message shows in place. No existing record breaks a rule. |
+| 3 | `6b7a3cf` | Removing a product file or a delivery asks first (`components/ConfirmSubmit.tsx`). | Browser: Cancel keeps the file / delivery, OK removes it. |
+| 4 | `d7bf298` | The delivery, add-row and add-material-type forms are keyed by their item count, so an add leaves an empty form; a refused add keeps the input. | Browser: after each add the form is empty and the new item is listed. |
+| 8 | `c1aa453` | Monthly PDF: "none yet" for parts with no products, one dash for empty cells, headings kept with at least the start of their table. | PDF regenerated for October 2026: [page 1](evidence/finding8-month-pdf-page1.png), [PDF](evidence/finding8-material-checklist-2026-10.pdf). |
+
+Evidence: [review error in place](evidence/finding1-review-error-in-place.png),
+[future sign-off refused](evidence/finding2-signoff-date-refused.png).
+
+Found while checking: after an add, the questionnaire editor takes a few seconds to show the new
+row or type (the page has 48 sections). The QA report's "added type not shown" was this delay,
+not a lost save.

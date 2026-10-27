@@ -15,4 +15,4 @@ for screenshots. When the item ships, a "Done" section is appended to its `task.
 | # | Item | Type | Status |
 |---|------|------|--------|
 | 1 | [Material Review: the SMQ per product, monthly checklists, credit progress](./01-material-review/task.md) | Feature | **Shipped**, Done section in its `task.md` |
-| 2 | [QA fixes: on-page form errors, date checks, confirmations, PDF polish](./02-qa-fixes/task.md) | Bugs | In progress |
+| 2 | [QA fixes: on-page form errors, date checks, confirmations, PDF polish](./02-qa-fixes/task.md) | Bugs | **6 of 9 fixed**; findings 5–7 wait on product decisions |
