@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../_components/PageChrome";
+import { ActionForm } from "@/components/ActionForm";
 import { Badge, Card } from "@/components/ui";
 import { getProject } from "@/lib/data";
 import { CREDIT_PARTS, partByKey } from "@/lib/materials/parts";
@@ -133,11 +134,11 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
       />
 
       <Card className="mb-6 px-5 py-4">
-        <form id="settings" action={saveSmqSettingsAction} className="grid gap-3 md:grid-cols-3">
+        <ActionForm id="settings" action={saveSmqSettingsAction} className="grid gap-3 md:grid-cols-3">
           {ids}
           <label className="text-sm font-medium text-slate-700 md:col-span-3">
             Questionnaire title
-            <input name="title" defaultValue={smq.template.title} className="input mt-1" />
+            <input name="title" defaultValue={smq.template.title} required className="input mt-1" />
           </label>
           <label className="text-sm font-medium text-slate-700">
             Certificates expire after (years)
@@ -156,7 +157,7 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
           <div className="md:col-span-3">
             <button type="submit" className={small}>Save settings</button>
           </div>
-        </form>
+        </ActionForm>
       </Card>
 
       {unlinked.length ? (
@@ -193,10 +194,10 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                 </summary>
 
                 <div className="space-y-2 border-b border-slate-100 px-4 py-3">
-                  <form action={editSmqSectionAction} className="flex flex-wrap items-center gap-2">
+                  <ActionForm action={editSmqSectionAction} className="flex flex-wrap items-center gap-2">
                     {ids}
                     <input type="hidden" name="sectionId" value={s.id} />
-                    <input name="heading" defaultValue={s.heading} className="input flex-1 text-sm font-semibold" />
+                    <input name="heading" defaultValue={s.heading} required className="input flex-1 text-sm font-semibold" />
                     <button type="submit" name="op" value="rename" className={small}>Rename</button>
                     {isAll ? null : (
                       <>
@@ -207,8 +208,8 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                         <button type="submit" name="op" value="down" className={small} disabled={typeIndex === types.length - 1}>↓</button>
                       </>
                     )}
-                  </form>
-                  <form action={editSmqSectionAction} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                  </ActionForm>
+                  <ActionForm action={editSmqSectionAction} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
                     {ids}
                     <input type="hidden" name="sectionId" value={s.id} />
                     <span className="font-medium">
@@ -221,7 +222,7 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                       </label>
                     ))}
                     <button type="submit" name="op" value="parts" className={small}>Save ticks</button>
-                  </form>
+                  </ActionForm>
                 </div>
 
                 <ul className="divide-y divide-slate-100">
@@ -246,7 +247,7 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                       </div>
                       <details className="mt-2 pl-[7.75rem]">
                         <summary className="cursor-pointer text-xs font-medium text-brand-600">Edit</summary>
-                        <form action={editSmqRowAction} className="mt-2 space-y-2">
+                        <ActionForm action={editSmqRowAction} className="mt-2 space-y-2">
                           {ids}
                           <input type="hidden" name="rowId" value={r.id} />
                           <RowFields row={r} credits={credits} />
@@ -258,19 +259,19 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                             <button type="submit" name="op" value="up" className={small} disabled={ri === 0} formNoValidate>↑</button>
                             <button type="submit" name="op" value="down" className={small} disabled={ri === s.rows.length - 1} formNoValidate>↓</button>
                           </div>
-                        </form>
+                        </ActionForm>
                       </details>
                     </li>
                   ))}
                 </ul>
                 <details className="border-t border-slate-100 px-4 py-2.5">
                   <summary className="cursor-pointer text-xs font-medium text-brand-600">Add a row under {s.heading}</summary>
-                  <form action={addSmqRowAction} className="mt-2 space-y-2">
+                  <ActionForm action={addSmqRowAction} className="mt-2 space-y-2">
                     {ids}
                     <input type="hidden" name="sectionId" value={s.id} />
                     <RowFields credits={credits} />
                     <button type="submit" className={small}>Add row</button>
-                  </form>
+                  </ActionForm>
                 </details>
               </details>
             </Card>
@@ -279,11 +280,11 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
       </div>
 
       <Card className="mt-4 px-4 py-3">
-        <form action={addSmqSectionAction} className="flex items-center gap-2">
+        <ActionForm action={addSmqSectionAction} className="flex items-center gap-2">
           {ids}
-          <input name="heading" placeholder="New material type, e.g. Waterproofing membranes" className="input flex-1" />
+          <input name="heading" placeholder="New material type, e.g. Waterproofing membranes" required className="input flex-1" />
           <button type="submit" className={small}>Add material type</button>
-        </form>
+        </ActionForm>
       </Card>
     </PageChrome>
   );

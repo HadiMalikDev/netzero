@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../../_components/PageChrome";
+import { ActionForm } from "@/components/ActionForm";
 import { Badge, Card, primaryButtonClass } from "@/components/ui";
 import { MaterialStatus } from "@/components/MaterialStatus";
 import { MaterialUpload } from "@/components/MaterialUpload";
@@ -271,7 +272,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
 
       <Card id="header" className="mb-6 px-5 py-4">
         <h2 className="mb-3 text-base font-semibold text-slate-900">Manufacture and product information</h2>
-        <form action={saveProductHeaderAction} className="space-y-3">
+        <ActionForm action={saveProductHeaderAction} className="space-y-3">
           {ids}
           <ProductHeaderFields values={p} disabled={!editable} />
           {editable ? (
@@ -279,7 +280,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
               Save product information
             </button>
           ) : null}
-        </form>
+        </ActionForm>
       </Card>
 
       <Card id="types" className="mb-6 px-5 py-4">
@@ -399,7 +400,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
           The BOQ quantity is the forecast; deliveries are the actual. Enter what the credits this product counts toward are measured in: steel and
           adhesives by weight, aggregates by volume, timber and KSA content by cost.
         </p>
-        <form action={saveBoqQuantitiesAction} className="space-y-3">
+        <ActionForm action={saveBoqQuantitiesAction} className="space-y-3">
           {ids}
           <fieldset disabled={!editable} className="grid max-w-3xl gap-3 sm:grid-cols-3">
             <label className="text-sm font-medium text-slate-700">
@@ -420,7 +421,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
               Save BOQ quantities
             </button>
           ) : null}
-        </form>
+        </ActionForm>
 
         <h3 className="mt-5 text-sm font-semibold text-slate-800">Deliveries</h3>
         <table className="mt-2 w-full text-sm">
@@ -475,7 +476,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
           </tbody>
         </table>
         {editable ? (
-          <form action={addDeliveryAction} className="mt-3 grid gap-2 sm:grid-cols-6">
+          <ActionForm action={addDeliveryAction} className="mt-3 grid gap-2 sm:grid-cols-6">
             {ids}
             <input name="deliveredOn" type="date" required aria-label="Delivery date" className="input text-sm" />
             <input name="poNumber" placeholder="PO number" className="input text-sm" />
@@ -485,7 +486,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
             <button type="submit" className={small}>
               Add delivery
             </button>
-          </form>
+          </ActionForm>
         ) : null}
       </Card>
 
@@ -512,7 +513,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
 
       <Card id="review" className="mb-6 px-5 py-4">
         <h2 className="mb-3 text-base font-semibold text-slate-900">Review</h2>
-        <form action={saveReviewAction} className="space-y-3">
+        <ActionForm action={saveReviewAction} className="space-y-3">
           {ids}
           <fieldset disabled={!editable} className="grid gap-3 md:grid-cols-6">
             <label className="text-sm font-medium text-slate-700 md:col-span-2">
@@ -568,7 +569,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
               Save review
             </button>
           ) : null}
-        </form>
+        </ActionForm>
         {editable && p.status ? (
           <form action={newRevisionAction} className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
             {ids}

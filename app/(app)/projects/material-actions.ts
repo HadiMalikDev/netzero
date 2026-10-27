@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/session";
 import { applyPartValue } from "@/lib/materials/apply";
 import { getProject } from "@/lib/data";
+import type { FormErrorCode } from "@/lib/materials/form-errors";
 import {
   addSmqRow,
   addSmqSection,
@@ -39,6 +40,10 @@ import {
  * Server actions for Material Review (Sprint 3). Every action re-reads the
  * project and its own questionnaire from the database: ids posted by the form
  * are only trusted once they are found under that project.
+ *
+ * Actions behind an ActionForm return why a save was refused (a FormErrorCode)
+ * so the form can say so in place (QA finding 1); they redirect when saved.
+ * Ids that don't resolve still throw: only a tampered request posts those.
  */
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "");
@@ -80,57 +85,58 @@ function optionalNumber(raw: string): number | null | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-export async function saveSmqSettingsAction(formData: FormData): Promise<void> {
+export async function saveSmqSettingsAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
   const { projectId, templateId } = await projectTemplateId(formData);
   const boq = optionalNumber(str(formData, "boqMaterialCostSar"));
-  if (boq === undefined) throw new Error("BOQ material cost must be a number");
-  const ok = await editSmqSettings(templateId, {
-    title: str(formData, "title"),
-    expiryYears: Number(str(formData, "expiryYears")),
-    boqMaterialCostSar: boq,
-  });
-  if (!ok) throw new Error("check the title, expiry years (1–50) and BOQ cost");
+  if (boq === undefined || (boq !== null && boq <= 0)) return "smq_boq";
+  const title = str(formData, "title");
+  if (!title.trim()) return "smq_title";
+  const ok = await editSmqSettings(templateId, { title, expiryYears: Number(str(formData, "expiryYears")), boqMaterialCostSar: boq });
+  if (!ok) return "smq_expiry";
   backToForm(projectId, "settings");
 }
 
-export async function editSmqSectionAction(formData: FormData): Promise<void> {
+export async function editSmqSectionAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
   const { projectId, templateId } = await projectTemplateId(formData);
   const op = str(formData, "op") as SmqSectionOp;
   if (!["rename", "toggle", "up", "down", "parts"].includes(op)) throw new Error("bad op");
   const sectionId = str(formData, "sectionId");
-  await editSmqSection(templateId, sectionId, op, {
+  const ok = await editSmqSection(templateId, sectionId, op, {
     heading: str(formData, "heading"),
     parts: formData.getAll("parts").map(String),
   });
+  if (!ok && op === "rename") return "type_name";
   backToForm(projectId, `s-${sectionId}`);
 }
 
-export async function addSmqSectionAction(formData: FormData): Promise<void> {
+export async function addSmqSectionAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
   const { projectId, templateId } = await projectTemplateId(formData);
   const id = await addSmqSection(templateId, str(formData, "heading"));
-  backToForm(projectId, id ? `s-${id}` : undefined);
+  if (!id) return "type_name";
+  backToForm(projectId, `s-${id}`);
 }
 
-export async function editSmqRowAction(formData: FormData): Promise<void> {
+export async function editSmqRowAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
   const { projectId, templateId } = await projectTemplateId(formData);
   const op = str(formData, "op") as SmqRowOp;
   if (!["save", "toggle", "up", "down"].includes(op)) throw new Error("bad op");
   const rowId = str(formData, "rowId");
   const ok = await editSmqRow(templateId, rowId, op, op === "save" ? rowInput(formData) : undefined);
-  if (!ok) throw new Error("row not saved: it needs its requirement text, and the credit must be this project's");
+  // The credit list offers only this project's credits, so a refusal is the missing text.
+  if (!ok) return "row_text";
   backToForm(projectId, `r-${rowId}`);
 }
 
-export async function addSmqRowAction(formData: FormData): Promise<void> {
+export async function addSmqRowAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
   const { projectId, templateId } = await projectTemplateId(formData);
   const sectionId = str(formData, "sectionId");
   const ok = await addSmqRow(templateId, sectionId, rowInput(formData));
-  if (!ok) throw new Error("row not added: it needs its requirement text");
+  if (!ok) return "row_text";
   backToForm(projectId, `s-${sectionId}`);
 }
 
@@ -171,29 +177,29 @@ async function project(formData: FormData) {
   return projectId;
 }
 
-export async function createSubmittalAction(formData: FormData): Promise<void> {
+export async function createSubmittalAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
   const projectId = await project(formData);
   const id = await createSubmittal(projectId, submittalInput(formData));
-  if (!id) throw new Error("A submittal needs its reference and title.");
+  if (!id) return "submittal_fields";
   refresh(projectId);
   redirect(`${materialsBase(projectId)}/submittals/${id}`);
 }
 
-export async function updateSubmittalAction(formData: FormData): Promise<void> {
+export async function updateSubmittalAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
   const projectId = await project(formData);
   const id = str(formData, "submittalId");
-  if (!(await updateSubmittal(projectId, id, submittalInput(formData)))) throw new Error("A submittal needs its reference and title.");
+  if (!(await updateSubmittal(projectId, id, submittalInput(formData)))) return "submittal_fields";
   refresh(projectId);
   redirect(`${materialsBase(projectId)}/submittals/${id}`);
 }
 
-export async function addProductAction(formData: FormData): Promise<void> {
+export async function addProductAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
   const projectId = await project(formData);
   const id = await addProduct(projectId, str(formData, "submittalId"), headerInput(formData));
-  if (!id) throw new Error("A product needs its name (the SMQ's Material Subject).");
+  if (!id) return "product_name";
   refresh(projectId);
   redirect(productPath(projectId, id));
 }
@@ -202,16 +208,22 @@ const FROZEN = "This revision has been replaced by a newer one and can no longer
 
 /**
  * Every product form posts projectId + productId; the product is re-read under
- * the project, and a revision a newer one replaced is refused here, so a
- * failure further on is about the input alone.
+ * the project. `frozen`: a newer revision replaced it (an old tab), checked
+ * here so a failure further on is about the input alone.
  */
 async function productTarget(formData: FormData) {
   const projectId = await project(formData);
   const productId = str(formData, "productId");
   const state = await productState(projectId, productId);
   if (state === "missing") throw new Error("product not found");
-  if (state === "superseded") throw new Error(FROZEN);
-  return { projectId, productId };
+  return { projectId, productId, frozen: state === "superseded" };
+}
+
+/** For the actions without an ActionForm: an old revision can only be posted from a stale tab. */
+async function editableTarget(formData: FormData) {
+  const t = await productTarget(formData);
+  if (t.frozen) throw new Error(FROZEN);
+  return t;
 }
 
 function backToProduct(projectId: string, productId: string, anchor?: string): never {
@@ -219,24 +231,24 @@ function backToProduct(projectId: string, productId: string, anchor?: string): n
   redirect(`${productPath(projectId, productId)}${anchor ? `#${anchor}` : ""}`);
 }
 
-export async function saveProductHeaderAction(formData: FormData): Promise<void> {
+export async function saveProductHeaderAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
-  const { projectId, productId } = await productTarget(formData);
-  if (!(await saveProductHeader(projectId, productId, headerInput(formData))))
-    throw new Error("Not saved: the product needs its name.");
+  const { projectId, productId, frozen } = await productTarget(formData);
+  if (frozen) return "frozen";
+  if (!(await saveProductHeader(projectId, productId, headerInput(formData)))) return "product_name";
   backToProduct(projectId, productId, "header");
 }
 
 export async function setProductTypesAction(formData: FormData): Promise<void> {
   await requireUser();
-  const { projectId, productId } = await productTarget(formData);
+  const { projectId, productId } = await editableTarget(formData);
   if (!(await setProductTypes(projectId, productId, formData.getAll("types").map(String)))) throw new Error("This project has no material questionnaire.");
   backToProduct(projectId, productId, "types");
 }
 
 export async function setProductPartsAction(formData: FormData): Promise<void> {
   await requireUser();
-  const { projectId, productId } = await productTarget(formData);
+  const { projectId, productId } = await editableTarget(formData);
   const ok = await setProductParts(projectId, productId, formData.getAll("parts").map(String), str(formData, "interior") !== "no");
   if (!ok) throw new Error("Not saved.");
   backToProduct(projectId, productId, "types");
@@ -244,7 +256,7 @@ export async function setProductPartsAction(formData: FormData): Promise<void> {
 
 export async function saveAnswersAction(formData: FormData): Promise<void> {
   await requireUser();
-  const { projectId, productId } = await productTarget(formData);
+  const { projectId, productId } = await editableTarget(formData);
   const inputs = formData.getAll("answerId").map((v) => {
     const answerId = String(v);
     return {
@@ -262,7 +274,8 @@ export async function saveAnswersAction(formData: FormData): Promise<void> {
 /** Upload result for the client control: an error message, or null when stored. */
 export async function uploadMaterialDocAction(_prev: string | null, formData: FormData): Promise<string | null> {
   await requireUser();
-  const { projectId, productId } = await productTarget(formData);
+  const { projectId, productId, frozen } = await productTarget(formData);
+  if (frozen) return FROZEN;
   const answerId = str(formData, "answerId");
   const files = formData.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
   if (!files.length) return "No file was sent.";
@@ -282,14 +295,15 @@ export async function uploadMaterialDocAction(_prev: string | null, formData: Fo
 
 export async function removeMaterialDocAction(formData: FormData): Promise<void> {
   await requireUser();
-  const { projectId, productId } = await productTarget(formData);
+  const { projectId, productId } = await editableTarget(formData);
   if (!(await removeMaterialDoc(projectId, productId, str(formData, "linkId")))) throw new Error("That file is not on this product.");
   backToProduct(projectId, productId, str(formData, "anchor") || undefined);
 }
 
-export async function saveReviewAction(formData: FormData): Promise<void> {
+export async function saveReviewAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
-  const { projectId, productId } = await productTarget(formData);
+  const { projectId, productId, frozen } = await productTarget(formData);
+  if (frozen) return "frozen";
   const ok = await saveReview(projectId, productId, {
     status: str(formData, "status"),
     reviewedOn: str(formData, "reviewedOn"),
@@ -301,13 +315,13 @@ export async function saveReviewAction(formData: FormData): Promise<void> {
     contractorSignatory: str(formData, "contractorSignatory"),
     contractorSignedOn: str(formData, "contractorSignedOn"),
   });
-  if (!ok) throw new Error("Not saved: a status needs its review date.");
+  if (!ok) return "review_date";
   backToProduct(projectId, productId, "review");
 }
 
 export async function newRevisionAction(formData: FormData): Promise<void> {
   await requireUser();
-  const { projectId, productId } = await productTarget(formData);
+  const { projectId, productId } = await editableTarget(formData);
   const id = await newRevision(projectId, productId);
   if (!id) throw new Error("Give this revision its review status before starting a new one.");
   backToProduct(projectId, id);
@@ -319,29 +333,30 @@ function quantityInput(formData: FormData) {
   return { weightT: str(formData, "weightT"), volumeM3: str(formData, "volumeM3"), costSar: str(formData, "costSar") };
 }
 
-export async function saveBoqQuantitiesAction(formData: FormData): Promise<void> {
+export async function saveBoqQuantitiesAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
-  const { projectId, productId } = await productTarget(formData);
-  if (!(await saveBoqQuantities(projectId, productId, quantityInput(formData))))
-    throw new Error("Quantities must be numbers of zero or more.");
+  const { projectId, productId, frozen } = await productTarget(formData);
+  if (frozen) return "frozen";
+  if (!(await saveBoqQuantities(projectId, productId, quantityInput(formData)))) return "boq_qty";
   backToProduct(projectId, productId, "quantities");
 }
 
-export async function addDeliveryAction(formData: FormData): Promise<void> {
+export async function addDeliveryAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
-  const { projectId, productId } = await productTarget(formData);
+  const { projectId, productId, frozen } = await productTarget(formData);
+  if (frozen) return "frozen";
   const ok = await addDelivery(projectId, productId, {
     ...quantityInput(formData),
     deliveredOn: str(formData, "deliveredOn"),
     poNumber: str(formData, "poNumber"),
   });
-  if (!ok) throw new Error("A delivery needs its date and at least one quantity, as numbers of zero or more.");
+  if (!ok) return "delivery";
   backToProduct(projectId, productId, "quantities");
 }
 
 export async function removeDeliveryAction(formData: FormData): Promise<void> {
   await requireUser();
-  const { projectId, productId } = await productTarget(formData);
+  const { projectId, productId } = await editableTarget(formData);
   if (!(await removeDelivery(projectId, productId, str(formData, "deliveryId")))) throw new Error("That delivery is not on this product.");
   backToProduct(projectId, productId, "quantities");
 }

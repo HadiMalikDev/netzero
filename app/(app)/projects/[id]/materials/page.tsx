@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../_components/PageChrome";
 import { ProjectTabs } from "../_components/ProjectTabs";
+import { ActionForm } from "@/components/ActionForm";
 import { Card, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { MaterialStatus } from "@/components/MaterialStatus";
@@ -227,13 +228,13 @@ export default async function MaterialsPage({ params, searchParams }: PageProps<
         <Card className="px-5 py-4">
           <details>
             <summary className="cursor-pointer text-sm font-semibold text-brand-700">New submittal</summary>
-            <form action={createSubmittalAction} className="mt-3 space-y-3">
+            <ActionForm action={createSubmittalAction} className="mt-3 space-y-3">
               <input type="hidden" name="projectId" value={id} />
               <SubmittalFields />
               <button type="submit" className={primaryButtonClass}>
                 Create submittal
               </button>
-            </form>
+            </ActionForm>
           </details>
         </Card>
 

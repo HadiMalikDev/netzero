@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../../_components/PageChrome";
+import { ActionForm } from "@/components/ActionForm";
 import { Card, primaryButtonClass } from "@/components/ui";
 import { MaterialStatus } from "@/components/MaterialStatus";
 import { getProject } from "@/lib/data";
@@ -75,28 +76,28 @@ export default async function SubmittalPage({ params }: PageProps<"/projects/[id
         ) : null}
         <details className="border-t border-slate-100 px-5 py-3" open={chains.length === 0}>
           <summary className="cursor-pointer text-sm font-semibold text-brand-700">Add a product</summary>
-          <form action={addProductAction} className="mt-3 space-y-3">
+          <ActionForm action={addProductAction} className="mt-3 space-y-3">
             <input type="hidden" name="projectId" value={id} />
             <input type="hidden" name="submittalId" value={submittal.id} />
             <ProductHeaderFields defaults={{ supplier: submittal.supplier }} />
             <button type="submit" className={primaryButtonClass}>
               Add product
             </button>
-          </form>
+          </ActionForm>
         </details>
       </Card>
 
       <Card className="px-5 py-4">
         <details>
           <summary className="cursor-pointer text-sm font-semibold text-slate-700">Edit submittal details</summary>
-          <form action={updateSubmittalAction} className="mt-3 space-y-3">
+          <ActionForm action={updateSubmittalAction} className="mt-3 space-y-3">
             <input type="hidden" name="projectId" value={id} />
             <input type="hidden" name="submittalId" value={submittal.id} />
             <SubmittalFields values={submittal} />
             <button type="submit" className={primaryButtonClass}>
               Save submittal
             </button>
-          </form>
+          </ActionForm>
         </details>
       </Card>
     </PageChrome>
