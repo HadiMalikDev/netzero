@@ -251,7 +251,7 @@ describeDb("material review: products", () => {
     // A review must have happened: not after today (QA finding 2).
     expect(await saveReview(pid(), productId, { ...review, reviewedOn: "2026-05-05" }, "2026-05-04")).toBe("review_future");
     expect(await saveReview(pid(), productId, { ...review, reviewedOn: "2026-05-05", manufacturerSignedOn: "2026-05-06" }, "2026-05-05")).toBe("signed_future");
-    expect(await saveReview(pid(), productId, { ...review, reviewedOn: "2026-05-05" })).toBeNull();
+    expect(await saveReview(pid(), productId, { ...review, reviewedOn: "2026-05-05", manufacturerSignatory: "Khalid", manufacturerSignedOn: "2026-05-01", contractorSignatory: "Sara", contractorSignedOn: "2026-05-02" })).toBeNull();
 
     const rev1 = (await newRevision(pid(), productId))!;
     expect(rev1).toBeTruthy();
@@ -259,6 +259,9 @@ describeDb("material review: products", () => {
     const next = (await getProduct(pid(), rev1))!;
     expect(old.latest).toBe(false);
     expect(next).toMatchObject({ latest: true, product: { revision: 1, status: null, reviewedOn: null, previousRevisionId: productId, interior: false } });
+    // D39: the resubmitted SMQ is signed again; Rev 00 keeps its sign-offs.
+    expect(next.product).toMatchObject({ manufacturerSignatory: null, manufacturerSignedOn: null, contractorSignatory: null, contractorSignedOn: null });
+    expect(old.product).toMatchObject({ manufacturerSignatory: "Khalid", manufacturerSignedOn: "2026-05-01", contractorSignatory: "Sara", contractorSignedOn: "2026-05-02" });
     expect(next.parts).toEqual(["HC-11:voc"]);
     expect(next.revisions.map((r) => r.revision)).toEqual([0, 1]);
     // Same answers, same files (linked, not copied).

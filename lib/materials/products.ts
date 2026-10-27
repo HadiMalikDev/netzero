@@ -608,8 +608,10 @@ export async function removeMaterialDoc(projectId: string, productId: string, ma
 
 /**
  * Resubmission (D9): Rev n+1 starts as a copy of Rev n (header, types, ticks,
- * answers, document links, quantities, deliveries) without its review. Rev n
- * is frozen from then on. Only a reviewed latest revision can be resubmitted.
+ * answers, document links, quantities, deliveries) without its review or the
+ * manufacturer's and contractor's sign-offs: a resubmitted SMQ is signed again
+ * (D39). Rev n is frozen from then on. Only a reviewed latest revision can be
+ * resubmitted.
  */
 export async function newRevision(projectId: string, productId: string): Promise<string | null> {
   const p = await editableProduct(projectId, productId);
@@ -628,6 +630,10 @@ export async function newRevision(projectId: string, productId: string): Promise
       reviewer: null,
       applicable: null,
       remarks: null,
+      manufacturerSignatory: null,
+      manufacturerSignedOn: null,
+      contractorSignatory: null,
+      contractorSignedOn: null,
     });
     const types = await tx.select().from(materialProductTypes).where(eq(materialProductTypes.productId, p.id));
     if (types.length) await tx.insert(materialProductTypes).values(types.map((t) => ({ productId: id, sectionId: t.sectionId })));

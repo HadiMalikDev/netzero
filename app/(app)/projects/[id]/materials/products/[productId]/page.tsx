@@ -582,7 +582,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
           <form action={newRevisionAction} className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
             {ids}
             <p className="flex-1 text-sm text-slate-600">
-              Resubmitted by the contractor? Start {revLabel(p.revision + 1)} as a copy of this one. {revLabel(p.revision)} stays as reviewed.
+              Resubmitted by the contractor? Start {revLabel(p.revision + 1)} as a copy of this one, without the review and the sign-offs (the new SMQ is signed again). {revLabel(p.revision)} stays as reviewed.
             </p>
             <button type="submit" className={small}>
               New revision ({revLabel(p.revision + 1)})
