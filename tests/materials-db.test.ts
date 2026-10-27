@@ -16,6 +16,7 @@ import {
   getProduct,
   listSubmittals,
   newRevision,
+  productState,
   removeMaterialDoc,
   saveAnswers,
   saveReview,
@@ -264,6 +265,10 @@ describeDb("material review: products", () => {
     expect(await saveReview(pid(), productId, { ...review, status: "A", reviewedOn: "2026-06-01" })).toBe(false);
     expect(await saveAnswers(pid(), productId, [])).toBe(false);
     expect(await newRevision(pid(), productId)).toBeNull();
+    // The actions tell "replaced" apart from bad input, and refuse other projects' products.
+    expect(await productState(pid(), productId)).toBe("superseded");
+    expect(await productState(pid(), rev1)).toBe("editable");
+    expect(await productState(randomUUID(), rev1)).toBe("missing");
 
     // Removing the file from Rev 01 keeps it for Rev 00.
     const link = next.sections[1].answers[0].docs[0];

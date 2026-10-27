@@ -233,6 +233,13 @@ export async function isSuperseded(productId: string): Promise<boolean> {
   return Boolean(r);
 }
 
+/** Whether a product can be changed: missing (not this project's), superseded (a newer revision replaced it) or editable. */
+export async function productState(projectId: string, productId: string): Promise<"missing" | "superseded" | "editable"> {
+  const p = await getProductRow(projectId, productId);
+  if (!p) return "missing";
+  return (await isSuperseded(p.id)) ? "superseded" : "editable";
+}
+
 /** The product, if it is this project's and still editable (the latest revision). */
 async function editableProduct(projectId: string, productId: string): Promise<MaterialProduct | null> {
   const p = await getProductRow(projectId, productId);

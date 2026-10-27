@@ -23,6 +23,7 @@ import {
   createSubmittal,
   newRevision,
   parseSlot,
+  productState,
   removeDelivery,
   removeMaterialDoc,
   saveAnswers,
@@ -197,10 +198,20 @@ export async function addProductAction(formData: FormData): Promise<void> {
   redirect(productPath(projectId, id));
 }
 
-/** Every product form posts projectId + productId; the product is re-read under the project. */
+const FROZEN = "This revision has been replaced by a newer one and can no longer be changed.";
+
+/**
+ * Every product form posts projectId + productId; the product is re-read under
+ * the project, and a revision a newer one replaced is refused here, so a
+ * failure further on is about the input alone.
+ */
 async function productTarget(formData: FormData) {
   const projectId = await project(formData);
-  return { projectId, productId: str(formData, "productId") };
+  const productId = str(formData, "productId");
+  const state = await productState(projectId, productId);
+  if (state === "missing") throw new Error("product not found");
+  if (state === "superseded") throw new Error(FROZEN);
+  return { projectId, productId };
 }
 
 function backToProduct(projectId: string, productId: string, anchor?: string): never {
@@ -208,20 +219,18 @@ function backToProduct(projectId: string, productId: string, anchor?: string): n
   redirect(`${productPath(projectId, productId)}${anchor ? `#${anchor}` : ""}`);
 }
 
-const FROZEN = "This revision has been replaced by a newer one and can no longer be changed.";
-
 export async function saveProductHeaderAction(formData: FormData): Promise<void> {
   await requireUser();
   const { projectId, productId } = await productTarget(formData);
   if (!(await saveProductHeader(projectId, productId, headerInput(formData))))
-    throw new Error(`Not saved: the product needs its name. ${FROZEN}`);
+    throw new Error("Not saved: the product needs its name.");
   backToProduct(projectId, productId, "header");
 }
 
 export async function setProductTypesAction(formData: FormData): Promise<void> {
   await requireUser();
   const { projectId, productId } = await productTarget(formData);
-  if (!(await setProductTypes(projectId, productId, formData.getAll("types").map(String)))) throw new Error(FROZEN);
+  if (!(await setProductTypes(projectId, productId, formData.getAll("types").map(String)))) throw new Error("This project has no material questionnaire.");
   backToProduct(projectId, productId, "types");
 }
 
@@ -229,7 +238,7 @@ export async function setProductPartsAction(formData: FormData): Promise<void> {
   await requireUser();
   const { projectId, productId } = await productTarget(formData);
   const ok = await setProductParts(projectId, productId, formData.getAll("parts").map(String), str(formData, "interior") !== "no");
-  if (!ok) throw new Error(FROZEN);
+  if (!ok) throw new Error("Not saved.");
   backToProduct(projectId, productId, "types");
 }
 
@@ -246,7 +255,7 @@ export async function saveAnswersAction(formData: FormData): Promise<void> {
       remark: str(formData, `remark:${answerId}`),
     };
   });
-  if (!(await saveAnswers(projectId, productId, inputs))) throw new Error(FROZEN);
+  if (!(await saveAnswers(projectId, productId, inputs))) throw new Error("Answers not saved.");
   backToProduct(projectId, productId, "questionnaire");
 }
 
@@ -274,7 +283,7 @@ export async function uploadMaterialDocAction(_prev: string | null, formData: Fo
 export async function removeMaterialDocAction(formData: FormData): Promise<void> {
   await requireUser();
   const { projectId, productId } = await productTarget(formData);
-  if (!(await removeMaterialDoc(projectId, productId, str(formData, "linkId")))) throw new Error(FROZEN);
+  if (!(await removeMaterialDoc(projectId, productId, str(formData, "linkId")))) throw new Error("That file is not on this product.");
   backToProduct(projectId, productId, str(formData, "anchor") || undefined);
 }
 
@@ -292,7 +301,7 @@ export async function saveReviewAction(formData: FormData): Promise<void> {
     contractorSignatory: str(formData, "contractorSignatory"),
     contractorSignedOn: str(formData, "contractorSignedOn"),
   });
-  if (!ok) throw new Error(`Not saved: a status needs its review date. ${FROZEN}`);
+  if (!ok) throw new Error("Not saved: a status needs its review date.");
   backToProduct(projectId, productId, "review");
 }
 
@@ -300,7 +309,7 @@ export async function newRevisionAction(formData: FormData): Promise<void> {
   await requireUser();
   const { projectId, productId } = await productTarget(formData);
   const id = await newRevision(projectId, productId);
-  if (!id) throw new Error("Only the latest revision, once reviewed, can be resubmitted.");
+  if (!id) throw new Error("Give this revision its review status before starting a new one.");
   backToProduct(projectId, id);
 }
 
@@ -314,7 +323,7 @@ export async function saveBoqQuantitiesAction(formData: FormData): Promise<void>
   await requireUser();
   const { projectId, productId } = await productTarget(formData);
   if (!(await saveBoqQuantities(projectId, productId, quantityInput(formData))))
-    throw new Error(`Quantities must be numbers of zero or more. ${FROZEN}`);
+    throw new Error("Quantities must be numbers of zero or more.");
   backToProduct(projectId, productId, "quantities");
 }
 
@@ -326,14 +335,14 @@ export async function addDeliveryAction(formData: FormData): Promise<void> {
     deliveredOn: str(formData, "deliveredOn"),
     poNumber: str(formData, "poNumber"),
   });
-  if (!ok) throw new Error(`A delivery needs its date and at least one quantity. ${FROZEN}`);
+  if (!ok) throw new Error("A delivery needs its date and at least one quantity, as numbers of zero or more.");
   backToProduct(projectId, productId, "quantities");
 }
 
 export async function removeDeliveryAction(formData: FormData): Promise<void> {
   await requireUser();
   const { projectId, productId } = await productTarget(formData);
-  if (!(await removeDelivery(projectId, productId, str(formData, "deliveryId")))) throw new Error(FROZEN);
+  if (!(await removeDelivery(projectId, productId, str(formData, "deliveryId")))) throw new Error("That delivery is not on this product.");
   backToProduct(projectId, productId, "quantities");
 }
 
