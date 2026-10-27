@@ -90,9 +90,14 @@ export default async function MaterialsPage({ params, searchParams }: PageProps<
         title="Materials"
         subtitle="Every material submittal, each product reviewed against the project's Sustainability Material Questionnaire (SMQ)."
         action={
-          <Link href={`${base}/form`} className={secondary}>
-            Questionnaire
-          </Link>
+          <div className="flex items-center gap-2">
+            <a href={`/api/projects/${id}/materials/tracker`} className={secondary}>
+              Material tracker (.xlsx)
+            </a>
+            <Link href={`${base}/form`} className={secondary}>
+              Questionnaire
+            </Link>
+          </div>
         }
       />
       <ProjectTabs projectId={id} />
