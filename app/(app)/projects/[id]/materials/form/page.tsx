@@ -266,7 +266,8 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                 </ul>
                 <details className="border-t border-slate-100 px-4 py-2.5">
                   <summary className="cursor-pointer text-xs font-medium text-brand-600">Add a row under {s.heading}</summary>
-                  <ActionForm action={addSmqRowAction} className="mt-2 space-y-2">
+                  {/* Keyed by the count: an added row leaves an empty form (QA finding 4). */}
+                  <ActionForm key={s.rows.length} action={addSmqRowAction} className="mt-2 space-y-2">
                     {ids}
                     <input type="hidden" name="sectionId" value={s.id} />
                     <RowFields credits={credits} />
@@ -280,7 +281,7 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
       </div>
 
       <Card className="mt-4 px-4 py-3">
-        <ActionForm action={addSmqSectionAction} className="flex items-center gap-2">
+        <ActionForm key={smq.sections.length} action={addSmqSectionAction} className="flex items-center gap-2">
           {ids}
           <input name="heading" placeholder="New material type, e.g. Waterproofing membranes" required className="input flex-1" />
           <button type="submit" className={small}>Add material type</button>

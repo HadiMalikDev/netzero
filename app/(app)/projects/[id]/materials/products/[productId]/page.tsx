@@ -482,7 +482,9 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
           </tbody>
         </table>
         {editable ? (
-          <ActionForm action={addDeliveryAction} className="mt-3 grid gap-2 sm:grid-cols-6">
+          // Keyed by the count, so a delivery that was added leaves an empty form (QA finding 4);
+          // a refused one keeps what was typed.
+          <ActionForm key={view.deliveries.length} action={addDeliveryAction} className="mt-3 grid gap-2 sm:grid-cols-6">
             {ids}
             <input name="deliveredOn" type="date" required max={today} aria-label="Delivery date" className="input text-sm" />
             <input name="poNumber" placeholder="PO number" className="input text-sm" />
