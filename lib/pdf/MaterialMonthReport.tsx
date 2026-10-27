@@ -34,6 +34,9 @@ const s = {
   }),
 };
 
+/** Room a section heading needs below it on its page: the table header and about three rows (QA finding 8). */
+const MIN_AHEAD = 80;
+
 const status = (st: string | null) => (st ? `${st} - ${STATUS_LABEL[st as Status]}` : "Under review");
 
 function Products({ rows }: { rows: MonthView["reviewed"] }) {
@@ -130,18 +133,20 @@ export function MaterialMonthReport({
                 <Text style={[s.td, { width: 90, textAlign: "right", fontFamily: "Helvetica-Bold", color: r.met.some(Boolean) ? C.green : C.ink }]}>
                   {formatPct(r.forecast.pct)}
                 </Text>
-                <Text style={[s.td, { width: 90, textAlign: "right" }]}>{r.actual ? formatPct(r.actual.pct) : "-"}</Text>
+                <Text style={[s.td, { width: 90, textAlign: "right" }]}>{r.actual ? formatPct(r.actual.pct) : "—"}</Text>
                 <Text style={[s.td, { width: 60, textAlign: "right", color: C.amber }]}>{formatPct(r.pendingPct)}</Text>
-                <Text style={[s.td, { width: 80, textAlign: "right" }]}>{d == null ? "-" : Math.abs(d) < 0.05 ? "no change" : `${d > 0 ? "+" : ""}${d.toFixed(1)} pts`}</Text>
+                <Text style={[s.td, { width: 80, textAlign: "right" }]}>{d == null ? "—" : Math.abs(d) < 0.05 ? "no change" : `${d > 0 ? "+" : ""}${d.toFixed(1)} pts`}</Text>
                 <Text style={[s.td, { width: 80 }]}>
-                  {r.products.filter((p) => p.state === "compliant").length} of {r.products.length} count
+                  {r.products.length ? `${r.products.filter((p) => p.state === "compliant").length} of ${r.products.length} count` : "none yet"}
                 </Text>
               </View>
             );
           })}
         </View>
 
-        <Text style={s.h2}>Warnings</Text>
+        <Text style={s.h2} minPresenceAhead={MIN_AHEAD}>
+          Warnings
+        </Text>
         {view.flags.length ? (
           <View>
             {view.flags.map((f, i) => (
@@ -156,10 +161,14 @@ export function MaterialMonthReport({
           <Text style={s.empty}>None.</Text>
         )}
 
-        <Text style={s.h2}>Reviewed in {monthName}</Text>
+        <Text style={s.h2} minPresenceAhead={MIN_AHEAD}>
+          Reviewed in {monthName}
+        </Text>
         <Products rows={view.reviewed} />
 
-        <Text style={s.h2}>Still open from earlier months (C or D, waiting for a resubmission)</Text>
+        <Text style={s.h2} minPresenceAhead={MIN_AHEAD}>
+          Still open from earlier months (C or D, waiting for a resubmission)
+        </Text>
         <Products rows={view.carried} />
 
         <Footer left={safe(`${projectName} · material checklist ${monthName} · generated ${generatedAt}`)} contentWidth={W} />
