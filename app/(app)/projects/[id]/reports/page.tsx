@@ -10,6 +10,7 @@ import { projectReportForms, type ReportForm } from "@/lib/reports";
 import { formatUploadedAt } from "@/lib/format";
 import { formatInspectionDate } from "@/lib/report/inspection-sheet";
 import { startInspectionAction } from "../../inspection-actions";
+import { monthLabel, monthSummaries, type MonthSummary } from "@/lib/materials/months";
 
 /**
  * Reports (Sprint 2 item 4): every generated report of the project in one
@@ -17,7 +18,8 @@ import { startInspectionAction } from "../../inspection-actions";
  * options the credit's own pages offer: start an inspection, edit the form,
  * review or download each inspection, the compliance checklist, and (ESC) the
  * corrective-action log. Each option goes through the same action or link as
- * on the credit, so the two places can never disagree.
+ * on the credit, so the two places can never disagree. The monthly material
+ * checklists sit beside them (Sprint 3, D8), with the material tracker.
  */
 
 const secondary =
@@ -120,11 +122,62 @@ function FormCard({ projectId, f }: { projectId: string; f: ReportForm }) {
   );
 }
 
+function MaterialCard({ projectId, months }: { projectId: string; months: MonthSummary[] }) {
+  const materials = `/projects/${projectId}/materials`;
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+        <div>
+          <Link href={materials} className="text-xs font-semibold uppercase tracking-wide text-brand-700 hover:text-brand-800">
+            Materials · SMQ
+          </Link>
+          <h2 className="mt-0.5 text-lg font-semibold text-slate-900">Monthly material checklists</h2>
+          <p className="text-sm text-slate-500">
+            Products reviewed each month against the Sustainability Material Questionnaire, and the material credits at the month&apos;s end.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <a href={`/api/projects/${projectId}/materials/tracker`} className={secondary}>
+            Material tracker (.xlsx)
+          </a>
+          <Link href={materials} className={primaryButtonClass}>
+            Open Materials
+          </Link>
+        </div>
+      </div>
+      {months.length === 0 ? (
+        <p className="px-5 py-4 text-sm text-slate-500">No material submittals yet.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100">
+          {months.map((m) => (
+            <li key={m.month} className="flex flex-wrap items-center gap-3 px-5 py-2.5 text-sm">
+              <Link href={`${materials}?month=${m.month}`} className="w-40 font-medium text-slate-800 hover:text-brand-700">
+                {monthLabel(m.month)}
+              </Link>
+              <span className="flex-1 text-slate-500">
+                {m.reviewed
+                  ? `${m.reviewed} reviewed · ${(["A", "B", "C", "D"] as const)
+                      .filter((k) => m.counts[k])
+                      .map((k) => `${m.counts[k]} ${k}`)
+                      .join(", ")}`
+                  : "Nothing reviewed"}
+              </span>
+              <a href={`/api/projects/${projectId}/materials/months/${m.month}/pdf`} className="text-xs font-semibold text-brand-700 hover:text-brand-800">
+                Download PDF
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 export default async function ReportsPage({ params }: PageProps<"/projects/[id]/reports">) {
   const { id } = await params;
   const project = await getProject(id);
   if (!project) notFound();
-  const forms = await projectReportForms(id);
+  const [forms, months] = await Promise.all([projectReportForms(id), monthSummaries(id)]);
 
   return (
     <PageChrome
@@ -136,9 +189,12 @@ export default async function ReportsPage({ params }: PageProps<"/projects/[id]/
     >
       <PageHeader
         title="Reports"
-        subtitle="Inspection reports generated for this project, with the same options as on each credit's page."
+        subtitle="Monthly material checklists and inspection reports generated for this project, with the same options as on each page they come from."
       />
       <ProjectTabs projectId={id} />
+      <div className="mb-6">
+        <MaterialCard projectId={id} months={months} />
+      </div>
       {forms.length === 0 ? (
         <EmptyState
           title="No report forms for this project"
