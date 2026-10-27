@@ -174,7 +174,9 @@ export default async function CreditDetailPage({
             const chosen = items.find((r) => paths.get(r.entryId) === "chosen");
             const body = items.map((req) => (
               <RequirementItem
-                key={req.entryId}
+                // Keyed by when the entry was last written: "Use this value" refreshes the page in
+                // place (D41), and the item's inputs only read their value when they mount.
+                key={`${req.entryId}:${req.updatedAt}`}
                 req={req}
                 rsVersionId={project.rsVersionId}
                 grouped={block.kind === "xor"}

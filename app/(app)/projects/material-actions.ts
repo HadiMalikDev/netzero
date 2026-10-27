@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/session";
-import { applyPartValue } from "@/lib/materials/apply";
+import { applyPartValue, describeApplied } from "@/lib/materials/apply";
 import { getProject } from "@/lib/data";
 import { parseIsoDate, todayIso } from "@/lib/materials/expiry";
 import type { FormErrorCode } from "@/lib/materials/form-errors";
@@ -372,13 +372,18 @@ export async function removeDeliveryAction(formData: FormData): Promise<void> {
 
 // ---------- credit page ----------
 
-export async function applyPartValueAction(formData: FormData): Promise<void> {
+/**
+ * "Use forecast / Use actual" on a credit page: says what was written beside
+ * the buttons (D41). It refreshes the page in place rather than redirecting,
+ * so values typed elsewhere on the credit page stay.
+ */
+export async function applyPartValueAction(_prev: string | null, formData: FormData): Promise<string> {
   await requireUser();
   const projectId = await project(formData);
   const code = str(formData, "code");
   const which = str(formData, "which") === "actual" ? "actual" : "forecast";
-  const written = await applyPartValue(projectId, code, str(formData, "part"), which);
-  if (!written) throw new Error("No value to use yet: the share needs products with quantities.");
+  const applied = await applyPartValue(projectId, code, str(formData, "part"), which);
+  if (!applied) return "No value to use yet: the share needs products with quantities.";
   revalidatePath(`/projects/${projectId}/credits/${encodeURIComponent(code)}`);
-  redirect(`/projects/${projectId}/credits/${encodeURIComponent(code)}#material-review`);
+  return describeApplied(applied, which);
 }

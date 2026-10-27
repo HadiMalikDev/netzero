@@ -6,17 +6,16 @@ import type { CreditSlice } from "@/lib/materials/credit-slice";
 import { formatPct, formatQty } from "@/lib/materials/format";
 import { monthLabel } from "@/lib/materials/months";
 import { revLabel } from "@/lib/materials/products";
-import { applyPartValueAction } from "../../../material-actions";
+import { ApplyPartValue } from "./ApplyPartValue";
 
 /**
  * The credit's slice of the material reviews (Sprint 3, D8): what each
  * product's SMQ answered for this credit, by review month, and — for MW-05,
  * HC-11, RC-01 and MW-04 — the shares the credit is measured by, with "Use
- * this value" to copy one into the requirement below (D15).
+ * this value" to copy one into the requirement below (D15), which says what
+ * it wrote (D41).
  */
 
-const small =
-  "rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50";
 const UNIT = { weight: "t", volume: "m³", cost: "SAR", count: "" } as const;
 const ANSWER = { yes: "Yes", no: "No", na: "N/A" } as const;
 const STATE = {
@@ -27,17 +26,6 @@ const STATE = {
 
 function PartCard({ r, projectId, code }: { r: PartResult; projectId: string; code: string }) {
   const unit = UNIT[r.part.basis];
-  const apply = (which: "forecast" | "actual", label: string) => (
-    <form action={applyPartValueAction}>
-      <input type="hidden" name="projectId" value={projectId} />
-      <input type="hidden" name="code" value={code} />
-      <input type="hidden" name="part" value={r.part.key} />
-      <input type="hidden" name="which" value={which} />
-      <button type="submit" className={small} title="Copy this share into the credit's requirement below">
-        {label}
-      </button>
-    </form>
-  );
   return (
     <div className="border-t border-slate-100 px-5 py-4 first:border-t-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -45,11 +33,8 @@ function PartCard({ r, projectId, code }: { r: PartResult; projectId: string; co
           <h3 className="text-sm font-semibold text-slate-900">{r.part.label}</h3>
           <p className="text-xs text-slate-500">{r.part.rule}</p>
         </div>
-        {r.part.requirementSeqs.length ? (
-          <div className="flex gap-2">
-            {r.forecast.pct != null ? apply("forecast", "Use forecast") : null}
-            {r.actual?.pct != null ? apply("actual", "Use actual") : null}
-          </div>
+        {r.part.requirementSeqs.length && (r.forecast.pct != null || r.actual?.pct != null) ? (
+          <ApplyPartValue projectId={projectId} code={code} part={r.part.key} forecast={r.forecast.pct != null} actual={r.actual?.pct != null} />
         ) : null}
       </div>
       <dl className="mt-3 grid gap-3 sm:grid-cols-4">

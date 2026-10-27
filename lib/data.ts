@@ -178,6 +178,8 @@ export interface RequirementView {
   valueNumber: number | null;
   valueText: string | null;
   note: string | null;
+  /** When the entry was last written (unix seconds): the credit page re-reads its inputs when it changes. */
+  updatedAt: number;
   evidenceCount: number;
   /** Files attached to this requirement, oldest first. */
   attachments: EvidenceAttachment[];
@@ -275,6 +277,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       valueNumber: requirementEntries.valueNumber,
       valueText: requirementEntries.valueText,
       note: requirementEntries.note,
+      updatedAt: requirementEntries.updatedAt,
       planned: requirementEntries.planned,
     })
     .from(requirementEntries)
@@ -416,6 +419,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       valueNumber: e.valueNumber,
       valueText: e.valueText,
       note: e.note,
+      updatedAt: e.updatedAt,
       evidenceCount,
       attachments,
       status,

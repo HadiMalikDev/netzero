@@ -6,7 +6,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { describeDb } from "./helpers/postgres";
 import { materialFixture } from "./helpers/material-fixture";
 import { db } from "@/db";
-import { evidenceDocs, smqRows, smqSections } from "@/db/schema";
+import { evidenceDocs, requirementEntries, smqRows, smqSections } from "@/db/schema";
 import { PART_KEYS } from "@/lib/materials/parts";
 import { editSmqRow, editSmqSection, ensureProjectSmq, getSmq } from "@/lib/materials/smq";
 import {
@@ -29,7 +29,7 @@ import { loadSnapshot } from "@/lib/materials/progress";
 import { monthSummaries, monthView } from "@/lib/materials/months";
 import { todayIso } from "@/lib/materials/expiry";
 import { creditSlice } from "@/lib/materials/credit-slice";
-import { applyPartValue } from "@/lib/materials/apply";
+import { applyPartValue, describeApplied } from "@/lib/materials/apply";
 import { getCreditByCode } from "@/lib/data";
 import { UPLOAD_ROOT } from "@/lib/uploads";
 import { WORKSPACE_ID } from "@/lib/catalog";
@@ -357,10 +357,30 @@ describeDb("material review: a credit's slice and 'Use this value'", () => {
     const steel = slice.parts.find((r) => r.part.key === "MW-05:steel")!;
     expect(steel.forecast.pct).toBe(100);
 
-    expect(await applyPartValue(pid, "MW-05", "MW-05:steel", "forecast")).toEqual([{ seq: 1, value: 100 }]);
+    const applied = await applyPartValue(pid, "MW-05", "MW-05:steel", "forecast");
+    expect(applied).toEqual({ pct: 100, entries: [{ seq: 1, kind: "number", value: 100 }] });
+    expect(describeApplied(applied!, "forecast")).toBe("The forecast share, 100%, was written into requirement #1.");
     expect(await applyPartValue(pid, "MW-05", "MW-05:steel", "actual")).toBeNull(); // nothing delivered
     expect(await applyPartValue(pid, "MW-05", "HC-11:voc", "forecast")).toBeNull(); // another credit's part
     const credit = (await getCreditByCode(pid, "MW-05"))!;
     expect(credit.requirements.find((r) => r.seq === 1)?.valueNumber).toBe(100);
+
+    // D41: a yes/no requirement is only ever ticked. RC-01's rows aren't answered yet, so its share
+    // is 0%: both requirements are left alone, including a tick set by hand.
+    const rc = (await getCreditByCode(pid, "RC-01"))!;
+    const manual = rc.requirements.find((r) => r.seq === 1)!;
+    await db.update(requirementEntries).set({ valueBool: true }).where(eq(requirementEntries.id, manual.entryId));
+    const below = (await applyPartValue(pid, "RC-01", "RC-01:ksa", "forecast"))!;
+    expect(below.entries.map((e) => e.kind)).toEqual(["left", "left"]);
+    expect(describeApplied(below, "forecast")).toBe("0% is below 20%: requirement #1 was left as it was. 0% is below 40%: requirement #2 was left as it was.");
+    const kept = (await getCreditByCode(pid, "RC-01"))!.requirements;
+    expect(kept.map((r) => r.valueBool)).toEqual([true, null]);
+
+    // Answered: the product is all made in KSA, so both thresholds are met and both are ticked.
+    const ksa = (await getProduct(pid, productId))!.sections[0].answers.filter((a) => a.creditCode === "RC-01");
+    await saveAnswers(pid, productId, ksa.map((a) => ({ answerId: a.id, answer: "yes", value: "", unit: "", remark: "" })));
+    const met = (await applyPartValue(pid, "RC-01", "RC-01:ksa", "forecast"))!;
+    expect(met.entries).toEqual([{ seq: 1, kind: "ticked", threshold: 20 }, { seq: 2, kind: "ticked", threshold: 40 }]);
+    expect((await getCreditByCode(pid, "RC-01"))!.requirements.map((r) => r.valueBool)).toEqual([true, true]);
   });
 });
