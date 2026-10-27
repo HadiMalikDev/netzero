@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { asc, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { describeDb } from "./helpers/postgres";
@@ -7,6 +9,20 @@ import { db } from "@/db";
 import { evidenceDocs, smqRows, smqSections } from "@/db/schema";
 import { PART_KEYS } from "@/lib/materials/parts";
 import { editSmqRow, editSmqSection, ensureProjectSmq, getSmq } from "@/lib/materials/smq";
+import {
+  addProduct,
+  attachMaterialDoc,
+  createSubmittal,
+  getProduct,
+  listSubmittals,
+  newRevision,
+  removeMaterialDoc,
+  saveAnswers,
+  saveReview,
+  setProductParts,
+  setProductTypes,
+} from "@/lib/materials/products";
+import { UPLOAD_ROOT } from "@/lib/uploads";
 import { WORKSPACE_ID } from "@/lib/catalog";
 
 const fx = materialFixture();
@@ -143,5 +159,109 @@ describeDb("material review: the project's own questionnaire", () => {
     expect(await editSmqSection(t.id, smq.sections[1].id, "up")).toBe(true);
     const again = (await getSmq(t.id))!;
     expect(again.sections[0].kind).toBe("all_materials");
+  });
+});
+
+const prodFx = materialFixture();
+
+describeDb("material review: products", () => {
+  beforeAll(() => prodFx.setup());
+  afterAll(async () => {
+    await prodFx.teardown();
+    await rm(join(UPLOAD_ROOT, prodFx.projectId), { recursive: true, force: true });
+  });
+
+  const pid = () => prodFx.projectId;
+  const header = { name: "Jotafloor Easyflow Primer HS", locationOfUse: "Flooring", manufacturer: "Jotun Saudi Limited", supplier: "", countryOfOrigin: "Norway", contactName: "", contactMobile: "" };
+  const pdf = (name = "report.pdf") => new File([new Uint8Array([37, 80, 68, 70])], name, { type: "application/pdf" });
+
+  it("a new product answers the 'For all materials' block and counts toward RC-01", async () => {
+    const sub = await createSubmittal(pid(), { ref: "MTS-0411", title: "All epoxy flooring systems", discipline: "Architecture", supplier: "Jotun", submittedOn: "2026-04-28" });
+    const productId = (await addProduct(pid(), sub!, header))!;
+    const v = (await getProduct(pid(), productId))!;
+    expect(v.sections.map((s) => s.heading)).toEqual(["For all materials"]);
+    expect(v.sections[0].answers).toHaveLength(7);
+    expect(v.parts).toEqual(["RC-01:ksa"]);
+    expect(v.latest).toBe(true);
+    expect(await addProduct(pid(), sub!, { ...header, name: "  " })).toBeNull();
+  });
+
+  it("picking types adds their rows and ticks; dropping one hides its answers and unticks", async () => {
+    const [{ products }] = await listSubmittals(pid());
+    const productId = products[0].id;
+    const smq = (await getSmq((await ensureProjectSmq(pid()))!.id))!;
+    const paints = smq.sections.find((s) => s.heading === "Paints & Coatings")!;
+    const flooring = smq.sections.find((s) => s.heading === "Carpet, Hard Flooring")!;
+    const ceilings = smq.sections.find((s) => s.heading === "Ceilings")!;
+
+    expect(await setProductTypes(pid(), productId, [paints.id, flooring.id, ceilings.id])).toBe(true);
+    let v = (await getProduct(pid(), productId))!;
+    expect(v.sections.map((s) => s.heading)).toEqual(["For all materials", "Paints & Coatings", "Carpet, Hard Flooring", "Ceilings"]);
+    expect(new Set(v.parts)).toEqual(new Set(["RC-01:ksa", "HC-11:voc", "HC-11:formaldehyde"]));
+
+    const ceilingAnswer = v.sections[3].answers[0];
+    await saveAnswers(pid(), productId, [{ answerId: ceilingAnswer.id, answer: "yes", value: "", unit: "", remark: "kept" }]);
+    // The contractor's mistake in MTS-0411: Ceilings rows on a floor primer. Drop them.
+    await setProductTypes(pid(), productId, [paints.id, flooring.id]);
+    v = (await getProduct(pid(), productId))!;
+    expect(v.sections.map((s) => s.heading)).toEqual(["For all materials", "Paints & Coatings", "Carpet, Hard Flooring"]);
+    expect(new Set(v.parts)).toEqual(new Set(["RC-01:ksa", "HC-11:voc"]));
+    // Picking Ceilings again brings its earlier answer back.
+    await setProductTypes(pid(), productId, [paints.id, flooring.id, ceilings.id]);
+    v = (await getProduct(pid(), productId))!;
+    expect(v.sections[3].answers[0]).toMatchObject({ id: ceilingAnswer.id, answer: "yes", remark: "kept" });
+    await setProductTypes(pid(), productId, [paints.id, flooring.id]);
+
+    expect(await setProductParts(pid(), productId, ["HC-11:voc", "bogus"], false)).toBe(true);
+    v = (await getProduct(pid(), productId))!;
+    expect(v.parts).toEqual(["HC-11:voc"]);
+    expect(v.product.interior).toBe(false);
+  });
+
+  it("a row's certificate needs its issue date; a slot document does not", async () => {
+    const [{ products }] = await listSubmittals(pid());
+    const productId = products[0].id;
+    const v = (await getProduct(pid(), productId))!;
+    const voc = v.sections[1].answers[0];
+    expect(await attachMaterialDoc(pid(), productId, pdf(), { answerId: voc.id }, "")).toMatch(/issued/);
+    expect(await attachMaterialDoc(pid(), productId, pdf(), { answerId: voc.id }, "2023-02-30")).toMatch(/issued/);
+    expect(await attachMaterialDoc(pid(), productId, pdf("voc.pdf"), { answerId: voc.id }, "2023-05-12")).toBeNull();
+    expect(await attachMaterialDoc(pid(), productId, pdf("boq.pdf"), { slot: "boq" }, "")).toBeNull();
+    const after = (await getProduct(pid(), productId))!;
+    expect(after.sections[1].answers[0].docs.map((d) => [d.fileName, d.issuedOn])).toEqual([["voc.pdf", "2023-05-12"]]);
+    expect(after.docs.map((d) => [d.fileName, d.slot, d.issuedOn])).toEqual([["boq.pdf", "boq", null]]);
+  });
+
+  it("a status needs a review date; a resubmission freezes the reviewed revision", async () => {
+    const [{ products }] = await listSubmittals(pid());
+    const productId = products[0].id;
+    const review = { status: "C", reviewedOn: "", reviewer: "Waqas Tariq", applicable: "yes", remarks: "VOC content is expired.", manufacturerSignatory: "", manufacturerSignedOn: "", contractorSignatory: "", contractorSignedOn: "" };
+    expect(await newRevision(pid(), productId)).toBeNull(); // not reviewed yet
+    expect(await saveReview(pid(), productId, review)).toBe(false);
+    expect(await saveReview(pid(), productId, { ...review, reviewedOn: "2026-05-05" })).toBe(true);
+
+    const rev1 = (await newRevision(pid(), productId))!;
+    expect(rev1).toBeTruthy();
+    const old = (await getProduct(pid(), productId))!;
+    const next = (await getProduct(pid(), rev1))!;
+    expect(old.latest).toBe(false);
+    expect(next).toMatchObject({ latest: true, product: { revision: 1, status: null, reviewedOn: null, previousRevisionId: productId, interior: false } });
+    expect(next.parts).toEqual(["HC-11:voc"]);
+    expect(next.revisions.map((r) => r.revision)).toEqual([0, 1]);
+    // Same answers, same files (linked, not copied).
+    expect(next.sections.map((s) => s.heading)).toEqual(old.sections.map((s) => s.heading));
+    expect(next.sections[1].answers[0].docs[0].docId).toBe(old.sections[1].answers[0].docs[0].docId);
+
+    // Rev 00 can no longer change.
+    expect(await saveReview(pid(), productId, { ...review, status: "A", reviewedOn: "2026-06-01" })).toBe(false);
+    expect(await saveAnswers(pid(), productId, [])).toBe(false);
+    expect(await newRevision(pid(), productId)).toBeNull();
+
+    // Removing the file from Rev 01 keeps it for Rev 00.
+    const link = next.sections[1].answers[0].docs[0];
+    expect(await removeMaterialDoc(pid(), rev1, link.linkId)).toBe(true);
+    const [still] = await db.select().from(evidenceDocs).where(eq(evidenceDocs.id, link.docId));
+    expect(still).toBeTruthy();
+    expect((await getProduct(pid(), productId))!.sections[1].answers[0].docs).toHaveLength(1);
   });
 });

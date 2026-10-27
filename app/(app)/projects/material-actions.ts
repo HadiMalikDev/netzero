@@ -15,6 +15,20 @@ import {
   type SmqRowOp,
   type SmqSectionOp,
 } from "@/lib/materials/smq";
+import {
+  addProduct,
+  attachMaterialDoc,
+  createSubmittal,
+  newRevision,
+  parseSlot,
+  removeMaterialDoc,
+  saveAnswers,
+  saveProductHeader,
+  saveReview,
+  setProductParts,
+  setProductTypes,
+  updateSubmittal,
+} from "@/lib/materials/products";
 
 /**
  * Server actions for Material Review (Sprint 3). Every action re-reads the
@@ -113,4 +127,175 @@ export async function addSmqRowAction(formData: FormData): Promise<void> {
   const ok = await addSmqRow(templateId, sectionId, rowInput(formData));
   if (!ok) throw new Error("row not added: it needs its requirement text");
   backToForm(projectId, `s-${sectionId}`);
+}
+
+// ---------- submittals and products ----------
+
+const productPath = (projectId: string, productId: string) => `${materialsBase(projectId)}/products/${productId}`;
+
+function refresh(projectId: string) {
+  // The Materials page, credit pages and reports all read material reviews.
+  revalidatePath(`/projects/${projectId}`, "layout");
+}
+
+function submittalInput(formData: FormData) {
+  return {
+    ref: str(formData, "ref"),
+    title: str(formData, "title"),
+    discipline: str(formData, "discipline"),
+    supplier: str(formData, "supplier"),
+    submittedOn: str(formData, "submittedOn"),
+  };
+}
+
+function headerInput(formData: FormData) {
+  return {
+    name: str(formData, "name"),
+    locationOfUse: str(formData, "locationOfUse"),
+    manufacturer: str(formData, "manufacturer"),
+    supplier: str(formData, "supplier"),
+    countryOfOrigin: str(formData, "countryOfOrigin"),
+    contactName: str(formData, "contactName"),
+    contactMobile: str(formData, "contactMobile"),
+  };
+}
+
+async function project(formData: FormData) {
+  const projectId = str(formData, "projectId");
+  if (!(await getProject(projectId))) throw new Error("project not found");
+  return projectId;
+}
+
+export async function createSubmittalAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = await project(formData);
+  const id = await createSubmittal(projectId, submittalInput(formData));
+  if (!id) throw new Error("A submittal needs its reference and title.");
+  refresh(projectId);
+  redirect(`${materialsBase(projectId)}/submittals/${id}`);
+}
+
+export async function updateSubmittalAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = await project(formData);
+  const id = str(formData, "submittalId");
+  if (!(await updateSubmittal(projectId, id, submittalInput(formData)))) throw new Error("A submittal needs its reference and title.");
+  refresh(projectId);
+  redirect(`${materialsBase(projectId)}/submittals/${id}`);
+}
+
+export async function addProductAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = await project(formData);
+  const id = await addProduct(projectId, str(formData, "submittalId"), headerInput(formData));
+  if (!id) throw new Error("A product needs its name (the SMQ's Material Subject).");
+  refresh(projectId);
+  redirect(productPath(projectId, id));
+}
+
+/** Every product form posts projectId + productId; the product is re-read under the project. */
+async function productTarget(formData: FormData) {
+  const projectId = await project(formData);
+  return { projectId, productId: str(formData, "productId") };
+}
+
+function backToProduct(projectId: string, productId: string, anchor?: string): never {
+  refresh(projectId);
+  redirect(`${productPath(projectId, productId)}${anchor ? `#${anchor}` : ""}`);
+}
+
+const FROZEN = "This revision has been replaced by a newer one and can no longer be changed.";
+
+export async function saveProductHeaderAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, productId } = await productTarget(formData);
+  if (!(await saveProductHeader(projectId, productId, headerInput(formData))))
+    throw new Error(`Not saved: the product needs its name. ${FROZEN}`);
+  backToProduct(projectId, productId, "header");
+}
+
+export async function setProductTypesAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, productId } = await productTarget(formData);
+  if (!(await setProductTypes(projectId, productId, formData.getAll("types").map(String)))) throw new Error(FROZEN);
+  backToProduct(projectId, productId, "types");
+}
+
+export async function setProductPartsAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, productId } = await productTarget(formData);
+  const ok = await setProductParts(projectId, productId, formData.getAll("parts").map(String), str(formData, "interior") !== "no");
+  if (!ok) throw new Error(FROZEN);
+  backToProduct(projectId, productId, "types");
+}
+
+export async function saveAnswersAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, productId } = await productTarget(formData);
+  const inputs = formData.getAll("answerId").map((v) => {
+    const answerId = String(v);
+    return {
+      answerId,
+      answer: str(formData, `answer:${answerId}`),
+      value: str(formData, `value:${answerId}`),
+      unit: str(formData, `unit:${answerId}`),
+      remark: str(formData, `remark:${answerId}`),
+    };
+  });
+  if (!(await saveAnswers(projectId, productId, inputs))) throw new Error(FROZEN);
+  backToProduct(projectId, productId, "questionnaire");
+}
+
+/** Upload result for the client control: an error message, or null when stored. */
+export async function uploadMaterialDocAction(_prev: string | null, formData: FormData): Promise<string | null> {
+  await requireUser();
+  const { projectId, productId } = await productTarget(formData);
+  const answerId = str(formData, "answerId");
+  const files = formData.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
+  if (!files.length) return "No file was sent.";
+  for (const file of files) {
+    const error = await attachMaterialDoc(
+      projectId,
+      productId,
+      file,
+      answerId ? { answerId } : { slot: parseSlot(str(formData, "slot")) },
+      str(formData, "issuedOn"),
+    );
+    if (error) return error;
+  }
+  refresh(projectId);
+  return null;
+}
+
+export async function removeMaterialDocAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, productId } = await productTarget(formData);
+  if (!(await removeMaterialDoc(projectId, productId, str(formData, "linkId")))) throw new Error(FROZEN);
+  backToProduct(projectId, productId, str(formData, "anchor") || undefined);
+}
+
+export async function saveReviewAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, productId } = await productTarget(formData);
+  const ok = await saveReview(projectId, productId, {
+    status: str(formData, "status"),
+    reviewedOn: str(formData, "reviewedOn"),
+    reviewer: str(formData, "reviewer"),
+    applicable: str(formData, "applicable"),
+    remarks: str(formData, "remarks"),
+    manufacturerSignatory: str(formData, "manufacturerSignatory"),
+    manufacturerSignedOn: str(formData, "manufacturerSignedOn"),
+    contractorSignatory: str(formData, "contractorSignatory"),
+    contractorSignedOn: str(formData, "contractorSignedOn"),
+  });
+  if (!ok) throw new Error(`Not saved: a status needs its review date. ${FROZEN}`);
+  backToProduct(projectId, productId, "review");
+}
+
+export async function newRevisionAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, productId } = await productTarget(formData);
+  const id = await newRevision(projectId, productId);
+  if (!id) throw new Error("Only the latest revision, once reviewed, can be resubmitted.");
+  backToProduct(projectId, id);
 }
