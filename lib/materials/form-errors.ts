@@ -13,8 +13,13 @@ export const FORM_ERRORS = {
   submittal_fields: "A submittal needs its reference and title.",
   product_name: "A product needs its name (the SMQ's Material Subject).",
   review_date: "A status needs its review date.",
+  review_future: "The review date can't be after today.",
+  review_before_submission: "The review date can't be before the submittal's date of submission.",
+  signed_future: "A sign-off date can't be after today.",
+  submitted_future: "The date of submission can't be after today.",
   boq_qty: "Quantities must be numbers of zero or more, e.g. 1,250.5.",
   delivery: "A delivery needs its date and at least one quantity, as numbers of zero or more.",
+  delivery_future: "A delivery can't be dated after today.",
   frozen: "This revision has been replaced by a newer one and can no longer be changed.",
 } as const;
 

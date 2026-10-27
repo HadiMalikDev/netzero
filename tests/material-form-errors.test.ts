@@ -11,7 +11,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import { getProductRow, newRevision, saveReview } from "@/lib/materials/products";
+import { addProduct, createSubmittal, getProductRow, newRevision, saveReview } from "@/lib/materials/products";
 import {
   addDeliveryAction,
   addProductAction,
@@ -55,18 +55,28 @@ describeDb("material forms: refused saves", () => {
   it("submittals and products", async () => {
     expect(await createSubmittalAction(form({ ref: "  ", title: "Paints" }))).toBe("submittal_fields");
     expect(await addProductAction(form({ submittalId, name: " " }))).toBe("product_name");
+    // QA finding 2: a date of submission can't be after today.
+    expect(await createSubmittalAction(form({ ref: "MTS-1", title: "Paints", submittedOn: "2099-01-01" }))).toBe("submitted_future");
   });
 
   it("review, quantities and deliveries, and an old revision", async () => {
     const p = { productId };
     expect(await saveReviewAction(form({ ...p, ...review, status: "C" }))).toBe("review_date");
+    expect(await saveReviewAction(form({ ...p, ...review, status: "C", reviewedOn: "2099-01-01" }))).toBe("review_future");
     expect(await saveBoqQuantitiesAction(form({ ...p, weightT: "-5", volumeM3: "", costSar: "" }))).toBe("boq_qty");
     expect(await addDeliveryAction(form({ ...p, deliveredOn: "2026-05-01", poNumber: "PO-1", weightT: "", volumeM3: "", costSar: "" }))).toBe("delivery");
     expect((await getProductRow(fx.projectId, productId))!.status).toBeNull();
 
-    expect(await saveReview(fx.projectId, productId, { ...review, status: "C", reviewedOn: "2026-05-05" })).toBe(true);
+    expect(await saveReview(fx.projectId, productId, { ...review, status: "C", reviewedOn: "2026-05-05" })).toBeNull();
     expect(await newRevision(fx.projectId, productId)).toBeTruthy();
     expect(await saveReviewAction(form({ ...p, ...review, status: "A", reviewedOn: "2026-05-06" }))).toBe("frozen");
     expect((await getProductRow(fx.projectId, productId))!.status).toBe("C");
+  });
+
+  it("a review can't be dated before the submittal was submitted", async () => {
+    const sid = (await createSubmittal(fx.projectId, { ref: "MTS-2", title: "Rebar", discipline: "", supplier: "", submittedOn: "2026-05-10" }))!;
+    const pid = (await addProduct(fx.projectId, sid, { name: "Rebar", locationOfUse: "", manufacturer: "", supplier: "", countryOfOrigin: "", contactName: "", contactMobile: "" }))!;
+    expect(await saveReview(fx.projectId, pid, { ...review, status: "A", reviewedOn: "2026-05-09" })).toBe("review_before_submission");
+    expect(await saveReview(fx.projectId, pid, { ...review, status: "A", reviewedOn: "2026-05-10" })).toBeNull();
   });
 });

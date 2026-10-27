@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/session";
 import { applyPartValue } from "@/lib/materials/apply";
 import { getProject } from "@/lib/data";
+import { parseIsoDate, todayIso } from "@/lib/materials/expiry";
 import type { FormErrorCode } from "@/lib/materials/form-errors";
 import {
   addSmqRow,
@@ -149,6 +150,12 @@ function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}`, "layout");
 }
 
+/** A date of submission after today: refused before the submittal is saved (QA finding 2). */
+const submittedLater = (formData: FormData) => {
+  const on = parseIsoDate(str(formData, "submittedOn"));
+  return Boolean(on && on > todayIso());
+};
+
 function submittalInput(formData: FormData) {
   return {
     ref: str(formData, "ref"),
@@ -180,6 +187,7 @@ async function project(formData: FormData) {
 export async function createSubmittalAction(formData: FormData): Promise<FormErrorCode | null> {
   await requireUser();
   const projectId = await project(formData);
+  if (submittedLater(formData)) return "submitted_future";
   const id = await createSubmittal(projectId, submittalInput(formData));
   if (!id) return "submittal_fields";
   refresh(projectId);
@@ -190,6 +198,7 @@ export async function updateSubmittalAction(formData: FormData): Promise<FormErr
   await requireUser();
   const projectId = await project(formData);
   const id = str(formData, "submittalId");
+  if (submittedLater(formData)) return "submitted_future";
   if (!(await updateSubmittal(projectId, id, submittalInput(formData)))) return "submittal_fields";
   refresh(projectId);
   redirect(`${materialsBase(projectId)}/submittals/${id}`);
@@ -304,7 +313,7 @@ export async function saveReviewAction(formData: FormData): Promise<FormErrorCod
   await requireUser();
   const { projectId, productId, frozen } = await productTarget(formData);
   if (frozen) return "frozen";
-  const ok = await saveReview(projectId, productId, {
+  const error = await saveReview(projectId, productId, {
     status: str(formData, "status"),
     reviewedOn: str(formData, "reviewedOn"),
     reviewer: str(formData, "reviewer"),
@@ -315,7 +324,7 @@ export async function saveReviewAction(formData: FormData): Promise<FormErrorCod
     contractorSignatory: str(formData, "contractorSignatory"),
     contractorSignedOn: str(formData, "contractorSignedOn"),
   });
-  if (!ok) return "review_date";
+  if (error) return error;
   backToProduct(projectId, productId, "review");
 }
 
@@ -345,12 +354,12 @@ export async function addDeliveryAction(formData: FormData): Promise<FormErrorCo
   await requireUser();
   const { projectId, productId, frozen } = await productTarget(formData);
   if (frozen) return "frozen";
-  const ok = await addDelivery(projectId, productId, {
+  const error = await addDelivery(projectId, productId, {
     ...quantityInput(formData),
     deliveredOn: str(formData, "deliveredOn"),
     poNumber: str(formData, "poNumber"),
   });
-  if (!ok) return "delivery";
+  if (error) return error;
   backToProduct(projectId, productId, "quantities");
 }
 

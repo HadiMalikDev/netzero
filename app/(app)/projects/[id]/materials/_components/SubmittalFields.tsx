@@ -1,3 +1,5 @@
+import { todayIso } from "@/lib/materials/expiry";
+
 /** The submittal's own fields, for creating and editing one. */
 export function SubmittalFields({ values }: { values?: { ref: string; title: string; discipline: string | null; supplier: string | null; submittedOn: string | null } }) {
   return (
@@ -20,7 +22,7 @@ export function SubmittalFields({ values }: { values?: { ref: string; title: str
       </label>
       <label className="text-sm font-medium text-slate-700 md:col-span-2">
         Date of submission
-        <input name="submittedOn" type="date" defaultValue={values?.submittedOn ?? ""} className="input mt-1" />
+        <input name="submittedOn" type="date" defaultValue={values?.submittedOn ?? ""} max={todayIso()} className="input mt-1" />
       </label>
     </div>
   );

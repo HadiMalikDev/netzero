@@ -19,6 +19,7 @@ import {
 import { WORKSPACE_ID } from "@/lib/catalog";
 import { storeUpload } from "@/lib/uploads";
 import { parseIsoDate, todayIso } from "./expiry";
+import type { FormErrorCode } from "./form-errors";
 import { PART_KEYS } from "./parts";
 import { ensureProjectSmq, getSmq, type SmqView } from "./smq";
 
@@ -415,12 +416,30 @@ export interface ReviewInput {
  * The consultant's review. A status needs a review date: the date puts the
  * review in a month (D26). Clearing the status takes the product back to
  * "under review".
+ *
+ * Returns why it was refused, or null when saved. The dates must have
+ * happened: a review on or before today and not before the submittal was
+ * submitted, sign-offs on or before today (QA finding 2).
  */
-export async function saveReview(projectId: string, productId: string, input: ReviewInput): Promise<boolean> {
-  if (!(await editableProduct(projectId, productId))) return false;
+export async function saveReview(
+  projectId: string,
+  productId: string,
+  input: ReviewInput,
+  today = todayIso(),
+): Promise<FormErrorCode | null> {
+  const p = await editableProduct(projectId, productId);
+  if (!p) return "frozen";
   const status = parseStatus(input.status);
   const reviewedOn = parseIsoDate(input.reviewedOn);
-  if (status && !reviewedOn) return false;
+  if (status && !reviewedOn) return "review_date";
+  if (status && reviewedOn) {
+    if (reviewedOn > today) return "review_future";
+    const submittedOn = (await getSubmittalRow(projectId, p.submittalId))?.submittedOn;
+    if (submittedOn && reviewedOn < submittedOn) return "review_before_submission";
+  }
+  const manufacturerSignedOn = parseIsoDate(input.manufacturerSignedOn);
+  const contractorSignedOn = parseIsoDate(input.contractorSignedOn);
+  if ((manufacturerSignedOn && manufacturerSignedOn > today) || (contractorSignedOn && contractorSignedOn > today)) return "signed_future";
   await db
     .update(materialProducts)
     .set({
@@ -430,13 +449,13 @@ export async function saveReview(projectId: string, productId: string, input: Re
       applicable: input.applicable === "yes" ? true : input.applicable === "no" ? false : null,
       remarks: cleanLines(input.remarks, 4000) || null,
       manufacturerSignatory: clean(input.manufacturerSignatory, 120) || null,
-      manufacturerSignedOn: parseIsoDate(input.manufacturerSignedOn),
+      manufacturerSignedOn,
       contractorSignatory: clean(input.contractorSignatory, 120) || null,
-      contractorSignedOn: parseIsoDate(input.contractorSignedOn),
+      contractorSignedOn,
       updatedAt: now(),
     })
     .where(eq(materialProducts.id, productId));
-  return true;
+  return null;
 }
 
 // ---------- quantities ----------
@@ -474,16 +493,22 @@ export async function saveBoqQuantities(projectId: string, productId: string, in
   return true;
 }
 
-/** One delivery: the actual (D13). Needs a date and at least one quantity. */
+/**
+ * One delivery: the actual (D13). Needs a date, on or before today (QA
+ * finding 2), and at least one quantity. Returns why it was refused, or null
+ * when added.
+ */
 export async function addDelivery(
   projectId: string,
   productId: string,
   input: QuantityInput & { deliveredOn: string; poNumber: string },
-): Promise<boolean> {
+  today = todayIso(),
+): Promise<FormErrorCode | null> {
   const q = quantities(input);
   const deliveredOn = parseIsoDate(input.deliveredOn);
-  if (!q || !deliveredOn || (q.weightT == null && q.volumeM3 == null && q.costSar == null)) return false;
-  if (!(await editableProduct(projectId, productId))) return false;
+  if (!q || !deliveredOn || (q.weightT == null && q.volumeM3 == null && q.costSar == null)) return "delivery";
+  if (deliveredOn > today) return "delivery_future";
+  if (!(await editableProduct(projectId, productId))) return "frozen";
   await db.insert(materialDeliveries).values({
     id: randomUUID(),
     productId,
@@ -491,7 +516,7 @@ export async function addDelivery(
     poNumber: clean(input.poNumber, 120) || null,
     ...q,
   });
-  return true;
+  return null;
 }
 
 export async function removeDelivery(projectId: string, productId: string, deliveryId: string): Promise<boolean> {
@@ -516,6 +541,7 @@ export async function attachMaterialDoc(
   file: File,
   target: { answerId: string } | { slot: Slot | null },
   issuedOnRaw: string,
+  today = todayIso(),
 ): Promise<string | null> {
   if (!(await editableProduct(projectId, productId))) return "This revision can no longer be changed.";
   if (!(file instanceof File) || file.size === 0) return "No file was sent.";
@@ -535,6 +561,8 @@ export async function attachMaterialDoc(
     slot = target.slot;
     if (issuedOnRaw.trim() && !issuedOn) return "The issue date is not a valid date.";
   }
+  // A certificate dated after today would read as valid for years (QA finding 2).
+  if (issuedOn && issuedOn > today) return "The issue date can't be after today.";
   const { id, filePath, size } = await storeUpload(file, projectId);
   await db.insert(evidenceDocs).values({
     id,

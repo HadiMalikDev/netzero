@@ -15,11 +15,14 @@ export function MaterialUpload({
   fields,
   label = "Attach file",
   requireDate,
+  maxDate,
 }: {
   action: UploadAction;
   fields: Record<string, string>;
   label?: string;
   requireDate: boolean;
+  /** Today: a certificate can't be issued later (QA finding 2). */
+  maxDate?: string;
 }) {
   const form = useRef<HTMLFormElement>(null);
   const [date, setDate] = useState("");
@@ -38,6 +41,7 @@ export function MaterialUpload({
           type="date"
           name="issuedOn"
           value={date}
+          max={maxDate}
           onChange={(e) => {
             setDate(e.target.value);
             setLocal(null);
@@ -59,6 +63,11 @@ export function MaterialUpload({
             if (!e.target.files?.length) return;
             if (requireDate && !date) {
               setLocal("Enter the date the certificate or report was issued, then pick the file.");
+              e.target.value = "";
+              return;
+            }
+            if (maxDate && date > maxDate) {
+              setLocal("The issue date can't be after today.");
               e.target.value = "";
               return;
             }

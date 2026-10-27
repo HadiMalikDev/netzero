@@ -160,6 +160,7 @@ function AnswerRow({
               fields={{ projectId, productId, answerId: a.id }}
               label="Attach certificate / report"
               requireDate
+              maxDate={today}
             />
           ) : null}
         </div>
@@ -354,7 +355,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
                 <div className="flex-1 space-y-1.5">
                   <DocList docs={docs} projectId={id} productId={p.id} anchor="documents" editable={editable} years={years} today={today} showExpiry={false} />
                   {editable ? (
-                    <MaterialUpload action={uploadMaterialDocAction} fields={{ projectId: id, productId: p.id, slot: slot ?? "" }} requireDate={false} />
+                    <MaterialUpload action={uploadMaterialDocAction} fields={{ projectId: id, productId: p.id, slot: slot ?? "" }} requireDate={false} maxDate={today} />
                   ) : null}
                 </div>
               </li>
@@ -478,7 +479,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
         {editable ? (
           <ActionForm action={addDeliveryAction} className="mt-3 grid gap-2 sm:grid-cols-6">
             {ids}
-            <input name="deliveredOn" type="date" required aria-label="Delivery date" className="input text-sm" />
+            <input name="deliveredOn" type="date" required max={today} aria-label="Delivery date" className="input text-sm" />
             <input name="poNumber" placeholder="PO number" className="input text-sm" />
             <input name="weightT" inputMode="decimal" placeholder="t" aria-label="Weight (t)" className="input text-sm" />
             <input name="volumeM3" inputMode="decimal" placeholder="m³" aria-label="Volume (m³)" className="input text-sm" />
@@ -529,7 +530,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
             </label>
             <label className="text-sm font-medium text-slate-700 md:col-span-2">
               Review date
-              <input name="reviewedOn" type="date" defaultValue={p.reviewedOn ?? today} className="input mt-1" />
+              <input name="reviewedOn" type="date" defaultValue={p.reviewedOn ?? today} min={submittal.submittedOn ?? undefined} max={today} className="input mt-1" />
             </label>
             <label className="text-sm font-medium text-slate-700 md:col-span-2">
               Reviewed by
@@ -553,7 +554,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
             </label>
             <label className="text-sm font-medium text-slate-700 md:col-span-1">
               Date
-              <input name="manufacturerSignedOn" type="date" defaultValue={p.manufacturerSignedOn ?? ""} className="input mt-1" />
+              <input name="manufacturerSignedOn" type="date" defaultValue={p.manufacturerSignedOn ?? ""} max={today} className="input mt-1" />
             </label>
             <label className="text-sm font-medium text-slate-700 md:col-span-2">
               Contractor&apos;s sustainability manager
@@ -561,7 +562,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
             </label>
             <label className="text-sm font-medium text-slate-700 md:col-span-1">
               Date
-              <input name="contractorSignedOn" type="date" defaultValue={p.contractorSignedOn ?? ""} className="input mt-1" />
+              <input name="contractorSignedOn" type="date" defaultValue={p.contractorSignedOn ?? ""} max={today} className="input mt-1" />
             </label>
           </fieldset>
           {editable ? (

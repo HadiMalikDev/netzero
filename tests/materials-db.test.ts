@@ -234,6 +234,7 @@ describeDb("material review: products", () => {
     const voc = v.sections[1].answers[0];
     expect(await attachMaterialDoc(pid(), productId, pdf(), { answerId: voc.id }, "")).toMatch(/issued/);
     expect(await attachMaterialDoc(pid(), productId, pdf(), { answerId: voc.id }, "2023-02-30")).toMatch(/issued/);
+    expect(await attachMaterialDoc(pid(), productId, pdf(), { answerId: voc.id }, "2023-05-12", "2023-05-11")).toMatch(/after today/);
     expect(await attachMaterialDoc(pid(), productId, pdf("voc.pdf"), { answerId: voc.id }, "2023-05-12")).toBeNull();
     expect(await attachMaterialDoc(pid(), productId, pdf("boq.pdf"), { slot: "boq" }, "")).toBeNull();
     const after = (await getProduct(pid(), productId))!;
@@ -246,8 +247,11 @@ describeDb("material review: products", () => {
     const productId = products[0].id;
     const review = { status: "C", reviewedOn: "", reviewer: "Waqas Tariq", applicable: "yes", remarks: "VOC content is expired.", manufacturerSignatory: "", manufacturerSignedOn: "", contractorSignatory: "", contractorSignedOn: "" };
     expect(await newRevision(pid(), productId)).toBeNull(); // not reviewed yet
-    expect(await saveReview(pid(), productId, review)).toBe(false);
-    expect(await saveReview(pid(), productId, { ...review, reviewedOn: "2026-05-05" })).toBe(true);
+    expect(await saveReview(pid(), productId, review)).toBe("review_date");
+    // A review must have happened: not after today (QA finding 2).
+    expect(await saveReview(pid(), productId, { ...review, reviewedOn: "2026-05-05" }, "2026-05-04")).toBe("review_future");
+    expect(await saveReview(pid(), productId, { ...review, reviewedOn: "2026-05-05", manufacturerSignedOn: "2026-05-06" }, "2026-05-05")).toBe("signed_future");
+    expect(await saveReview(pid(), productId, { ...review, reviewedOn: "2026-05-05" })).toBeNull();
 
     const rev1 = (await newRevision(pid(), productId))!;
     expect(rev1).toBeTruthy();
@@ -262,7 +266,7 @@ describeDb("material review: products", () => {
     expect(next.sections[1].answers[0].docs[0].docId).toBe(old.sections[1].answers[0].docs[0].docId);
 
     // Rev 00 can no longer change.
-    expect(await saveReview(pid(), productId, { ...review, status: "A", reviewedOn: "2026-06-01" })).toBe(false);
+    expect(await saveReview(pid(), productId, { ...review, status: "A", reviewedOn: "2026-06-01" })).toBe("frozen");
     expect(await saveAnswers(pid(), productId, [])).toBe(false);
     expect(await newRevision(pid(), productId)).toBeNull();
     // The actions tell "replaced" apart from bad input, and refuse other projects' products.
@@ -283,8 +287,9 @@ describeDb("material review: products", () => {
     const latest = products.find((p) => p.latest)!;
     expect(await saveBoqQuantities(pid(), latest.id, { weightT: "1,250.5", volumeM3: "", costSar: "40000" })).toBe(true);
     expect(await saveBoqQuantities(pid(), latest.id, { weightT: "-1", volumeM3: "", costSar: "" })).toBe(false);
-    expect(await addDelivery(pid(), latest.id, { deliveredOn: "2026-06-01", poNumber: "PO-1", weightT: "", volumeM3: "", costSar: "" })).toBe(false);
-    expect(await addDelivery(pid(), latest.id, { deliveredOn: "2026-06-01", poNumber: "PO-1", weightT: "10", volumeM3: "", costSar: "" })).toBe(true);
+    expect(await addDelivery(pid(), latest.id, { deliveredOn: "2026-06-01", poNumber: "PO-1", weightT: "", volumeM3: "", costSar: "" })).toBe("delivery");
+    expect(await addDelivery(pid(), latest.id, { deliveredOn: "2026-06-01", poNumber: "PO-1", weightT: "10", volumeM3: "", costSar: "" }, "2026-05-31")).toBe("delivery_future");
+    expect(await addDelivery(pid(), latest.id, { deliveredOn: "2026-06-01", poNumber: "PO-1", weightT: "10", volumeM3: "", costSar: "" })).toBeNull();
     const snap = await loadSnapshot(pid());
     expect(snap.products).toHaveLength(1);
     const [p] = snap.products;
