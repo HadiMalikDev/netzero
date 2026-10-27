@@ -12,6 +12,10 @@ import { revLabel, STATUS_LABEL, type ProductSummary, type Status } from "@/lib/
  * toward, and its answers per credit. "Answers" lists every SMQ answer, and
  * "Credits" the calculated parts for the month.
  *
+ * A resubmission carries its deliveries over, so only the latest revision's
+ * row lists them; earlier rows point at it, and the delivered columns add up
+ * (D40).
+ *
  * Pure: the route loads, this builds, tests read it back.
  */
 
@@ -62,6 +66,13 @@ export function buildMaterialTracker(input: TrackerInput): ExcelJS.Workbook {
   for (const d of input.deliveries) deliveriesBy.set(d.productId, [...(deliveriesBy.get(d.productId) ?? []), d]);
   const docsBy = new Map<string, TrackerInput["docs"]>();
   for (const d of input.docs) if (d.answerId) docsBy.set(d.answerId, [...(docsBy.get(d.answerId) ?? []), d]);
+  // The revision that replaced each one, to point earlier rows at the latest (D40).
+  const replacedBy = new Map(input.products.filter((r) => r.product.previousRevisionId).map((r) => [r.product.previousRevisionId!, r.product]));
+  const latestOf = (p: ProductSummary) => {
+    let q = p;
+    while (replacedBy.has(q.id)) q = replacedBy.get(q.id)!;
+    return q;
+  };
   // Where each product's latest revision stands on each part, this month.
   const stateBy = new Map<string, string>();
   for (const r of input.parts) for (const p of r.products) stateBy.set(`${p.revisionId}:${r.part.key}`, STATE[p.state]);
@@ -96,7 +107,7 @@ export function buildMaterialTracker(input: TrackerInput): ExcelJS.Workbook {
   bold(ws.addRow([...TRACKER_COLUMNS, ...extra]));
 
   input.products.forEach(({ product: p, submittal: s }, i) => {
-    const deliveries = (deliveriesBy.get(p.id) ?? []).sort((a, b) => (a.deliveredOn < b.deliveredOn ? -1 : 1));
+    const deliveries = p.latest ? (deliveriesBy.get(p.id) ?? []).sort((a, b) => (a.deliveredOn < b.deliveredOn ? -1 : 1)) : [];
     const sum = (k: "weightT" | "volumeM3" | "costSar") =>
       deliveries.some((d) => d[k] != null) ? deliveries.reduce((n, d) => n + (d[k] ?? 0), 0) : null;
     const answers = (answersBy.get(p.id) ?? []).sort((a, b) => a.sectionSeq - b.sectionSeq || a.seq - b.seq);
@@ -115,7 +126,7 @@ export function buildMaterialTracker(input: TrackerInput): ExcelJS.Workbook {
       p.applicable === true ? "Applicable" : p.applicable === false ? "Not applicable" : "",
       s.discipline ?? "",
       p.supplier ?? s.supplier ?? "",
-      deliveries.map((d) => d.deliveredOn).join("\n"),
+      p.latest ? deliveries.map((d) => d.deliveredOn).join("\n") : `see ${revLabel(latestOf(p).revision)}`,
       deliveries.map((d) => d.poNumber ?? "").filter(Boolean).join("\n"),
       p.manufacturer ?? "",
       p.countryOfOrigin ?? "",

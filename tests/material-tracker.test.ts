@@ -49,4 +49,30 @@ describe("buildMaterialTracker", () => {
     expect((answers.getRow(2).values as unknown[])[14]).toBe("datasheet.pdf (2025-11-02)");
     expect((wb.getWorksheet("Credits")!.getRow(2).values as unknown[]).slice(1, 6)).toEqual(["MW-05", "Recycled steel", "weight", "50", 100]);
   });
+
+  it("lists a resubmitted product's deliveries on its latest revision only (D40)", () => {
+    const rev1 = { ...product, id: "r1", revision: 1, previousRevisionId: "r0", status: null, reviewedOn: null } as ProductSummary;
+    const delivery = { productId: "", deliveredOn: "2026-06-30", poNumber: "2403879", weightT: 250, volumeM3: null, costSar: 800_000, createdAt: 0 };
+    const wb = buildMaterialTracker({
+      projectName: "Oceanarium",
+      ratingSystem: "Mostadam",
+      month: "2026-06",
+      generatedAt: new Date("2026-06-30T12:00:00Z"),
+      products: [{ product: { ...product, status: "C", latest: false }, submittal }, { product: rev1, submittal }],
+      answers: [],
+      docs: [],
+      // A new revision copies the deliveries, so both revisions hold the same one.
+      deliveries: [{ ...delivery, id: "d0", productId: "r0" }, { ...delivery, id: "d1", productId: "r1" }],
+      parts: [],
+    });
+    const ws = wb.getWorksheet("Tracker")!;
+    const headers = ws.getRow(6).values as unknown[];
+    const col = (name: string) => headers.indexOf(name);
+    const old = ws.getRow(7).values as unknown[];
+    const latest = ws.getRow(8).values as unknown[];
+    expect([old[col("Material Delivery date")], old[col("Material Delivery (PO Number)")], old[col("Delivered weight (t)")]]).toEqual(["see Rev 01", "", undefined]);
+    expect([latest[col("Material Delivery date")], latest[col("Material Delivery (PO Number)")], latest[col("Delivered weight (t)")]]).toEqual(["2026-06-30", "2403879", 250]);
+    // D40 covers deliveries only: the BOQ forecast still shows on every revision.
+    expect([old[col("BOQ weight (t)")], latest[col("BOQ weight (t)")]]).toEqual([600, 600]);
+  });
 });
