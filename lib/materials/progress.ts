@@ -68,7 +68,7 @@ export async function loadSnapshot(projectId: string): Promise<Snapshot> {
       key,
       name: latest.product.name,
       submittalRef: latest.submittal.ref,
-      revisions: ordered.map(({ product: p }) => {
+      revisions: ordered.map(({ product: p, submittal }) => {
         // Answers of a type the product no longer has are hidden, and don't count.
         const shown = new Set((typesBy.get(p.id) ?? []).map((t) => t.sectionId));
         return {
@@ -76,7 +76,12 @@ export async function loadSnapshot(projectId: string): Promise<Snapshot> {
           revision: p.revision,
           status: p.status,
           reviewedOn: p.reviewedOn,
-          createdOn: todayIso(new Date(p.createdAt * 1000)),
+          // A first revision exists from the submittal's date (records are often
+          // entered after the fact); a resubmission from when it was entered.
+          createdOn:
+            p.revision === 0 && submittal.submittedOn
+              ? [submittal.submittedOn, todayIso(new Date(p.createdAt * 1000))].sort()[0]
+              : todayIso(new Date(p.createdAt * 1000)),
           interior: p.interior,
           parts: (partsBy.get(p.id) ?? []).map((x) => x.part),
           boq: { weightT: p.boqWeightT, volumeM3: p.boqVolumeM3, costSar: p.boqCostSar },

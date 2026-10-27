@@ -25,6 +25,8 @@ import {
   saveBoqQuantities,
 } from "@/lib/materials/products";
 import { loadSnapshot } from "@/lib/materials/progress";
+import { monthSummaries, monthView } from "@/lib/materials/months";
+import { todayIso } from "@/lib/materials/expiry";
 import { UPLOAD_ROOT } from "@/lib/uploads";
 import { WORKSPACE_ID } from "@/lib/catalog";
 
@@ -283,5 +285,30 @@ describeDb("material review: products", () => {
     expect(p.deliveries).toEqual([{ deliveredOn: "2026-06-01", weightT: 10, volumeM3: null, costSar: null }]);
     // Ceilings was dropped: its HC-11 rows are hidden and must not count.
     expect(p.revisions[1].answers.some((a) => a.text.startsWith("technical datasheet with a maximum formaldehyde"))).toBe(false);
+  });
+
+  it("a month lists its reviews, carries open C/D forward and flags overdue resubmissions as of then", async () => {
+    // Rev 00 was reviewed C on 2026-05-05; Rev 01 was entered today (after October 2026 began).
+    const today = todayIso();
+    const may = await monthView(pid(), "2026-05", "2026-05-25");
+    expect(may.reviewed.map((r) => [r.product.revision, r.product.status])).toEqual([[0, "C"]]);
+    expect(may.counts).toEqual({ A: 0, B: 0, C: 1, D: 0 });
+    expect(may.carried).toEqual([]);
+    expect(may.flags.map((f) => f.kind)).toContain("resubmission_overdue");
+
+    const june = await monthView(pid(), "2026-06", "2026-06-10");
+    expect(june.reviewed).toEqual([]);
+    expect(june.carried.map((r) => r.product.revision)).toEqual([0]);
+
+    // Now Rev 01 exists, so nothing is open or overdue any more.
+    const now = await monthView(pid(), today.slice(0, 7), today);
+    expect(now.carried).toEqual([]);
+    expect(now.flags.filter((f) => f.kind === "resubmission_overdue")).toEqual([]);
+    expect(now.parts.map((r) => r.part.key)).toContain("HC-11:voc");
+
+    const months = await monthSummaries(pid(), today);
+    expect(months[0].month).toBe(today.slice(0, 7));
+    expect(months.find((m) => m.month === "2026-05")).toMatchObject({ reviewed: 1, counts: { C: 1 } });
+    expect(months.at(-1)!.month).toBe("2026-04"); // the submittal's date
   });
 });
