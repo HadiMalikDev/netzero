@@ -230,7 +230,17 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
       <PageHeader
         title={p.name}
         subtitle={`${submittal.ref} · ${revLabel(p.revision)}${p.manufacturer ? ` · ${p.manufacturer}` : ""}`}
-        action={<MaterialStatus status={p.status} />}
+        action={
+          <div className="flex items-center gap-3">
+            <MaterialStatus status={p.status} />
+            <a
+              href={`/api/projects/${id}/materials/products/${p.id}/pdf`}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Download SMQ (PDF)
+            </a>
+          </div>
+        }
       />
 
       {view.revisions.length > 1 ? (
