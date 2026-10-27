@@ -18,7 +18,7 @@ import {
 } from "@/db/schema";
 import { WORKSPACE_ID } from "@/lib/catalog";
 import { storeUpload } from "@/lib/uploads";
-import { parseIsoDate } from "./expiry";
+import { parseIsoDate, todayIso } from "./expiry";
 import { PART_KEYS } from "./parts";
 import { ensureProjectSmq, getSmq, type SmqView } from "./smq";
 
@@ -129,6 +129,16 @@ export async function getSubmittalRow(projectId: string, submittalId: string): P
     )
     .limit(1);
   return s ?? null;
+}
+
+/**
+ * The day a revision starts to exist for the month views (YYYY-MM-DD): a first
+ * revision from its submittal's date, since records are often entered after
+ * the fact; a resubmission from the day it was entered.
+ */
+export function existsFrom(product: MaterialProduct, submittal: MaterialSubmittal): string {
+  const entered = todayIso(new Date(product.createdAt * 1000));
+  return product.revision === 0 && submittal.submittedOn && submittal.submittedOn < entered ? submittal.submittedOn : entered;
 }
 
 /** Which products have been replaced by a newer revision. */

@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { evidenceDocs, materialAnswers, materialDocs, materialProductTypes, type MaterialSubmittal } from "@/db/schema";
 import { computeParts, previousMonth, type PartResult } from "./credits";
 import { expiryOf, monthEnd, todayIso } from "./expiry";
-import { projectProducts, type ProductSummary } from "./products";
+import { existsFrom, projectProducts, type ProductSummary } from "./products";
 import { loadSnapshot } from "./progress";
 import { ensureProjectSmq } from "./smq";
 
@@ -79,8 +79,7 @@ function replacedBy(rows: MonthProduct[]) {
   return m;
 }
 
-/** Saudi-time calendar date a revision was entered. */
-const createdOn = (p: ProductSummary) => todayIso(new Date(p.createdAt * 1000));
+const createdOn = (r: MonthProduct) => existsFrom(r.product, r.submittal);
 
 export async function monthView(projectId: string, month: string, today = todayIso()): Promise<MonthView> {
   const rows = await projectProducts(projectId);
@@ -96,7 +95,7 @@ export async function monthView(projectId: string, month: string, today = todayI
   const openAt = (r: MonthProduct, on: string) => {
     if (!(r.product.status === "C" || r.product.status === "D") || !r.product.reviewedOn || r.product.reviewedOn > on) return false;
     const n = next.get(r.product.id);
-    return !n || createdOn(n.product) > on;
+    return !n || createdOn(n) > on;
   };
   const carried = rows.filter((r) => openAt(r, end) && r.product.reviewedOn! < `${month}-01`);
 
@@ -119,7 +118,7 @@ export async function monthView(projectId: string, month: string, today = todayI
   const years = template?.expiryYears ?? 3;
   // Products entered after the date read are not there yet.
   const latestIds = rows
-    .filter((r) => r.product.latest && r.product.status !== "D" && createdOn(r.product) <= asOf)
+    .filter((r) => r.product.latest && r.product.status !== "D" && createdOn(r) <= asOf)
     .map((r) => r.product.id);
   if (latestIds.length) {
     const [docs, types] = await Promise.all([
@@ -171,7 +170,7 @@ export async function monthView(projectId: string, month: string, today = todayI
 export async function monthSummaries(projectId: string, today = todayIso()): Promise<MonthSummary[]> {
   const rows = await projectProducts(projectId);
   const current = today.slice(0, 7);
-  const starts = rows.flatMap((r) => [r.product.reviewedOn, r.submittal.submittedOn, createdOn(r.product)]).filter((d): d is string => Boolean(d));
+  const starts = rows.flatMap((r) => [r.product.reviewedOn, r.submittal.submittedOn, createdOn(r)]).filter((d): d is string => Boolean(d));
   if (!starts.length) return [];
   const first = starts.sort()[0].slice(0, 7);
   return monthsBetween(first < current ? first : current, current).map((month) => {

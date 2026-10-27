@@ -9,8 +9,7 @@ import {
   materialProductTypes,
 } from "@/db/schema";
 import { computeParts, type PartResult, type Snapshot, type SnapshotProduct } from "./credits";
-import { todayIso } from "./expiry";
-import { projectProducts } from "./products";
+import { existsFrom, projectProducts } from "./products";
 import { ensureProjectSmq } from "./smq";
 
 /**
@@ -76,12 +75,7 @@ export async function loadSnapshot(projectId: string): Promise<Snapshot> {
           revision: p.revision,
           status: p.status,
           reviewedOn: p.reviewedOn,
-          // A first revision exists from the submittal's date (records are often
-          // entered after the fact); a resubmission from when it was entered.
-          createdOn:
-            p.revision === 0 && submittal.submittedOn
-              ? [submittal.submittedOn, todayIso(new Date(p.createdAt * 1000))].sort()[0]
-              : todayIso(new Date(p.createdAt * 1000)),
+          createdOn: existsFrom(p, submittal),
           interior: p.interior,
           parts: (partsBy.get(p.id) ?? []).map((x) => x.part),
           boq: { weightT: p.boqWeightT, volumeM3: p.boqVolumeM3, costSar: p.boqCostSar },
