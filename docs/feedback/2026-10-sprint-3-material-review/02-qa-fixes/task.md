@@ -108,4 +108,22 @@ Continues the item 01 decision log (D1–D38).
 - **Answer: (a) Tick only, then confirm.** Number requirements get the same confirmation
   message.
 
-Status: decided, not built yet.
+Status: built, see "Done: D39–D41" below.
+
+## Done: D39–D41 (2026-10-27)
+
+| Decision | Commit | What changed | How it was checked |
+|---|---|---|---|
+| D39 | `4d741b6` | `newRevision` clears the manufacturer's and contractor's sign-off names and dates; the reviewed revision keeps its own. The "New revision" text says so. | DB test; browser: Rev 02 of the QA paint starts with blank sign-offs, Rev 01 keeps "QA Manufacturer 2026-09-01 / QA Contractor 2026-10-09", and Rev 02's SMQ PDF has blank sign-off names. |
+| D40 | `3c3e476` | In the tracker, only the latest revision's row lists deliveries and delivered totals; earlier rows say "see Rev NN". | Unit test; tracker downloaded from the Materials page: Rev 00 and Rev 01 say "see Rev 02", Rev 02 lists the deliveries (500 t), [xlsx](evidence/d40-material-tracker.xlsx). |
+| D41 | `6c4ed29` | A yes/no requirement is ticked when its threshold is met and left alone when not. Every apply says what it did beside the buttons. The credit page refreshes in place instead of redirecting, and requirement items are keyed by when their entry was last written, so the applied value shows and values typed elsewhere stay. | DB test (a hand tick survives 0%; both RC-01 requirements tick at 100%; the message text); browser: RC-01 at 18% keeps a hand tick, [screenshot](evidence/d41-rc01-left-as-it-was.png); MW-05 "Use actual" shows 100 in requirement #1 and keeps an unsaved 33 in #2. |
+
+Full run: `pnpm test` 212 passed / 49 skipped, `pnpm test:db` 261 passed, `pnpm lint` 0 errors
+(the same 5 warnings in files this item doesn't touch), `pnpm build` passes.
+
+Calls made while building, flagged:
+- **D41 message for number requirements too**, e.g. "The forecast share, 57.1%, was written into
+  requirement #1."
+- **D40 covers deliveries only.** The BOQ quantities still show on every revision's row, so
+  summing the BOQ columns also counts a resubmitted product once per revision. Not changed: it
+  wasn't part of the decision.
