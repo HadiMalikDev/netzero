@@ -1,8 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { rm } from "node:fs/promises";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
@@ -30,8 +29,7 @@ import {
 import { parseThresholds } from "@/lib/tiers";
 import { parseStage } from "@/lib/evidence";
 import { groupByOption } from "@/lib/option-group";
-
-const UPLOAD_ROOT = ".data/uploads";
+import { storeUpload } from "@/lib/uploads";
 
 /**
  * Create a project and instantiate its live checklist from a selected canonical
@@ -334,16 +332,10 @@ export async function uploadEvidence(formData: FormData): Promise<void> {
   const rawSlot = String(formData.get("evidenceSpecIndex") ?? "").trim();
   const slot = entryId && /^\d+$/.test(rawSlot) ? Number(rawSlot) : null;
 
-  const dir = join(UPLOAD_ROOT, projectId, "evidence");
-  await mkdir(dir, { recursive: true });
   const uploaded: string[] = [];
 
   for (const file of files) {
-    const id = randomUUID();
-    const safeName = file.name.replace(/[^\w.\-() ]+/g, "_");
-    const filePath = join(dir, `${id}-${safeName}`);
-    const buf = Buffer.from(await file.arrayBuffer());
-    await writeFile(filePath, buf);
+    const { id, filePath, size } = await storeUpload(file, projectId);
 
     await db.insert(evidenceDocs).values({
       id,
@@ -352,7 +344,7 @@ export async function uploadEvidence(formData: FormData): Promise<void> {
       requirementEntryId: entryId,
       fileName: file.name,
       filePath,
-      fileSize: buf.length,
+      fileSize: size,
       evidenceSpecIndex: slot,
     });
     uploaded.push(id);
