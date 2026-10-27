@@ -648,3 +648,100 @@ one per manufacturer.
   - (b) A tab before Reports.
   - (c) A tab after Credits plus a sidebar entry.
 - **Answer: (a) Tab after Credits.**
+
+---
+
+## Done — 2026-10-27
+
+Built on `feat/material-review`: 15 commits, one per row of the plan. Rows 5–7 share a commit
+because they share one library. Not pushed; no PR.
+
+### How it works for the user
+
+1. **Materials tab** (after Credits). It opens on **this month's material checklist**:
+   - counts by status;
+   - warnings: a resubmission overdue 14 days after a C/D, and certificates expiring within
+     30 days or expired;
+   - the products reviewed this month, and C/D products still open from earlier months;
+   - the material credit parts to date, with the change since last month.
+   Below that: **Monthly checklists** (every past month, each opening the same view as at its
+   end, with a PDF), then the **Submittals**.
+2. **Questionnaire** (button on Materials). The project's own copy of SMQ Rev03, made on first
+   visit. Material types and rows can be edited, each row has its credit, kind and project
+   target, and there are two settings: certificate expiry years and the BOQ material cost for
+   RC-01. The Oceanarium copy has its Rev03 targets filled in (fixture flow rates, U-values,
+   SHGC, VLT).
+3. **New submittal → Add product.** Each product is one SMQ:
+   - the header;
+   - its material types (their rows join "For all materials");
+   - the credit parts it counts toward, pre-ticked from its types, and interior or exterior;
+   - named document slots;
+   - per-row answers, values and certificates, where an issue date is required;
+   - BOQ quantities and a delivery log;
+   - the review (A–D, review date, remarks, sign-offs);
+   - "Where it stands this month";
+   - Download SMQ (PDF).
+   **New revision** starts Rev n+1 from a reviewed product; Rev n stays read-only.
+4. **Credit pages** get a *Material Review* section:
+   - every product's answers for that credit, by review month;
+   - for MW-05, HC-11, RC-01 and MW-04: forecast, actual and pending shares, the products
+     behind them with the reason each does or doesn't count, month-by-month history, and
+     *Use forecast* / *Use actual*, which fill the requirement value.
+5. **Reports** lists the monthly material checklists (PDF each) and the **material tracker
+   (.xlsx)**.
+
+### How it was checked
+
+- **Tests:**
+  - `pnpm test`: 211 passed, 45 skipped. `pnpm test:db`: 256 passed.
+  - New suites: `tests/materials-credits.test.ts` (the maths and expiry),
+    `tests/materials-db.test.ts` (schema, seed, project copy, products, documents,
+    revisions, snapshot, month view, credit slice, Use this value) and
+    `tests/material-tracker.test.ts`.
+- **Build and lint:** `pnpm build` passes. `pnpm lint` has 0 errors; its 5 warnings were
+  already there, in files this work didn't touch.
+- **Real browser:** Playwright with JS on, against `netzero_v2`, on the Oceanarium. Every page
+  was clicked through:
+  - MTS-0411 Jotafloor Easyflow Primer HS: Paints & Coatings plus Carpet/Hard Flooring, not
+    the Ceilings rows the contractor used. A C review with the consultant's remarks; the 2022
+    VOC report shows as expired; an upload without an issue date is refused.
+  - TBE-0001 rebar from ITTIFAQ (A, 600 t), WESTERN STEEL (B, 300 t) and THILAL (C, 100 t),
+    with deliveries in June and July.
+  - MW-05 steel reads 60% for May, 90% for June and 90% for July (no change). Use forecast
+    wrote 90 into MW-05 requirement 1.
+  - THILAL was resubmitted as Rev 01; Rev 00 is read-only.
+  - Screenshots are in `evidence/`.
+- **Downloads:** the PDFs and the workbook were fetched from the running server and read back.
+  They are in `evidence/` as 12-…pdf, 13-…pdf and 14-material-tracker.xlsx.
+
+### Calls made while building (please check)
+
+1. On a row a certificate needs its issue date. In a product slot (submittal, BOQ line,
+   datasheet, filled SMQ) the date is optional.
+2. On the counting rule (D32):
+   - N/A rows are neutral, but at least one row for the credit must be Yes.
+   - A Yes row with no document still counts; only documents that are present are checked
+     for expiry.
+3. Rejected (D) products leave the total: the material won't be used. C and unreviewed
+   products are pending.
+4. A month uses each product's revision that was current at the month's end. A first revision
+   exists from its submittal date, so back-filled records land in the right months.
+5. RC-01's actual share also divides by the BOQ material cost. MW-04 and HC-11 formaldehyde
+   count products and have no actual.
+6. The tracker keeps Appendix 8's twelve identifying columns. Its LEED and Estidama credit
+   columns are replaced by Mostadam ones, and two sheets are added: Answers and Credits.
+7. Seeded wording:
+   - The SMQ's notes are verbatim, including "should be older than 3 years" on the VOC rows,
+     which means not older.
+   - Rev03's thermal-conductivity row has no note; it is seeded as a fixed requirement.
+   - The default title is "LEED & Mostadam Material Review Questionnaire".
+8. A new revision can be started from any reviewed status, not only C/D.
+9. Material files are not listed on the project Documents page.
+
+### Not in this work (by decision)
+
+- M&E compliance sheet (D16).
+- AI review of material documents (D23).
+- Risk-register entries; the flags only warn (D31).
+- Contractor accounts (D5).
+- A default-questionnaire editor (D35).
