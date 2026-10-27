@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../../_components/PageChrome";
 import { ActionForm } from "@/components/ActionForm";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { Badge, Card, primaryButtonClass } from "@/components/ui";
 import { MaterialStatus } from "@/components/MaterialStatus";
 import { MaterialUpload } from "@/components/MaterialUpload";
@@ -104,9 +105,13 @@ function DocList({
               <input type="hidden" name="productId" value={productId} />
               <input type="hidden" name="linkId" value={d.linkId} />
               <input type="hidden" name="anchor" value={anchor} />
-              <button type="submit" className="text-slate-400 hover:text-red-600" title="Remove this file from the product">
+              <ConfirmSubmit
+                message={`Remove ${d.fileName} from this product? The file is deleted, unless an earlier revision still lists it.`}
+                className="text-slate-400 hover:text-red-600"
+                title="Remove this file from the product"
+              >
                 Remove
-              </button>
+              </ConfirmSubmit>
             </form>
           ) : null}
         </li>
@@ -449,9 +454,9 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
                     <form action={removeDeliveryAction}>
                       {ids}
                       <input type="hidden" name="deliveryId" value={d.id} />
-                      <button type="submit" className="text-xs text-slate-400 hover:text-red-600">
+                      <ConfirmSubmit message={`Remove the delivery of ${d.deliveredOn}${d.poNumber ? ` (${d.poNumber})` : ""}?`} className="text-xs text-slate-400 hover:text-red-600">
                         Remove
-                      </button>
+                      </ConfirmSubmit>
                     </form>
                   ) : null}
                 </td>
