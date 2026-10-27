@@ -16,13 +16,16 @@ import {
   type SmqSectionOp,
 } from "@/lib/materials/smq";
 import {
+  addDelivery,
   addProduct,
   attachMaterialDoc,
   createSubmittal,
   newRevision,
   parseSlot,
+  removeDelivery,
   removeMaterialDoc,
   saveAnswers,
+  saveBoqQuantities,
   saveProductHeader,
   saveReview,
   setProductParts,
@@ -298,4 +301,37 @@ export async function newRevisionAction(formData: FormData): Promise<void> {
   const id = await newRevision(projectId, productId);
   if (!id) throw new Error("Only the latest revision, once reviewed, can be resubmitted.");
   backToProduct(projectId, id);
+}
+
+// ---------- quantities ----------
+
+function quantityInput(formData: FormData) {
+  return { weightT: str(formData, "weightT"), volumeM3: str(formData, "volumeM3"), costSar: str(formData, "costSar") };
+}
+
+export async function saveBoqQuantitiesAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, productId } = await productTarget(formData);
+  if (!(await saveBoqQuantities(projectId, productId, quantityInput(formData))))
+    throw new Error(`Quantities must be numbers of zero or more. ${FROZEN}`);
+  backToProduct(projectId, productId, "quantities");
+}
+
+export async function addDeliveryAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, productId } = await productTarget(formData);
+  const ok = await addDelivery(projectId, productId, {
+    ...quantityInput(formData),
+    deliveredOn: str(formData, "deliveredOn"),
+    poNumber: str(formData, "poNumber"),
+  });
+  if (!ok) throw new Error(`A delivery needs its date and at least one quantity. ${FROZEN}`);
+  backToProduct(projectId, productId, "quantities");
+}
+
+export async function removeDeliveryAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const { projectId, productId } = await productTarget(formData);
+  if (!(await removeDelivery(projectId, productId, str(formData, "deliveryId")))) throw new Error(FROZEN);
+  backToProduct(projectId, productId, "quantities");
 }

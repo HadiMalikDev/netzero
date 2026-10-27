@@ -21,7 +21,10 @@ import {
   saveReview,
   setProductParts,
   setProductTypes,
+  addDelivery,
+  saveBoqQuantities,
 } from "@/lib/materials/products";
+import { loadSnapshot } from "@/lib/materials/progress";
 import { UPLOAD_ROOT } from "@/lib/uploads";
 import { WORKSPACE_ID } from "@/lib/catalog";
 
@@ -263,5 +266,22 @@ describeDb("material review: products", () => {
     const [still] = await db.select().from(evidenceDocs).where(eq(evidenceDocs.id, link.docId));
     expect(still).toBeTruthy();
     expect((await getProduct(pid(), productId))!.sections[1].answers[0].docs).toHaveLength(1);
+  });
+
+  it("the snapshot holds one product per revision chain, with quantities and deliveries", async () => {
+    const [{ products }] = await listSubmittals(pid());
+    const latest = products.find((p) => p.latest)!;
+    expect(await saveBoqQuantities(pid(), latest.id, { weightT: "1,250.5", volumeM3: "", costSar: "40000" })).toBe(true);
+    expect(await saveBoqQuantities(pid(), latest.id, { weightT: "-1", volumeM3: "", costSar: "" })).toBe(false);
+    expect(await addDelivery(pid(), latest.id, { deliveredOn: "2026-06-01", poNumber: "PO-1", weightT: "", volumeM3: "", costSar: "" })).toBe(false);
+    expect(await addDelivery(pid(), latest.id, { deliveredOn: "2026-06-01", poNumber: "PO-1", weightT: "10", volumeM3: "", costSar: "" })).toBe(true);
+    const snap = await loadSnapshot(pid());
+    expect(snap.products).toHaveLength(1);
+    const [p] = snap.products;
+    expect(p.revisions.map((r) => [r.revision, r.status])).toEqual([[0, "C"], [1, null]]);
+    expect(p.revisions[1].boq).toEqual({ weightT: 1250.5, volumeM3: null, costSar: 40000 });
+    expect(p.deliveries).toEqual([{ deliveredOn: "2026-06-01", weightT: 10, volumeM3: null, costSar: null }]);
+    // Ceilings was dropped: its HC-11 rows are hidden and must not count.
+    expect(p.revisions[1].answers.some((a) => a.text.startsWith("technical datasheet with a maximum formaldehyde"))).toBe(false);
   });
 });

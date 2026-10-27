@@ -6,7 +6,9 @@ import { MaterialStatus } from "@/components/MaterialStatus";
 import { MaterialUpload } from "@/components/MaterialUpload";
 import { getProject } from "@/lib/data";
 import { expiryOf, todayIso } from "@/lib/materials/expiry";
+import { formatQty } from "@/lib/materials/format";
 import { CREDIT_PARTS } from "@/lib/materials/parts";
+import { creditProgress } from "@/lib/materials/progress";
 import {
   getProduct,
   revLabel,
@@ -19,7 +21,10 @@ import {
 } from "@/lib/materials/products";
 import { ROW_KIND_LABEL } from "@/lib/materials/smq";
 import {
+  addDeliveryAction,
   newRevisionAction,
+  removeDeliveryAction,
+  saveBoqQuantitiesAction,
   removeMaterialDocAction,
   saveAnswersAction,
   saveProductHeaderAction,
@@ -203,6 +208,14 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
   const types = smq.sections.filter((s) => s.kind === "material_type" && (s.active || view.typeIds.includes(s.id)));
   const newest = view.revisions[view.revisions.length - 1];
   const answered = view.sections.flatMap((s) => s.answers);
+  const month = today.slice(0, 7);
+  const chainKey = view.revisions[0].id;
+  const standing = (await creditProgress(id, month))
+    .map((r) => ({ part: r.part, mine: r.products.find((x) => x.key === chainKey) }))
+    .filter((x) => x.mine);
+  // Null when no delivery recorded this quantity, so it prints "—", not 0.
+  const delivered = (k: "weightT" | "volumeM3" | "costSar") =>
+    view.deliveries.some((d) => d[k] != null) ? view.deliveries.reduce((n, d) => n + (d[k] ?? 0), 0) : null;
 
   return (
     <PageChrome
@@ -369,6 +382,123 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
           </div>
         ) : null}
       </section>
+
+      <Card id="quantities" className="mb-6 px-5 py-4">
+        <h2 className="text-base font-semibold text-slate-900">Quantities</h2>
+        <p className="mb-3 text-sm text-slate-500">
+          The BOQ quantity is the forecast; deliveries are the actual. Enter what the credits this product counts toward are measured in: steel and
+          adhesives by weight, aggregates by volume, timber and KSA content by cost.
+        </p>
+        <form action={saveBoqQuantitiesAction} className="space-y-3">
+          {ids}
+          <fieldset disabled={!editable} className="grid max-w-3xl gap-3 sm:grid-cols-3">
+            <label className="text-sm font-medium text-slate-700">
+              BOQ weight (t)
+              <input name="weightT" inputMode="decimal" defaultValue={p.boqWeightT ?? ""} className="input mt-1" />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              BOQ volume (m³)
+              <input name="volumeM3" inputMode="decimal" defaultValue={p.boqVolumeM3 ?? ""} className="input mt-1" />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              BOQ cost (SAR)
+              <input name="costSar" inputMode="decimal" defaultValue={p.boqCostSar ?? ""} className="input mt-1" />
+            </label>
+          </fieldset>
+          {editable ? (
+            <button type="submit" className={small}>
+              Save BOQ quantities
+            </button>
+          ) : null}
+        </form>
+
+        <h3 className="mt-5 text-sm font-semibold text-slate-800">Deliveries</h3>
+        <table className="mt-2 w-full text-sm">
+          <thead className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="py-1.5 pr-3">Delivered</th>
+              <th className="py-1.5 pr-3">PO number</th>
+              <th className="py-1.5 pr-3 text-right">Weight (t)</th>
+              <th className="py-1.5 pr-3 text-right">Volume (m³)</th>
+              <th className="py-1.5 pr-3 text-right">Cost (SAR)</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {view.deliveries.map((d) => (
+              <tr key={d.id}>
+                <td className="py-1.5 pr-3">{d.deliveredOn}</td>
+                <td className="py-1.5 pr-3">{d.poNumber ?? "—"}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{formatQty(d.weightT)}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{formatQty(d.volumeM3)}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{formatQty(d.costSar)}</td>
+                <td className="py-1.5 text-right">
+                  {editable ? (
+                    <form action={removeDeliveryAction}>
+                      {ids}
+                      <input type="hidden" name="deliveryId" value={d.id} />
+                      <button type="submit" className="text-xs text-slate-400 hover:text-red-600">
+                        Remove
+                      </button>
+                    </form>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+            {view.deliveries.length ? (
+              <tr className="font-medium text-slate-800">
+                <td className="py-1.5 pr-3" colSpan={2}>
+                  Delivered to date
+                </td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{formatQty(delivered("weightT"))}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{formatQty(delivered("volumeM3"))}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{formatQty(delivered("costSar"))}</td>
+                <td />
+              </tr>
+            ) : (
+              <tr>
+                <td colSpan={6} className="py-2 text-slate-400">
+                  No deliveries logged yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        {editable ? (
+          <form action={addDeliveryAction} className="mt-3 grid gap-2 sm:grid-cols-6">
+            {ids}
+            <input name="deliveredOn" type="date" required aria-label="Delivery date" className="input text-sm" />
+            <input name="poNumber" placeholder="PO number" className="input text-sm" />
+            <input name="weightT" inputMode="decimal" placeholder="t" aria-label="Weight (t)" className="input text-sm" />
+            <input name="volumeM3" inputMode="decimal" placeholder="m³" aria-label="Volume (m³)" className="input text-sm" />
+            <input name="costSar" inputMode="decimal" placeholder="SAR" aria-label="Cost (SAR)" className="input text-sm" />
+            <button type="submit" className={small}>
+              Add delivery
+            </button>
+          </form>
+        ) : null}
+      </Card>
+
+      {standing.length ? (
+        <Card className="mb-6 px-5 py-4">
+          <h2 className="text-base font-semibold text-slate-900">Where it stands this month</h2>
+          <p className="mb-3 text-sm text-slate-500">How this product counts toward each credit part it is ticked for, as of today.</p>
+          <ul className="space-y-2">
+            {standing.map(({ part, mine }) => (
+              <li key={part.key} className="text-sm">
+                <Link href={`/projects/${id}/credits/${encodeURIComponent(part.creditCode)}#material-review`} className="font-medium text-slate-800 hover:text-brand-700">
+                  {part.creditCode} {part.label}
+                </Link>
+                {" · "}
+                <span className={mine!.state === "compliant" ? "text-emerald-700" : mine!.state === "pending" ? "text-amber-700" : "text-red-700"}>
+                  {mine!.state === "compliant" ? "Counts" : mine!.state === "pending" ? "Pending" : "Does not count"}
+                </span>
+                {mine!.reasons.length ? <span className="text-slate-500"> — {mine!.reasons.join("; ")}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       <Card id="review" className="mb-6 px-5 py-4">
         <h2 className="mb-3 text-base font-semibold text-slate-900">Review</h2>

@@ -422,6 +422,70 @@ export async function saveReview(projectId: string, productId: string, input: Re
   return true;
 }
 
+// ---------- quantities ----------
+
+export interface QuantityInput {
+  weightT: string;
+  volumeM3: string;
+  costSar: string;
+}
+
+/** "" = not entered; otherwise a non-negative number (thousands commas allowed). undefined = invalid. */
+export function parseQuantity(raw: string): number | null | undefined {
+  const t = raw.replace(/,/g, "").trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
+function quantities(input: QuantityInput) {
+  const weightT = parseQuantity(input.weightT);
+  const volumeM3 = parseQuantity(input.volumeM3);
+  const costSar = parseQuantity(input.costSar);
+  if (weightT === undefined || volumeM3 === undefined || costSar === undefined) return null;
+  return { weightT, volumeM3, costSar };
+}
+
+/** The BOQ quantities: the forecast (D13), in t, m³ and SAR (D25). */
+export async function saveBoqQuantities(projectId: string, productId: string, input: QuantityInput): Promise<boolean> {
+  const q = quantities(input);
+  if (!q || !(await editableProduct(projectId, productId))) return false;
+  await db
+    .update(materialProducts)
+    .set({ boqWeightT: q.weightT, boqVolumeM3: q.volumeM3, boqCostSar: q.costSar, updatedAt: now() })
+    .where(eq(materialProducts.id, productId));
+  return true;
+}
+
+/** One delivery: the actual (D13). Needs a date and at least one quantity. */
+export async function addDelivery(
+  projectId: string,
+  productId: string,
+  input: QuantityInput & { deliveredOn: string; poNumber: string },
+): Promise<boolean> {
+  const q = quantities(input);
+  const deliveredOn = parseIsoDate(input.deliveredOn);
+  if (!q || !deliveredOn || (q.weightT == null && q.volumeM3 == null && q.costSar == null)) return false;
+  if (!(await editableProduct(projectId, productId))) return false;
+  await db.insert(materialDeliveries).values({
+    id: randomUUID(),
+    productId,
+    deliveredOn,
+    poNumber: clean(input.poNumber, 120) || null,
+    ...q,
+  });
+  return true;
+}
+
+export async function removeDelivery(projectId: string, productId: string, deliveryId: string): Promise<boolean> {
+  if (!(await editableProduct(projectId, productId))) return false;
+  const gone = await db
+    .delete(materialDeliveries)
+    .where(and(eq(materialDeliveries.id, deliveryId), eq(materialDeliveries.productId, productId)))
+    .returning({ id: materialDeliveries.id });
+  return gone.length > 0;
+}
+
 // ---------- documents ----------
 
 /**
