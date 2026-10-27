@@ -28,6 +28,8 @@ import { SaveCreditButton } from "./SaveCreditButton";
 import { groupByOption, pathStates, type PathState } from "@/lib/option-group";
 import { OptionGroup } from "@/components/OptionGroup";
 import { formatPointsSpan } from "@/lib/points";
+import { creditSlice } from "@/lib/materials/credit-slice";
+import { MaterialReviewSection } from "./MaterialReviewSection";
 
 export default async function CreditDetailPage({
   params,
@@ -46,6 +48,7 @@ export default async function CreditDetailPage({
     pathStates(block.items).forEach((p, i) => paths.set(block.items[i].entryId, p));
   }
   const { sections, setAside } = documentSections(credit.requirements, paths);
+  const materials = await creditSlice(id, credit.projectCreditId, credit.code);
 
   return (
     <PageChrome
@@ -158,6 +161,8 @@ export default async function CreditDetailPage({
           rerunAction={rerunEvidenceReview}
         />
       </Card>
+
+      <MaterialReviewSection projectId={id} code={credit.code} slice={materials} />
 
       <Card className="p-5">
         <h2 className="mb-2 text-sm font-semibold text-slate-800">

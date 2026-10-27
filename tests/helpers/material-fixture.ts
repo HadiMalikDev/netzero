@@ -3,6 +3,8 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   catalogCredits,
+  catalogRequirements,
+  requirementEntries,
   evidenceDocs,
   materialProducts,
   materialSubmittals,
@@ -60,6 +62,15 @@ export function materialFixture() {
     for (const c of credits) {
       await db.insert(projectCredits).values({ id: pcByCode.get(c.code)!, workspaceId: WORKSPACE_ID, projectId, catalogCreditId: c.id });
     }
+    // The requirements "Use this value" fills, as the parsed manual has them.
+    const reqs: Record<string, string[]> = { "MW-05": ["NUMERIC", "NUMERIC", "NUMERIC"], "RC-01": ["BOOLEAN", "BOOLEAN"] };
+    for (const c of credits) {
+      for (const [i, metricType] of (reqs[c.code] ?? []).entries()) {
+        const reqId = randomUUID();
+        await db.insert(catalogRequirements).values({ id: reqId, workspaceId: WORKSPACE_ID, catalogCreditId: c.id, seq: i + 1, text: `${c.code} requirement ${i + 1}`, metricType });
+        await db.insert(requirementEntries).values({ id: randomUUID(), workspaceId: WORKSPACE_ID, projectCreditId: pcByCode.get(c.code)!, catalogRequirementId: reqId });
+      }
+    }
   }
 
   async function addSubmittal(ref = "MTS-0411", title = "All epoxy flooring systems") {
@@ -91,8 +102,11 @@ export function materialFixture() {
     await db.delete(smqTemplates).where(eq(smqTemplates.projectId, projectId));
     const pcIds = [...pcByCode.values()];
     if (pcIds.length) await db.delete(evidenceDocs).where(inArray(evidenceDocs.projectCreditId, pcIds));
+    if (pcIds.length) await db.delete(requirementEntries).where(inArray(requirementEntries.projectCreditId, pcIds));
     await db.delete(projectCredits).where(eq(projectCredits.projectId, projectId));
     await db.delete(projects).where(eq(projects.id, projectId));
+    const catalog = await db.select({ id: catalogCredits.id }).from(catalogCredits).where(eq(catalogCredits.rsVersionId, versionId));
+    if (catalog.length) await db.delete(catalogRequirements).where(inArray(catalogRequirements.catalogCreditId, catalog.map((c) => c.id)));
     await db.delete(catalogCredits).where(eq(catalogCredits.rsVersionId, versionId));
     await db.delete(rsVersions).where(eq(rsVersions.id, versionId));
     await db.delete(ratingSystems).where(eq(ratingSystems.id, rsId));

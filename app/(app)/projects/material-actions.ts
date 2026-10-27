@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/session";
+import { applyPartValue } from "@/lib/materials/apply";
 import { getProject } from "@/lib/data";
 import {
   addSmqRow,
@@ -334,4 +335,17 @@ export async function removeDeliveryAction(formData: FormData): Promise<void> {
   const { projectId, productId } = await productTarget(formData);
   if (!(await removeDelivery(projectId, productId, str(formData, "deliveryId")))) throw new Error(FROZEN);
   backToProduct(projectId, productId, "quantities");
+}
+
+// ---------- credit page ----------
+
+export async function applyPartValueAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const projectId = await project(formData);
+  const code = str(formData, "code");
+  const which = str(formData, "which") === "actual" ? "actual" : "forecast";
+  const written = await applyPartValue(projectId, code, str(formData, "part"), which);
+  if (!written) throw new Error("No value to use yet: the share needs products with quantities.");
+  revalidatePath(`/projects/${projectId}/credits/${encodeURIComponent(code)}`);
+  redirect(`/projects/${projectId}/credits/${encodeURIComponent(code)}#material-review`);
 }

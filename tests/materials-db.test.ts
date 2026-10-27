@@ -27,6 +27,9 @@ import {
 import { loadSnapshot } from "@/lib/materials/progress";
 import { monthSummaries, monthView } from "@/lib/materials/months";
 import { todayIso } from "@/lib/materials/expiry";
+import { creditSlice } from "@/lib/materials/credit-slice";
+import { applyPartValue } from "@/lib/materials/apply";
+import { getCreditByCode } from "@/lib/data";
 import { UPLOAD_ROOT } from "@/lib/uploads";
 import { WORKSPACE_ID } from "@/lib/catalog";
 
@@ -310,5 +313,41 @@ describeDb("material review: products", () => {
     expect(months[0].month).toBe(today.slice(0, 7));
     expect(months.find((m) => m.month === "2026-05")).toMatchObject({ reviewed: 1, counts: { C: 1 } });
     expect(months.at(-1)!.month).toBe("2026-04"); // the submittal's date
+  });
+});
+
+const applyFx = materialFixture();
+
+describeDb("material review: a credit's slice and 'Use this value'", () => {
+  beforeAll(() => applyFx.setup());
+  afterAll(async () => {
+    await applyFx.teardown();
+    await rm(join(UPLOAD_ROOT, applyFx.projectId), { recursive: true, force: true });
+  });
+
+  it("shows the product's MW-05 answers and copies the steel share into the requirement", async () => {
+    const pid = applyFx.projectId;
+    const sub = (await createSubmittal(pid, { ref: "TBE-0001", title: "Rebar", discipline: "", supplier: "", submittedOn: "2026-03-15" }))!;
+    const productId = (await addProduct(pid, sub, { name: "Rebar ITTIFAQ", locationOfUse: "", manufacturer: "ITTIFAQ", supplier: "", countryOfOrigin: "Saudi Arabia", contactName: "", contactMobile: "" }))!;
+    const smq = (await getSmq((await ensureProjectSmq(pid))!.id))!;
+    await setProductTypes(pid, productId, [smq.sections.find((s) => s.heading === "All metals")!.id]);
+    const v = (await getProduct(pid, productId))!;
+    const steelRows = v.sections[1].answers;
+    await saveAnswers(pid, productId, steelRows.map((a) => ({ answerId: a.id, answer: "yes", value: a.seq === 1 ? "85" : "", unit: a.seq === 1 ? "%" : "", remark: "" })));
+    await saveBoqQuantities(pid, productId, { weightT: "600", volumeM3: "", costSar: "1920000" });
+    await saveReview(pid, productId, { status: "A", reviewedOn: todayIso(), reviewer: "W", applicable: "yes", remarks: "", manufacturerSignatory: "", manufacturerSignedOn: "", contractorSignatory: "", contractorSignedOn: "" });
+
+    const slice = await creditSlice(pid, applyFx.pcByCode.get("MW-05")!, "MW-05");
+    expect(slice.months).toHaveLength(1);
+    expect(slice.months[0].month).toBe(todayIso().slice(0, 7));
+    expect(slice.months[0].products[0].answers.map((a) => [a.answer, a.value])).toEqual([["yes", "85"], ["yes", null]]);
+    const steel = slice.parts.find((r) => r.part.key === "MW-05:steel")!;
+    expect(steel.forecast.pct).toBe(100);
+
+    expect(await applyPartValue(pid, "MW-05", "MW-05:steel", "forecast")).toEqual([{ seq: 1, value: 100 }]);
+    expect(await applyPartValue(pid, "MW-05", "MW-05:steel", "actual")).toBeNull(); // nothing delivered
+    expect(await applyPartValue(pid, "MW-05", "HC-11:voc", "forecast")).toBeNull(); // another credit's part
+    const credit = (await getCreditByCode(pid, "MW-05"))!;
+    expect(credit.requirements.find((r) => r.seq === 1)?.valueNumber).toBe(100);
   });
 });
