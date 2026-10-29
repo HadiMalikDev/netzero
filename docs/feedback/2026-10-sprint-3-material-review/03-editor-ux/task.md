@@ -52,16 +52,16 @@ Raised: 2026-10-29 (after item 01 merged) · Branch: `main` (by request: "Do dir
    questionnaire answers stay always editable: they are the data entry itself.
 4. An unreviewed product opens with its review form ready; an old revision shows no Edit.
 5. The inspections (IAQ/ESC) form editor keeps "Switch off" for now; it is a different editor.
+6. Request 3: the credit parts a type counts toward are calculated in code (MW-05 steel, HC-11
+   VOC …), so a typed name that matches none of them would count toward nothing. "No predefined
+   list" is read as: don't show every option up front; typing shows the matching parts, and only
+   those can be added.
 7. Request 4: a drop saves at once, with no Save button, as in Notion, Linear and Trello. A
    refused drop (the list changed in another tab) puts the list back, says so, and reloads.
    Dragging works from the keyboard too: focus the grip, Space, arrow keys, Space.
 8. Request 4: drag and drop uses `@dnd-kit` (core 6.3.1, sortable 10.0.0, utilities 3.2.2), the
    usual React library for sortable lists; native HTML drag and drop has no touch or keyboard
    support.
-6. Request 3: the credit parts a type counts toward are calculated in code (MW-05 steel, HC-11
-   VOC …), so a typed name that matches none of them would count toward nothing. "No predefined
-   list" is read as: don't show every option up front; typing shows the matching parts, and only
-   those can be added.
 
 ## Done
 
