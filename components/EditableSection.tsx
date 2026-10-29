@@ -72,7 +72,9 @@ export function EditableSection({
     </>
   ) : (
     <>
-      {tools}
+      {/* Its own fragment: a lone element from a server page beside the Edit button trips React's
+          "unique key" check in development. */}
+      <>{tools}</>
       {locked ? null : (
         <button type="button" onClick={() => setEditing(true)} className={secondaryButtonClass}>
           {view === undefined ? null : <PencilIcon />}

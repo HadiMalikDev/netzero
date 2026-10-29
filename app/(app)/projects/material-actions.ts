@@ -12,6 +12,8 @@ import {
   addSmqSection,
   editSmqRow,
   editSmqSection,
+  reorderSmqRows,
+  reorderSmqTypes,
   editSmqSettings,
   ensureProjectSmq,
   type RowInput,
@@ -53,7 +55,10 @@ const materialsBase = (projectId: string) => `/projects/${projectId}/materials`;
 
 /** The project's questionnaire copy, made on first use. */
 async function projectTemplateId(formData: FormData) {
-  const projectId = str(formData, "projectId");
+  return templateOf(str(formData, "projectId"));
+}
+
+async function templateOf(projectId: string) {
   if (!(await getProject(projectId))) throw new Error("project not found");
   const t = await ensureProjectSmq(projectId);
   if (!t) throw new Error("no material questionnaire to copy");
@@ -110,6 +115,28 @@ export async function editSmqSectionAction(formData: FormData): Promise<FormErro
   });
   if (!ok && (op === "save" || op === "rename")) return "type_name";
   backToForm(projectId, `s-${sectionId}`);
+}
+
+/**
+ * A drag and drop in the questionnaire editor: saved as soon as it is
+ * dropped. Refreshes in place (no redirect), so the page keeps its scroll;
+ * false when the order no longer matches the page, which then reloads.
+ */
+export async function reorderSmqRowsAction(projectId: string, sectionId: string, ids: string[]): Promise<boolean> {
+  await requireUser();
+  const { templateId } = await templateOf(projectId);
+  const ok = await reorderSmqRows(templateId, sectionId, ids);
+  revalidatePath(`${materialsBase(projectId)}/form`);
+  return ok;
+}
+
+export async function reorderSmqTypesAction(projectId: string, ids: string[]): Promise<boolean> {
+  await requireUser();
+  const { templateId } = await templateOf(projectId);
+  const ok = await reorderSmqTypes(templateId, ids);
+  revalidatePath(`${materialsBase(projectId)}/form`);
+  revalidatePath(materialsBase(projectId));
+  return ok;
 }
 
 export async function addSmqSectionAction(formData: FormData): Promise<FormErrorCode | null> {

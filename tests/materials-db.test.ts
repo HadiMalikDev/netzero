@@ -8,7 +8,7 @@ import { materialFixture } from "./helpers/material-fixture";
 import { db } from "@/db";
 import { evidenceDocs, requirementEntries, smqRows, smqSections } from "@/db/schema";
 import { PART_KEYS } from "@/lib/materials/parts";
-import { editSmqRow, editSmqSection, ensureProjectSmq, getSmq } from "@/lib/materials/smq";
+import { editSmqRow, editSmqSection, ensureProjectSmq, getSmq, reorderSmqRows, reorderSmqTypes } from "@/lib/materials/smq";
 import {
   addProduct,
   attachMaterialDoc,
@@ -152,6 +152,31 @@ describeDb("material review: the project's own questionnaire", () => {
     const def = (await getSmq("smq_default"))!.sections.find((s) => s.heading === "Paints & Coatings")!;
     expect(def.rows[0].creditCode).toBe("HC-11");
     expect(def.rows[0].targetText).toBeNull();
+  });
+
+  it("saves a dragged order of rows and material types, and refuses a stale one", async () => {
+    const t = (await ensureProjectSmq(copyFx.projectId))!;
+    let smq = (await getSmq(t.id))!;
+    const sec = smq.sections.find((s) => s.rows.length >= 3)!;
+    const rows = sec.rows.map((r) => r.id);
+    const dragged = [rows[2], rows[0], rows[1], ...rows.slice(3)];
+    expect(await reorderSmqRows(t.id, sec.id, dragged)).toBe(true);
+    smq = (await getSmq(t.id))!;
+    expect(smq.sections.find((s) => s.id === sec.id)!.rows.map((r) => r.id)).toEqual(dragged);
+    // A row missing, repeated, or from elsewhere: nothing changes.
+    expect(await reorderSmqRows(t.id, sec.id, dragged.slice(1))).toBe(false);
+    expect(await reorderSmqRows(t.id, sec.id, [dragged[0], ...dragged.slice(0, -1)])).toBe(false);
+    expect(await reorderSmqRows(t.id, smq.sections[0].id === sec.id ? smq.sections[1].id : smq.sections[0].id, dragged)).toBe(false);
+    expect((await getSmq(t.id))!.sections.find((s) => s.id === sec.id)!.rows.map((r) => r.id)).toEqual(dragged);
+
+    const types = smq.sections.filter((s) => s.kind === "material_type").map((s) => s.id);
+    const moved = [types[1], types[0], ...types.slice(2)];
+    expect(await reorderSmqTypes(t.id, moved)).toBe(true);
+    smq = (await getSmq(t.id))!;
+    // "For all materials" stays first.
+    expect(smq.sections[0].kind).toBe("all_materials");
+    expect(smq.sections.slice(1).map((s) => s.id)).toEqual(moved);
+    expect(await reorderSmqTypes(t.id, [smq.sections[0].id, ...moved.slice(1)])).toBe(false);
   });
 
   it("saves a material type's name and ticks in one go, or neither", async () => {

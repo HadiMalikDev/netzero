@@ -248,6 +248,45 @@ async function move(
   for (let k = 0; k < ordered.length; k++) if (ordered[k].seq !== k + 1) await write(ordered[k].id, k + 1);
 }
 
+/**
+ * Put `items` in the order of `ids` (a drag and drop): seq 1..n. Refused
+ * unless `ids` names each item exactly once, so a stale page can't drop or
+ * duplicate one.
+ */
+async function reorder(
+  items: { id: string; seq: number }[],
+  ids: string[],
+  write: (id: string, seq: number) => Promise<unknown>,
+): Promise<boolean> {
+  const have = new Set(items.map((x) => x.id));
+  if (ids.length !== have.size || new Set(ids).size !== ids.length || !ids.every((id) => have.has(id))) return false;
+  const seq = new Map(items.map((x) => [x.id, x.seq]));
+  for (let k = 0; k < ids.length; k++) if (seq.get(ids[k]) !== k + 1) await write(ids[k], k + 1);
+  return true;
+}
+
+/** A section's rows in the order they were dragged to. */
+export async function reorderSmqRows(templateId: string, sectionId: string, ids: string[]): Promise<boolean> {
+  if (!(await ownSection(templateId, sectionId))) return false;
+  const rows = await db.select({ id: smqRows.id, seq: smqRows.seq }).from(smqRows).where(eq(smqRows.sectionId, sectionId));
+  const ok = await reorder(rows, ids, (id, seq) => db.update(smqRows).set({ seq }).where(eq(smqRows.id, id)));
+  if (ok) await touch(templateId);
+  return ok;
+}
+
+/** The material types in the order they were dragged to; "For all materials" stays first. */
+export async function reorderSmqTypes(templateId: string, ids: string[]): Promise<boolean> {
+  const all = await db
+    .select({ id: smqSections.id, seq: smqSections.seq, kind: smqSections.kind })
+    .from(smqSections)
+    .where(eq(smqSections.templateId, templateId));
+  // "For all materials" is seq 0; the types are 1..n, as `move` leaves them.
+  const types = all.filter((s) => s.kind !== "all_materials");
+  const ok = await reorder(types, ids, (id, seq) => db.update(smqSections).set({ seq }).where(eq(smqSections.id, id)));
+  if (ok) await touch(templateId);
+  return ok;
+}
+
 /** The questionnaire's title and the project's material settings. */
 export async function editSmqSettings(
   templateId: string,

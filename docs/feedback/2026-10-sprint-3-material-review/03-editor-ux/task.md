@@ -16,6 +16,12 @@ Raised: 2026-10-29 (after item 01 merged) · Branch: `main` (by request: "Do dir
    > show up as tags and they can then cut and add those. Like right now, I don't want to give
    > them a predefined list.
 
+4. > Instead of [the up and down arrows] can we have … two dots horizontally, three dots
+   > vertically … drag and drop these … Is it just immediate or is there a button we need to
+   > click? Also … "add a row under …", just call it add a row and … when I'm scrolling down past
+   > for all materials, I want for all materials to stick to the top. … do these in separate
+   > commits … and then push on main.
+
 ## Decisions
 
 ### D42 — What replaces "Switch off" (2026-10-29)
@@ -46,6 +52,12 @@ Raised: 2026-10-29 (after item 01 merged) · Branch: `main` (by request: "Do dir
    questionnaire answers stay always editable: they are the data entry itself.
 4. An unreviewed product opens with its review form ready; an old revision shows no Edit.
 5. The inspections (IAQ/ESC) form editor keeps "Switch off" for now; it is a different editor.
+7. Request 4: a drop saves at once, with no Save button, as in Notion, Linear and Trello. A
+   refused drop (the list changed in another tab) puts the list back, says so, and reloads.
+   Dragging works from the keyboard too: focus the grip, Space, arrow keys, Space.
+8. Request 4: drag and drop uses `@dnd-kit` (core 6.3.1, sortable 10.0.0, utilities 3.2.2), the
+   usual React library for sortable lists; native HTML drag and drop has no touch or keyboard
+   support.
 6. Request 3: the credit parts a type counts toward are calculated in code (MW-05 steel, HC-11
    VOC …), so a typed name that matches none of them would count toward nothing. "No predefined
    list" is read as: don't show every option up front; typing shows the matching parts, and only
@@ -71,3 +83,14 @@ Raised: 2026-10-29 (after item 01 merged) · Branch: `main` (by request: "Do dir
   - Checked in a browser: suggestions, add by click and by Enter, "no match", remove, save
     (persisted, then restored), Cancel, and blur closing the list on the product page.
   - `pnpm test` 212 passed; `pnpm test:db` 262 passed; lint 0 errors; build passes.
+- Request 4, three commits:
+  - "Add a row": the button no longer repeats the section's name.
+  - Sticky headers: a section's header stays at the top of the page while its rows scroll past,
+    and leaves with the section (`evidence/st-1-sticky.png`).
+  - Drag and drop: a ⋮⋮ grip on each row and on each material type's header replaces ↑ ↓.
+    Checked in a browser: a dragged row and a dragged material type are saved in the dropped
+    order (read back from the database), the page keeps its scroll, the keyboard moves a row,
+    and clicking a type's grip doesn't open or close it (`evidence/dnd-2-types.png`,
+    `evidence/dnd-3-dragging.png`). DB test: a stale or partial order is refused and changes
+    nothing; "For all materials" stays first.
+  - `pnpm test` 212 passed; `pnpm test:db` 263 passed; lint 0 errors; build passes.

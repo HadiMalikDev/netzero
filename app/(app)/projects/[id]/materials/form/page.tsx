@@ -6,7 +6,8 @@ import { ActiveSwitch } from "@/components/ActiveSwitch";
 import { CreditPartsPicker } from "@/components/CreditPartsPicker";
 import { EditableSection, ReadField } from "@/components/EditableSection";
 import { OpenOnHash } from "@/components/OpenOnHash";
-import { Badge, Card, secondaryButtonClass, smallPrimaryButtonClass } from "@/components/ui";
+import { DragHandle, Sortable, SortableList } from "@/components/SortableList";
+import { Badge, Card, smallPrimaryButtonClass } from "@/components/ui";
 import { getProject } from "@/lib/data";
 import { partByKey } from "@/lib/materials/parts";
 import {
@@ -16,12 +17,15 @@ import {
   ROW_KIND_LABEL,
   ROW_KINDS,
   type SmqRowView,
+  type SmqSectionView,
 } from "@/lib/materials/smq";
 import {
   addSmqRowAction,
   addSmqSectionAction,
   editSmqRowAction,
   editSmqSectionAction,
+  reorderSmqRowsAction,
+  reorderSmqTypesAction,
   saveSmqSettingsAction,
 } from "../../../material-actions";
 
@@ -40,20 +44,6 @@ const partName = (key: string) => {
   const p = partByKey(key);
   return p ? `${p.creditCode} ${p.label}` : key;
 };
-
-/** ↑ ↓ for a row or material type; they save at once, like the Active switch. */
-function MoveButtons({ disableUp, disableDown, what }: { disableUp: boolean; disableDown: boolean; what: string }) {
-  return (
-    <span className="inline-flex">
-      <button type="submit" name="op" value="up" disabled={disableUp} aria-label={`Move ${what} up`} title={`Move ${what} up`} className={`${secondaryButtonClass} rounded-r-none`}>
-        ↑
-      </button>
-      <button type="submit" name="op" value="down" disabled={disableDown} aria-label={`Move ${what} down`} title={`Move ${what} down`} className={`${secondaryButtonClass} -ml-px rounded-l-none`}>
-        ↓
-      </button>
-    </span>
-  );
-}
 
 /** A row as saved: its wording, then only the details that are set. */
 function RowView({ row }: { row: SmqRowView }) {
@@ -155,7 +145,140 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
   const base = `/projects/${id}/materials`;
   const ids = <input type="hidden" name="projectId" value={id} />;
   const types = smq.sections.filter((s) => s.kind === "material_type");
+  const all = smq.sections.find((s) => s.kind === "all_materials");
   const unlinked = smq.sections.flatMap((s) => s.rows).filter((r) => r.active && r.creditCode && !r.projectCreditId);
+
+  /** One section's card: its header, what it counts toward, its rows and "Add a row". */
+  function section(s: SmqSectionView) {
+    const isAll = s.kind === "all_materials";
+    const inUse = s.rows.filter((r) => r.active).length;
+    const sectionIds = (
+      <>
+        {ids}
+        <input type="hidden" name="sectionId" value={s.id} />
+      </>
+    );
+    return (
+      <Card className={s.active ? "" : "opacity-70"}>
+        <details id={`s-${s.id}`} open={isAll} className="group scroll-mt-20">
+          {/* Sticks to the top of the page while its rows scroll past, so the reader knows which
+              section they are in. The card doesn't clip (overflow-hidden would stop the sticking),
+              so the header carries the card's rounded corners itself. */}
+          <summary className="sticky top-0 z-10 flex cursor-pointer list-none items-center gap-3 rounded-xl bg-white px-5 py-3.5 hover:bg-slate-50 group-open:rounded-b-none group-open:border-b group-open:border-slate-200 group-open:shadow-[0_1px_2px_rgb(15_23_42/0.04)] [&::-webkit-details-marker]:hidden">
+            {isAll ? null : <DragHandle label={`Drag to reorder ${s.heading}`} />}
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-90">
+              <path fillRule="evenodd" d="M7.2 14.8a.75.75 0 0 1 0-1.06L10.94 10 7.2 6.26a.75.75 0 1 1 1.06-1.06l4.27 4.27a.75.75 0 0 1 0 1.06L8.26 14.8a.75.75 0 0 1-1.06 0Z" clipRule="evenodd" />
+            </svg>
+            <span className="flex-1 text-sm font-semibold text-slate-800">
+              {s.heading}
+              {s.active ? null : (
+                <span className="ml-2 align-middle">
+                  <Badge>Inactive</Badge>
+                </span>
+              )}
+            </span>
+            <span className="hidden flex-wrap justify-end gap-1.5 sm:flex">
+              {s.defaultParts.map((k) => (
+                <Badge key={k} tone="brand">
+                  {partName(k)}
+                </Badge>
+              ))}
+            </span>
+            <span className="text-xs text-slate-500">
+              {inUse} row{inUse === 1 ? "" : "s"}
+            </span>
+          </summary>
+
+          <div className="border-y border-slate-100 bg-slate-50/60 px-5 py-4">
+            <EditableSection
+              action={editSmqSectionAction}
+              hidden={sectionIds}
+              editLabel={isAll ? "Edit" : "Edit type"}
+              summaryTitle
+              title={
+                <dl>
+                  <ReadField label={isAll ? "Every product is counted in" : "Products of this type are counted in"}>
+                    {s.defaultParts.length ? (
+                      <span className="mt-1 flex flex-wrap gap-1.5">
+                        {s.defaultParts.map((k) => (
+                          <Badge key={k} tone="brand">
+                            {partName(k)}
+                          </Badge>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">No credit calculation</span>
+                    )}
+                  </ReadField>
+                </dl>
+              }
+              view={null}
+              tools={isAll ? null : <ActiveSwitch active={s.active} what="material type" />}
+              fields={
+                <div className="space-y-4">
+                  <label className="block text-sm font-medium text-slate-700">
+                    {isAll ? "Section name" : "Material type name"}
+                    <input name="heading" defaultValue={s.heading} required className="input mt-1" />
+                  </label>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">
+                      {isAll ? "Every product is counted in" : "Products of this type are counted in"}
+                    </p>
+                    <p className="mb-1.5 text-xs text-slate-500">
+                      The credit calculations their quantities add to, e.g. MW-05 Recycled steel adds a product&apos;s weight to the recycled steel share.
+                    </p>
+                    <CreditPartsPicker defaultValue={s.defaultParts} label={isAll ? "Every product is counted in" : "Products of this type are counted in"} />
+                  </div>
+                </div>
+              }
+            />
+          </div>
+
+          <SortableList className="divide-y divide-slate-100" save={reorderSmqRowsAction.bind(null, id, s.id)}>
+            {s.rows.map((r) => (
+              <Sortable
+                key={r.id}
+                id={r.id}
+                domId={`r-${r.id}`}
+                className={`scroll-mt-16 px-5 py-4 has-[[data-editing]]:bg-brand-50/40 ${r.active ? "" : "bg-slate-50"}`}
+              >
+                <EditableSection
+                  action={editSmqRowAction}
+                  hidden={
+                    <>
+                      {ids}
+                      <input type="hidden" name="rowId" value={r.id} />
+                    </>
+                  }
+                  title={
+                    <div className="flex flex-wrap items-center gap-2">
+                      <DragHandle label="Drag to reorder this row" />
+                      <CreditTag row={r} />
+                      <span className="text-xs text-slate-500">{ROW_KIND_LABEL[r.kind as keyof typeof ROW_KIND_LABEL] ?? r.kind}</span>
+                      {r.active ? null : <Badge>Inactive</Badge>}
+                    </div>
+                  }
+                  tools={<ActiveSwitch active={r.active} what="row" />}
+                  view={<RowView row={r} />}
+                  fields={<RowFields row={r} credits={credits} />}
+                  saveLabel="Save row"
+                />
+              </Sortable>
+            ))}
+          </SortableList>
+          <div className="border-t border-slate-100 px-5 py-3">
+            <EditableSection
+              action={addSmqRowAction}
+              hidden={sectionIds}
+              fields={<RowFields credits={credits} />}
+              editLabel="+ Add a row"
+              saveLabel="Add row"
+            />
+          </div>
+        </details>
+      </Card>
+    );
+  }
 
   return (
     <PageChrome
@@ -226,144 +349,15 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
       ) : null}
 
       <div className="space-y-3">
-        {smq.sections.map((s) => {
-          const isAll = s.kind === "all_materials";
-          const typeIndex = types.findIndex((t) => t.id === s.id);
-          const inUse = s.rows.filter((r) => r.active).length;
-          const sectionIds = (
-            <>
-              {ids}
-              <input type="hidden" name="sectionId" value={s.id} />
-            </>
-          );
-          return (
-            <Card key={s.id} className={s.active ? "" : "opacity-70"}>
-              <details id={`s-${s.id}`} open={isAll} className="group scroll-mt-20">
-                {/* Sticks to the top of the page while its rows scroll past, so the reader knows which
-                    section they are in. The card doesn't clip (overflow-hidden would stop the sticking),
-                    so the header carries the card's rounded corners itself. */}
-                <summary className="sticky top-0 z-10 flex cursor-pointer list-none items-center gap-3 rounded-xl bg-white px-5 py-3.5 hover:bg-slate-50 group-open:rounded-b-none group-open:border-b group-open:border-slate-200 group-open:shadow-[0_1px_2px_rgb(15_23_42/0.04)] [&::-webkit-details-marker]:hidden">
-                  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-90">
-                    <path fillRule="evenodd" d="M7.2 14.8a.75.75 0 0 1 0-1.06L10.94 10 7.2 6.26a.75.75 0 1 1 1.06-1.06l4.27 4.27a.75.75 0 0 1 0 1.06L8.26 14.8a.75.75 0 0 1-1.06 0Z" clipRule="evenodd" />
-                  </svg>
-                  <span className="flex-1 text-sm font-semibold text-slate-800">
-                    {s.heading}
-                    {s.active ? null : (
-                      <span className="ml-2 align-middle">
-                        <Badge>Inactive</Badge>
-                      </span>
-                    )}
-                  </span>
-                  <span className="hidden flex-wrap justify-end gap-1.5 sm:flex">
-                    {s.defaultParts.map((k) => (
-                      <Badge key={k} tone="brand">
-                        {partName(k)}
-                      </Badge>
-                    ))}
-                  </span>
-                  <span className="text-xs text-slate-500">
-                    {inUse} row{inUse === 1 ? "" : "s"}
-                  </span>
-                </summary>
-
-                <div className="border-y border-slate-100 bg-slate-50/60 px-5 py-4">
-                  <EditableSection
-                    action={editSmqSectionAction}
-                    hidden={sectionIds}
-                    editLabel={isAll ? "Edit" : "Edit type"}
-                    summaryTitle
-                    title={
-                      <dl>
-                        <ReadField label={isAll ? "Every product is counted in" : "Products of this type are counted in"}>
-                          {s.defaultParts.length ? (
-                            <span className="mt-1 flex flex-wrap gap-1.5">
-                              {s.defaultParts.map((k) => (
-                                <Badge key={k} tone="brand">
-                                  {partName(k)}
-                                </Badge>
-                              ))}
-                            </span>
-                          ) : (
-                            <span className="text-slate-500">No credit calculation</span>
-                          )}
-                        </ReadField>
-                      </dl>
-                    }
-                    view={null}
-                    tools={
-                      isAll ? null : (
-                        <>
-                          <ActiveSwitch active={s.active} what="material type" />
-                          <MoveButtons disableUp={typeIndex <= 0} disableDown={typeIndex === types.length - 1} what="material type" />
-                        </>
-                      )
-                    }
-                    fields={
-                      <div className="space-y-4">
-                        <label className="block text-sm font-medium text-slate-700">
-                          {isAll ? "Section name" : "Material type name"}
-                          <input name="heading" defaultValue={s.heading} required className="input mt-1" />
-                        </label>
-                        <div>
-                          <p className="text-sm font-medium text-slate-700">
-                            {isAll ? "Every product is counted in" : "Products of this type are counted in"}
-                          </p>
-                          <p className="mb-1.5 text-xs text-slate-500">
-                            The credit calculations their quantities add to, e.g. MW-05 Recycled steel adds a product&apos;s weight to the recycled steel share.
-                          </p>
-                          <CreditPartsPicker defaultValue={s.defaultParts} label={isAll ? "Every product is counted in" : "Products of this type are counted in"} />
-                        </div>
-                      </div>
-                    }
-                  />
-                </div>
-
-                <ul className="divide-y divide-slate-100">
-                  {s.rows.map((r, ri) => (
-                    <li key={r.id} id={`r-${r.id}`} className={`scroll-mt-16 px-5 py-4 has-[[data-editing]]:bg-brand-50/40 ${r.active ? "" : "bg-slate-50"}`}>
-                      <EditableSection
-                        action={editSmqRowAction}
-                        hidden={
-                          <>
-                            {ids}
-                            <input type="hidden" name="rowId" value={r.id} />
-                          </>
-                        }
-                        title={
-                          <div className="flex flex-wrap items-center gap-2">
-                            <CreditTag row={r} />
-                            <span className="text-xs text-slate-500">{ROW_KIND_LABEL[r.kind as keyof typeof ROW_KIND_LABEL] ?? r.kind}</span>
-                            {r.active ? null : <Badge>Inactive</Badge>}
-                          </div>
-                        }
-                        tools={
-                          <>
-                            <ActiveSwitch active={r.active} what="row" />
-                            <MoveButtons disableUp={ri === 0} disableDown={ri === s.rows.length - 1} what="row" />
-                          </>
-                        }
-                        view={<RowView row={r} />}
-                        fields={<RowFields row={r} credits={credits} />}
-                        saveLabel="Save row"
-                      />
-                    </li>
-                  ))}
-                </ul>
-                <div className="border-t border-slate-100 px-5 py-3">
-                  <EditableSection
-                    action={addSmqRowAction}
-                    hidden={sectionIds}
-                    fields={<RowFields credits={credits} />}
-                    editLabel="+ Add a row"
-                    saveLabel="Add row"
-                  />
-                </div>
-              </details>
-            </Card>
-          );
-        })}
+        {all ? section(all) : null}
+        <SortableList as="div" className="space-y-3" save={reorderSmqTypesAction.bind(null, id)}>
+          {types.map((s) => (
+            <Sortable key={s.id} id={s.id}>
+              {section(s)}
+            </Sortable>
+          ))}
+        </SortableList>
       </div>
-
       <Card className="mt-4 px-5 py-4">
         <ActionForm key={smq.sections.length} action={addSmqSectionAction} className="flex flex-wrap items-center gap-2">
           {ids}
