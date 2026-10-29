@@ -19,7 +19,7 @@ export function PencilIcon() {
  * that goes through returns to the saved view. Without `view` it is an "add"
  * form: only the button shows until it is opened.
  *
- * `tools` are buttons shown beside Edit while viewing (e.g. Switch off, ↑ ↓);
+ * `tools` are buttons shown beside Edit while viewing (e.g. the Active switch, ↑ ↓);
  * they submit this form with their own op and only the `hidden` fields.
  */
 export function EditableSection({

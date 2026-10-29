@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../_components/PageChrome";
 import { ActionForm } from "@/components/ActionForm";
+import { ActiveSwitch } from "@/components/ActiveSwitch";
 import { EditableSection, ReadField } from "@/components/EditableSection";
 import { OpenOnHash } from "@/components/OpenOnHash";
 import { Badge, Card, secondaryButtonClass, smallPrimaryButtonClass } from "@/components/ui";
@@ -26,7 +27,7 @@ import {
 /**
  * Edit the project's Sustainability Material Questionnaire (Sprint 3, D1):
  * its own copy of the standard SMQ, made on first visit. Material types and
- * rows can be renamed, reordered, added and switched off; each row's credit,
+ * rows can be renamed, reordered, added and made inactive; each row's credit,
  * kind and project target can be set. Saved values read as text; Edit opens
  * one block's inputs. Products already entered keep the wording they were
  * filled with.
@@ -39,7 +40,7 @@ const partName = (key: string) => {
   return p ? `${p.creditCode} ${p.label}` : key;
 };
 
-/** ↑ ↓ for a row or material type; they save at once, like Switch off. */
+/** ↑ ↓ for a row or material type; they save at once, like the Active switch. */
 function MoveButtons({ disableUp, disableDown, what }: { disableUp: boolean; disableDown: boolean; what: string }) {
   return (
     <span className="inline-flex">
@@ -243,7 +244,11 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                   </svg>
                   <span className="flex-1 text-sm font-semibold text-slate-800">
                     {s.heading}
-                    {s.active ? null : <span className="ml-2 font-normal text-slate-500">(switched off)</span>}
+                    {s.active ? null : (
+                      <span className="ml-2 align-middle">
+                        <Badge>Inactive</Badge>
+                      </span>
+                    )}
                   </span>
                   <span className="hidden flex-wrap justify-end gap-1.5 sm:flex">
                     {s.defaultParts.map((k) => (
@@ -283,9 +288,7 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                     tools={
                       isAll ? null : (
                         <>
-                          <button type="submit" name="op" value="toggle" className={secondaryButtonClass}>
-                            {s.active ? "Switch off" : "Switch on"}
-                          </button>
+                          <ActiveSwitch active={s.active} what="material type" />
                           <MoveButtons disableUp={typeIndex <= 0} disableDown={typeIndex === types.length - 1} what="material type" />
                         </>
                       )
@@ -331,14 +334,12 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                           <div className="flex flex-wrap items-center gap-2">
                             <CreditTag row={r} />
                             <span className="text-xs text-slate-500">{ROW_KIND_LABEL[r.kind as keyof typeof ROW_KIND_LABEL] ?? r.kind}</span>
-                            {r.active ? null : <Badge>Switched off</Badge>}
+                            {r.active ? null : <Badge>Inactive</Badge>}
                           </div>
                         }
                         tools={
                           <>
-                            <button type="submit" name="op" value="toggle" className={secondaryButtonClass}>
-                              {r.active ? "Switch off" : "Switch on"}
-                            </button>
+                            <ActiveSwitch active={r.active} what="row" />
                             <MoveButtons disableUp={ri === 0} disableDown={ri === s.rows.length - 1} what="row" />
                           </>
                         }
