@@ -237,9 +237,12 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
             </>
           );
           return (
-            <Card key={s.id} className={`overflow-hidden ${s.active ? "" : "opacity-70"}`}>
+            <Card key={s.id} className={s.active ? "" : "opacity-70"}>
               <details id={`s-${s.id}`} open={isAll} className="group scroll-mt-20">
-                <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-3.5 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+                {/* Sticks to the top of the page while its rows scroll past, so the reader knows which
+                    section they are in. The card doesn't clip (overflow-hidden would stop the sticking),
+                    so the header carries the card's rounded corners itself. */}
+                <summary className="sticky top-0 z-10 flex cursor-pointer list-none items-center gap-3 rounded-xl bg-white px-5 py-3.5 hover:bg-slate-50 group-open:rounded-b-none group-open:border-b group-open:border-slate-200 group-open:shadow-[0_1px_2px_rgb(15_23_42/0.04)] [&::-webkit-details-marker]:hidden">
                   <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-90">
                     <path fillRule="evenodd" d="M7.2 14.8a.75.75 0 0 1 0-1.06L10.94 10 7.2 6.26a.75.75 0 1 1 1.06-1.06l4.27 4.27a.75.75 0 0 1 0 1.06L8.26 14.8a.75.75 0 0 1-1.06 0Z" clipRule="evenodd" />
                   </svg>
@@ -317,7 +320,7 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
 
                 <ul className="divide-y divide-slate-100">
                   {s.rows.map((r, ri) => (
-                    <li key={r.id} id={`r-${r.id}`} className={`scroll-mt-20 px-5 py-4 has-[[data-editing]]:bg-brand-50/40 ${r.active ? "" : "bg-slate-50"}`}>
+                    <li key={r.id} id={`r-${r.id}`} className={`scroll-mt-16 px-5 py-4 has-[[data-editing]]:bg-brand-50/40 ${r.active ? "" : "bg-slate-50"}`}>
                       <EditableSection
                         action={editSmqRowAction}
                         hidden={
