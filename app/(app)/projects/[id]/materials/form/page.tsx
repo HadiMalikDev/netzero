@@ -351,7 +351,7 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                     action={addSmqRowAction}
                     hidden={sectionIds}
                     fields={<RowFields credits={credits} />}
-                    editLabel={`+ Add a row under ${s.heading}`}
+                    editLabel="+ Add a row"
                     saveLabel="Add row"
                   />
                 </div>
