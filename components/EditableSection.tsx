@@ -33,6 +33,7 @@ export function EditableSection({
   editLabel = "Edit",
   saveLabel = "Save",
   startOpen = false,
+  summaryTitle = false,
   className = "",
 }: {
   action: FormAction | ((formData: FormData) => Promise<void>);
@@ -46,6 +47,8 @@ export function EditableSection({
   editLabel?: string;
   saveLabel?: string;
   startOpen?: boolean;
+  /** The title is itself the saved value (shown beside the buttons): hidden while editing. */
+  summaryTitle?: boolean;
   className?: string;
 }) {
   const [editing, setEditing] = useState(startOpen);
@@ -82,14 +85,14 @@ export function EditableSection({
   return (
     <ActionForm key={round} action={action} onSaved={() => setEditing(false)} className={className} editing={editing}>
       {hidden}
-      {title !== undefined || !editing ? (
+      {(title !== undefined && !(editing && summaryTitle)) || !editing ? (
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">{title}</div>
           {editing ? null : <div className="flex flex-wrap items-center gap-2">{bar}</div>}
         </div>
       ) : null}
       {editing ? (
-        <div className={`space-y-4 ${title !== undefined ? "mt-3" : ""}`}>
+        <div className={`space-y-4 ${title !== undefined && !summaryTitle ? "mt-3" : ""}`}>
           {fields}
           <div className="flex flex-wrap items-center gap-2">{bar}</div>
         </div>

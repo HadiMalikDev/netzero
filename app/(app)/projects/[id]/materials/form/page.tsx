@@ -3,11 +3,12 @@ import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../_components/PageChrome";
 import { ActionForm } from "@/components/ActionForm";
 import { ActiveSwitch } from "@/components/ActiveSwitch";
+import { CreditPartsPicker } from "@/components/CreditPartsPicker";
 import { EditableSection, ReadField } from "@/components/EditableSection";
 import { OpenOnHash } from "@/components/OpenOnHash";
 import { Badge, Card, secondaryButtonClass, smallPrimaryButtonClass } from "@/components/ui";
 import { getProject } from "@/lib/data";
-import { CREDIT_PARTS, partByKey } from "@/lib/materials/parts";
+import { partByKey } from "@/lib/materials/parts";
 import {
   ensureProjectSmq,
   getSmq,
@@ -267,9 +268,10 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                     action={editSmqSectionAction}
                     hidden={sectionIds}
                     editLabel={isAll ? "Edit" : "Edit type"}
+                    summaryTitle
                     title={
                       <dl>
-                        <ReadField label={isAll ? "Every product counts toward" : "Products of this type count toward"}>
+                        <ReadField label={isAll ? "Every product is counted in" : "Products of this type are counted in"}>
                           {s.defaultParts.length ? (
                             <span className="mt-1 flex flex-wrap gap-1.5">
                               {s.defaultParts.map((k) => (
@@ -279,7 +281,7 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                               ))}
                             </span>
                           ) : (
-                            <span className="text-slate-500">No calculated credit</span>
+                            <span className="text-slate-500">No credit calculation</span>
                           )}
                         </ReadField>
                       </dl>
@@ -296,24 +298,18 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
                     fields={
                       <div className="space-y-4">
                         <label className="block text-sm font-medium text-slate-700">
-                          {isAll ? "Block name" : "Material type"}
+                          {isAll ? "Section name" : "Material type name"}
                           <input name="heading" defaultValue={s.heading} required className="input mt-1" />
                         </label>
-                        <fieldset>
-                          <legend className="text-sm font-medium text-slate-700">
-                            {isAll ? "Every product counts toward" : "Products of this type count toward"}
-                          </legend>
-                          <div className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                            {CREDIT_PARTS.map((p) => (
-                              <label key={p.key} className="flex items-center gap-2 text-sm text-slate-700">
-                                <input type="checkbox" name="parts" value={p.key} defaultChecked={s.defaultParts.includes(p.key)} className="h-4 w-4 rounded border-slate-300" />
-                                <span>
-                                  <span className="font-medium">{p.creditCode}</span> {p.label}
-                                </span>
-                              </label>
-                            ))}
-                          </div>
-                        </fieldset>
+                        <div>
+                          <p className="text-sm font-medium text-slate-700">
+                            {isAll ? "Every product is counted in" : "Products of this type are counted in"}
+                          </p>
+                          <p className="mb-1.5 text-xs text-slate-500">
+                            The credit calculations their quantities add to, e.g. MW-05 Recycled steel adds a product&apos;s weight to the recycled steel share.
+                          </p>
+                          <CreditPartsPicker defaultValue={s.defaultParts} label={isAll ? "Every product is counted in" : "Products of this type are counted in"} />
+                        </div>
                       </div>
                     }
                   />

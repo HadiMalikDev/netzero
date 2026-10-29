@@ -59,3 +59,15 @@ Raised: 2026-10-29 (after item 01 merged) · Branch: `main` (by request: "Do dir
 - D42: the Active switch — `evidence/sw-1-row-inactive.png` (inactive rows greyed and tagged).
   Checked in a browser: the switch flips at once, saves, shows "Inactive", and switches back,
   on a row and on a material type.
+- `5feef2c` feat(materials): an Active switch replaces Switch off (D42)
+- Request 3: the credit calculations a section, material type or product is counted in are
+  picked as tags from one input. Nothing is listed until something is typed; typing "hc", "ksa"
+  or "steel" shows the matching calculations, click or Enter adds a tag, × or Backspace removes
+  one, and the list closes when the input loses focus. Labels: "Block name" → "Section name" /
+  "Material type name"; "Every product counts toward" → "Every product is counted in", with a
+  line saying what that means. The product page's "Counts toward" uses the same picker.
+  - Evidence: `evidence/tag-1-suggest.png`, `evidence/tag-2-tags.png`,
+    `evidence/tag-4-all-edit.png`.
+  - Checked in a browser: suggestions, add by click and by Enter, "no match", remove, save
+    (persisted, then restored), Cancel, and blur closing the list on the product page.
+  - `pnpm test` 212 passed; `pnpm test:db` 262 passed; lint 0 errors; build passes.

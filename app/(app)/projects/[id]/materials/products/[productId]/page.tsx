@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../../_components/PageChrome";
 import { ActionForm } from "@/components/ActionForm";
+import { CreditPartsPicker } from "@/components/CreditPartsPicker";
 import { EditableSection, ReadField } from "@/components/EditableSection";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { Badge, Card, primaryButtonClass, secondaryButtonClass } from "@/components/ui";
@@ -336,16 +337,16 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
             locked={!editable}
             title={
               <>
-                <h3 className="text-sm font-semibold text-slate-800">Counts toward</h3>
+                <h3 className="text-sm font-semibold text-slate-800">Counted in</h3>
                 <p className="text-xs text-slate-500">
-                  Ticked from the material types. Untick what doesn&apos;t apply, e.g. aluminium under &quot;All metals&quot; is not reinforcing steel.
+                  The credit calculations this product&apos;s quantities add to, filled from its material types. Remove what doesn&apos;t apply, e.g. aluminium under &quot;All metals&quot; is not reinforcing steel.
                 </p>
               </>
             }
             view={
               <dl className="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-3">
                 <ReadField label="Used">{p.interior ? "Interior (inside the weatherproofing line)" : "Exterior"}</ReadField>
-                <ReadField label="Credit parts" className="sm:col-span-2">
+                <ReadField label="Credit calculations" className="sm:col-span-2">
                   {view.parts.length ? (
                     <span className="mt-1 flex flex-wrap gap-1.5">
                       {CREDIT_PARTS.filter((part) => view.parts.includes(part.key)).map((part) => (
@@ -355,7 +356,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
                       ))}
                     </span>
                   ) : (
-                    <span className="text-slate-500">No calculated credit</span>
+                    <span className="text-slate-500">No credit calculation</span>
                   )}
                 </ReadField>
               </dl>
@@ -370,17 +371,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
                     <input type="radio" name="interior" value="no" defaultChecked={!p.interior} /> Exterior
                   </label>
                 </div>
-                <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
-                  {CREDIT_PARTS.map((part) => (
-                    <label key={part.key} className="flex items-start gap-2 text-sm text-slate-700">
-                      <input type="checkbox" name="parts" value={part.key} defaultChecked={view.parts.includes(part.key)} className="mt-0.5 h-4 w-4 rounded border-slate-300" />
-                      <span>
-                        <span className="font-medium">{part.creditCode}</span> {part.label}
-                        {part.interiorOnly ? <span className="text-xs text-slate-400"> · interior only</span> : null}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                <CreditPartsPicker defaultValue={view.parts} label="Credit calculations this product is counted in" />
               </div>
             }
           />
