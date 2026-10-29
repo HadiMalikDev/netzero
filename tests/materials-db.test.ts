@@ -154,6 +154,18 @@ describeDb("material review: the project's own questionnaire", () => {
     expect(def.rows[0].targetText).toBeNull();
   });
 
+  it("saves a material type's name and ticks in one go, or neither", async () => {
+    const t = (await ensureProjectSmq(copyFx.projectId))!;
+    const type = (await getSmq(t.id))!.sections[2];
+    expect(await editSmqSection(t.id, type.id, "save", { heading: "  ", parts: ["MW-05:steel"] })).toBe(false);
+    let after = (await getSmq(t.id))!.sections.find((s) => s.id === type.id)!;
+    expect(after).toMatchObject({ heading: type.heading, defaultParts: type.defaultParts });
+
+    expect(await editSmqSection(t.id, type.id, "save", { heading: "Renamed type", parts: ["MW-05:steel", "bogus"] })).toBe(true);
+    after = (await getSmq(t.id))!.sections.find((s) => s.id === type.id)!;
+    expect(after).toMatchObject({ heading: "Renamed type", defaultParts: ["MW-05:steel"] });
+  });
+
   it("refuses a credit from another project and keeps 'For all materials' first and on", async () => {
     const t = (await ensureProjectSmq(copyFx.projectId))!;
     const smq = (await getSmq(t.id))!;

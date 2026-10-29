@@ -15,11 +15,17 @@ export function ActionForm({
   children,
   className,
   id,
+  onSaved,
+  editing,
 }: {
-  action: FormAction;
+  action: FormAction | ((formData: FormData) => Promise<void>);
   children: ReactNode;
   className?: string;
   id?: string;
+  /** Called once the action went through: it redirected, or returned no error. */
+  onSaved?: () => void;
+  /** Marks the form as open for editing (data-editing), for the page to style. */
+  editing?: boolean;
 }) {
   const [error, setError] = useState<FormErrorCode | null>(null);
   const [pending, start] = useTransition();
@@ -32,12 +38,19 @@ export function ActionForm({
     // Cleared first: a save that succeeds redirects and never returns here.
     setError(null);
     start(async () => {
-      setError(await action(data));
+      let code: FormErrorCode | null = null;
+      try {
+        code = (await action(data)) ?? null;
+        setError(code);
+      } finally {
+        // A redirect rejects the call, so success is "no error code came back".
+        if (!code) onSaved?.();
+      }
     });
   }
 
   return (
-    <form id={id} onSubmit={onSubmit} aria-busy={pending} className={className}>
+    <form id={id} onSubmit={onSubmit} aria-busy={pending} data-editing={editing || undefined} className={className}>
       {children}
       {error ? (
         <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-600/20 md:col-span-full">

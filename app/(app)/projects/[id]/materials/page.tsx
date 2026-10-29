@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../_components/PageChrome";
 import { ProjectTabs } from "../_components/ProjectTabs";
-import { ActionForm } from "@/components/ActionForm";
-import { Card, primaryButtonClass } from "@/components/ui";
+import { EditableSection } from "@/components/EditableSection";
+import { Card } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { MaterialStatus } from "@/components/MaterialStatus";
 import { getProject } from "@/lib/data";
@@ -226,16 +226,13 @@ export default async function MaterialsPage({ params, searchParams }: PageProps<
       <section id="submittals" className="space-y-4">
         <h2 className="text-lg font-semibold text-slate-900">Submittals</h2>
         <Card className="px-5 py-4">
-          <details>
-            <summary className="cursor-pointer text-sm font-semibold text-brand-700">New submittal</summary>
-            <ActionForm action={createSubmittalAction} className="mt-3 space-y-3">
-              <input type="hidden" name="projectId" value={id} />
-              <SubmittalFields />
-              <button type="submit" className={primaryButtonClass}>
-                Create submittal
-              </button>
-            </ActionForm>
-          </details>
+          <EditableSection
+            action={createSubmittalAction}
+            hidden={<input type="hidden" name="projectId" value={id} />}
+            fields={<SubmittalFields />}
+            editLabel="+ New submittal"
+            saveLabel="Create submittal"
+          />
         </Card>
 
         {submittals.length === 0 ? (

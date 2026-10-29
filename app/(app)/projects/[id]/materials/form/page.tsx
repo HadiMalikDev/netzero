@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../_components/PageChrome";
 import { ActionForm } from "@/components/ActionForm";
-import { Badge, Card } from "@/components/ui";
+import { EditableSection, ReadField } from "@/components/EditableSection";
+import { OpenOnHash } from "@/components/OpenOnHash";
+import { Badge, Card, secondaryButtonClass, smallPrimaryButtonClass } from "@/components/ui";
 import { getProject } from "@/lib/data";
 import { CREDIT_PARTS, partByKey } from "@/lib/materials/parts";
 import {
@@ -25,13 +27,52 @@ import {
  * Edit the project's Sustainability Material Questionnaire (Sprint 3, D1):
  * its own copy of the standard SMQ, made on first visit. Material types and
  * rows can be renamed, reordered, added and switched off; each row's credit,
- * kind and project target can be set. Products already entered keep the
- * wording they were filled with. Plain forms, so each change saves on its own.
+ * kind and project target can be set. Saved values read as text; Edit opens
+ * one block's inputs. Products already entered keep the wording they were
+ * filled with.
  */
 
-const small =
-  "rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40";
-const fieldLabel = "text-xs font-medium text-slate-600";
+const fieldLabel = "text-sm font-medium text-slate-700";
+
+const partName = (key: string) => {
+  const p = partByKey(key);
+  return p ? `${p.creditCode} ${p.label}` : key;
+};
+
+/** ↑ ↓ for a row or material type; they save at once, like Switch off. */
+function MoveButtons({ disableUp, disableDown, what }: { disableUp: boolean; disableDown: boolean; what: string }) {
+  return (
+    <span className="inline-flex">
+      <button type="submit" name="op" value="up" disabled={disableUp} aria-label={`Move ${what} up`} title={`Move ${what} up`} className={`${secondaryButtonClass} rounded-r-none`}>
+        ↑
+      </button>
+      <button type="submit" name="op" value="down" disabled={disableDown} aria-label={`Move ${what} down`} title={`Move ${what} down`} className={`${secondaryButtonClass} -ml-px rounded-l-none`}>
+        ↓
+      </button>
+    </span>
+  );
+}
+
+/** A row as saved: its wording, then only the details that are set. */
+function RowView({ row }: { row: SmqRowView }) {
+  return (
+    <div className={`mt-2.5 ${row.active ? "" : "opacity-60"}`}>
+      <p className="whitespace-pre-line text-sm leading-relaxed text-slate-800">{row.text}</p>
+      {row.leedRef || row.targetText || row.valueUnit || row.note || row.kind === "project_value" ? (
+        <dl className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+          {row.targetText || row.kind === "project_value" ? (
+            <ReadField label="Project target">
+              {row.targetText || <span className="text-amber-700">Not set yet</span>}
+            </ReadField>
+          ) : null}
+          {row.valueUnit ? <ReadField label="Value unit">{row.valueUnit}</ReadField> : null}
+          {row.leedRef ? <ReadField label="LEED reference (shown only)">{row.leedRef}</ReadField> : null}
+          {row.note ? <ReadField label="Note">{row.note}</ReadField> : null}
+        </dl>
+      ) : null}
+    </div>
+  );
+}
 
 function RowFields({
   row,
@@ -41,10 +82,10 @@ function RowFields({
   credits: { id: string; code: string; title: string }[];
 }) {
   return (
-    <div className="grid gap-2 md:grid-cols-2">
+    <div className="grid gap-3 md:grid-cols-2">
       <label className={`${fieldLabel} md:col-span-2`}>
         Required documents / parameters
-        <textarea name="text" defaultValue={row?.text ?? ""} rows={3} className="input mt-1 text-sm" required />
+        <textarea name="text" defaultValue={row?.text ?? ""} rows={4} className="input mt-1 text-sm" required />
       </label>
       <label className={fieldLabel}>
         Mostadam credit
@@ -91,7 +132,7 @@ function CreditTag({ row }: { row: SmqRowView }) {
   if (row.credit) return <Badge tone="brand">{row.credit.code}</Badge>;
   if (row.creditCode)
     return (
-      <span title="This project's catalog has no credit with this code. Pick one under Edit.">
+      <span title="This project's catalog has no credit with this code. Pick one with Edit.">
         <Badge tone="amber">{row.creditCode} · unlinked</Badge>
       </span>
     );
@@ -123,6 +164,7 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
         { label: "Questionnaire" },
       ]}
     >
+      <OpenOnHash />
       <PageHeader
         title="Material questionnaire"
         subtitle={`${project.name} · this project's own copy of the SMQ (${template.revision ?? "standard"}): ${types.filter((t) => t.active).length} material types in use. Changes apply to products added from now on; products already entered keep the wording they were filled with.`}
@@ -134,30 +176,44 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
       />
 
       <Card className="mb-6 px-5 py-4">
-        <ActionForm id="settings" action={saveSmqSettingsAction} className="grid gap-3 md:grid-cols-3">
-          {ids}
-          <label className="text-sm font-medium text-slate-700 md:col-span-3">
-            Questionnaire title
-            <input name="title" defaultValue={smq.template.title} required className="input mt-1" />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Certificates expire after (years)
-            <input name="expiryYears" type="number" min={1} max={50} defaultValue={smq.template.expiryYears} className="input mt-1" />
-          </label>
-          <label className="text-sm font-medium text-slate-700 md:col-span-2">
-            Total construction material cost from the BOQ (SAR), for RC-01
-            <input
-              name="boqMaterialCostSar"
-              inputMode="decimal"
-              defaultValue={smq.template.boqMaterialCostSar ?? ""}
-              placeholder="Not entered"
-              className="input mt-1"
-            />
-          </label>
-          <div className="md:col-span-3">
-            <button type="submit" className={small}>Save settings</button>
-          </div>
-        </ActionForm>
+        <EditableSection
+          action={saveSmqSettingsAction}
+          hidden={ids}
+          title={<h2 className="text-base font-semibold text-slate-900">Settings</h2>}
+          view={
+            <dl className="mt-3 grid gap-4 sm:grid-cols-3">
+              <ReadField label="Questionnaire title">{smq.template.title}</ReadField>
+              <ReadField label="Certificates expire after">
+                {smq.template.expiryYears} year{smq.template.expiryYears === 1 ? "" : "s"}
+              </ReadField>
+              <ReadField label="Total material cost from the BOQ, for RC-01">
+                {smq.template.boqMaterialCostSar != null ? `SAR ${Number(smq.template.boqMaterialCostSar).toLocaleString("en-US")}` : null}
+              </ReadField>
+            </dl>
+          }
+          fields={
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="text-sm font-medium text-slate-700 md:col-span-3">
+                Questionnaire title
+                <input name="title" defaultValue={smq.template.title} required className="input mt-1" />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Certificates expire after (years)
+                <input name="expiryYears" type="number" min={1} max={50} defaultValue={smq.template.expiryYears} className="input mt-1" />
+              </label>
+              <label className="text-sm font-medium text-slate-700 md:col-span-2">
+                Total construction material cost from the BOQ (SAR), for RC-01
+                <input
+                  name="boqMaterialCostSar"
+                  inputMode="decimal"
+                  defaultValue={smq.template.boqMaterialCostSar ?? ""}
+                  placeholder="Not entered"
+                  className="input mt-1"
+                />
+              </label>
+            </div>
+          }
+        />
       </Card>
 
       {unlinked.length ? (
@@ -172,119 +228,147 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
           const isAll = s.kind === "all_materials";
           const typeIndex = types.findIndex((t) => t.id === s.id);
           const inUse = s.rows.filter((r) => r.active).length;
+          const sectionIds = (
+            <>
+              {ids}
+              <input type="hidden" name="sectionId" value={s.id} />
+            </>
+          );
           return (
             <Card key={s.id} className={`overflow-hidden ${s.active ? "" : "opacity-70"}`}>
-              <details id={`s-${s.id}`} open={isAll}>
-                <summary className="flex cursor-pointer items-center gap-3 bg-slate-100 px-4 py-2.5">
+              <details id={`s-${s.id}`} open={isAll} className="group scroll-mt-20">
+                <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-3.5 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+                  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-90">
+                    <path fillRule="evenodd" d="M7.2 14.8a.75.75 0 0 1 0-1.06L10.94 10 7.2 6.26a.75.75 0 1 1 1.06-1.06l4.27 4.27a.75.75 0 0 1 0 1.06L8.26 14.8a.75.75 0 0 1-1.06 0Z" clipRule="evenodd" />
+                  </svg>
                   <span className="flex-1 text-sm font-semibold text-slate-800">
                     {s.heading}
                     {s.active ? null : <span className="ml-2 font-normal text-slate-500">(switched off)</span>}
                   </span>
-                  {s.defaultParts.map((k) => {
-                    const p = partByKey(k);
-                    return (
+                  <span className="hidden flex-wrap justify-end gap-1.5 sm:flex">
+                    {s.defaultParts.map((k) => (
                       <Badge key={k} tone="brand">
-                        {p ? `${p.creditCode} ${p.label}` : k}
+                        {partName(k)}
                       </Badge>
-                    );
-                  })}
+                    ))}
+                  </span>
                   <span className="text-xs text-slate-500">
                     {inUse} row{inUse === 1 ? "" : "s"}
                   </span>
                 </summary>
 
-                <div className="space-y-2 border-b border-slate-100 px-4 py-3">
-                  <ActionForm action={editSmqSectionAction} className="flex flex-wrap items-center gap-2">
-                    {ids}
-                    <input type="hidden" name="sectionId" value={s.id} />
-                    <input name="heading" defaultValue={s.heading} required className="input flex-1 text-sm font-semibold" />
-                    <button type="submit" name="op" value="rename" className={small}>Rename</button>
-                    {isAll ? null : (
-                      <>
-                        <button type="submit" name="op" value="toggle" className={small}>
-                          {s.active ? "Switch off" : "Switch on"}
-                        </button>
-                        <button type="submit" name="op" value="up" className={small} disabled={typeIndex <= 0}>↑</button>
-                        <button type="submit" name="op" value="down" className={small} disabled={typeIndex === types.length - 1}>↓</button>
-                      </>
-                    )}
-                  </ActionForm>
-                  <ActionForm action={editSmqSectionAction} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
-                    {ids}
-                    <input type="hidden" name="sectionId" value={s.id} />
-                    <span className="font-medium">
-                      {isAll ? "Every product counts toward:" : "Products of this type count toward:"}
-                    </span>
-                    {CREDIT_PARTS.map((p) => (
-                      <label key={p.key} className="flex items-center gap-1">
-                        <input type="checkbox" name="parts" value={p.key} defaultChecked={s.defaultParts.includes(p.key)} className="h-3.5 w-3.5 rounded border-slate-300" />
-                        {p.creditCode} {p.label}
-                      </label>
-                    ))}
-                    <button type="submit" name="op" value="parts" className={small}>Save ticks</button>
-                  </ActionForm>
+                <div className="border-y border-slate-100 bg-slate-50/60 px-5 py-4">
+                  <EditableSection
+                    action={editSmqSectionAction}
+                    hidden={sectionIds}
+                    editLabel={isAll ? "Edit" : "Edit type"}
+                    title={
+                      <dl>
+                        <ReadField label={isAll ? "Every product counts toward" : "Products of this type count toward"}>
+                          {s.defaultParts.length ? (
+                            <span className="mt-1 flex flex-wrap gap-1.5">
+                              {s.defaultParts.map((k) => (
+                                <Badge key={k} tone="brand">
+                                  {partName(k)}
+                                </Badge>
+                              ))}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">No calculated credit</span>
+                          )}
+                        </ReadField>
+                      </dl>
+                    }
+                    view={null}
+                    tools={
+                      isAll ? null : (
+                        <>
+                          <button type="submit" name="op" value="toggle" className={secondaryButtonClass}>
+                            {s.active ? "Switch off" : "Switch on"}
+                          </button>
+                          <MoveButtons disableUp={typeIndex <= 0} disableDown={typeIndex === types.length - 1} what="material type" />
+                        </>
+                      )
+                    }
+                    fields={
+                      <div className="space-y-4">
+                        <label className="block text-sm font-medium text-slate-700">
+                          {isAll ? "Block name" : "Material type"}
+                          <input name="heading" defaultValue={s.heading} required className="input mt-1" />
+                        </label>
+                        <fieldset>
+                          <legend className="text-sm font-medium text-slate-700">
+                            {isAll ? "Every product counts toward" : "Products of this type count toward"}
+                          </legend>
+                          <div className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                            {CREDIT_PARTS.map((p) => (
+                              <label key={p.key} className="flex items-center gap-2 text-sm text-slate-700">
+                                <input type="checkbox" name="parts" value={p.key} defaultChecked={s.defaultParts.includes(p.key)} className="h-4 w-4 rounded border-slate-300" />
+                                <span>
+                                  <span className="font-medium">{p.creditCode}</span> {p.label}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
+                      </div>
+                    }
+                  />
                 </div>
 
                 <ul className="divide-y divide-slate-100">
                   {s.rows.map((r, ri) => (
-                    <li key={r.id} id={`r-${r.id}`} className={`px-4 py-3 ${r.active ? "" : "bg-slate-50"}`}>
-                      <div className="flex items-start gap-3">
-                        <div className="w-28 shrink-0 space-y-1">
-                          <CreditTag row={r} />
-                          <div className="text-[11px] text-slate-500">{ROW_KIND_LABEL[r.kind as keyof typeof ROW_KIND_LABEL] ?? r.kind}</div>
-                        </div>
-                        <div className={`flex-1 text-sm ${r.active ? "text-slate-700" : "text-slate-400 line-through"}`}>
-                          <p className="whitespace-pre-line">{r.text}</p>
-                          {r.leedRef ? <p className="mt-1 text-xs text-slate-400">LEED: {r.leedRef}</p> : null}
-                          {r.targetText ? (
-                            <p className="mt-1 whitespace-pre-line text-xs text-slate-600">
-                              <span className="font-medium">Target:</span> {r.targetText}
-                            </p>
-                          ) : r.kind === "project_value" ? (
-                            <p className="mt-1 text-xs text-amber-700">Project target not set</p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <details className="mt-2 pl-[7.75rem]">
-                        <summary className="cursor-pointer text-xs font-medium text-brand-600">Edit</summary>
-                        <ActionForm action={editSmqRowAction} className="mt-2 space-y-2">
-                          {ids}
-                          <input type="hidden" name="rowId" value={r.id} />
-                          <RowFields row={r} credits={credits} />
-                          <div className="flex flex-wrap gap-2">
-                            <button type="submit" name="op" value="save" className={small}>Save row</button>
-                            <button type="submit" name="op" value="toggle" className={small} formNoValidate>
+                    <li key={r.id} id={`r-${r.id}`} className={`scroll-mt-20 px-5 py-4 has-[[data-editing]]:bg-brand-50/40 ${r.active ? "" : "bg-slate-50"}`}>
+                      <EditableSection
+                        action={editSmqRowAction}
+                        hidden={
+                          <>
+                            {ids}
+                            <input type="hidden" name="rowId" value={r.id} />
+                          </>
+                        }
+                        title={
+                          <div className="flex flex-wrap items-center gap-2">
+                            <CreditTag row={r} />
+                            <span className="text-xs text-slate-500">{ROW_KIND_LABEL[r.kind as keyof typeof ROW_KIND_LABEL] ?? r.kind}</span>
+                            {r.active ? null : <Badge>Switched off</Badge>}
+                          </div>
+                        }
+                        tools={
+                          <>
+                            <button type="submit" name="op" value="toggle" className={secondaryButtonClass}>
                               {r.active ? "Switch off" : "Switch on"}
                             </button>
-                            <button type="submit" name="op" value="up" className={small} disabled={ri === 0} formNoValidate>↑</button>
-                            <button type="submit" name="op" value="down" className={small} disabled={ri === s.rows.length - 1} formNoValidate>↓</button>
-                          </div>
-                        </ActionForm>
-                      </details>
+                            <MoveButtons disableUp={ri === 0} disableDown={ri === s.rows.length - 1} what="row" />
+                          </>
+                        }
+                        view={<RowView row={r} />}
+                        fields={<RowFields row={r} credits={credits} />}
+                        saveLabel="Save row"
+                      />
                     </li>
                   ))}
                 </ul>
-                <details className="border-t border-slate-100 px-4 py-2.5">
-                  <summary className="cursor-pointer text-xs font-medium text-brand-600">Add a row under {s.heading}</summary>
-                  {/* Keyed by the count: an added row leaves an empty form (QA finding 4). */}
-                  <ActionForm key={s.rows.length} action={addSmqRowAction} className="mt-2 space-y-2">
-                    {ids}
-                    <input type="hidden" name="sectionId" value={s.id} />
-                    <RowFields credits={credits} />
-                    <button type="submit" className={small}>Add row</button>
-                  </ActionForm>
-                </details>
+                <div className="border-t border-slate-100 px-5 py-3">
+                  <EditableSection
+                    action={addSmqRowAction}
+                    hidden={sectionIds}
+                    fields={<RowFields credits={credits} />}
+                    editLabel={`+ Add a row under ${s.heading}`}
+                    saveLabel="Add row"
+                  />
+                </div>
               </details>
             </Card>
           );
         })}
       </div>
 
-      <Card className="mt-4 px-4 py-3">
-        <ActionForm key={smq.sections.length} action={addSmqSectionAction} className="flex items-center gap-2">
+      <Card className="mt-4 px-5 py-4">
+        <ActionForm key={smq.sections.length} action={addSmqSectionAction} className="flex flex-wrap items-center gap-2">
           {ids}
-          <input name="heading" placeholder="New material type, e.g. Waterproofing membranes" required className="input flex-1" />
-          <button type="submit" className={small}>Add material type</button>
+          <input name="heading" placeholder="New material type, e.g. Waterproofing membranes" required className="input min-w-0 flex-1" />
+          <button type="submit" className={smallPrimaryButtonClass}>Add material type</button>
         </ActionForm>
       </Card>
     </PageChrome>

@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../../_components/PageChrome";
-import { ActionForm } from "@/components/ActionForm";
-import { Card, primaryButtonClass } from "@/components/ui";
+import { EditableSection } from "@/components/EditableSection";
+import { Card } from "@/components/ui";
 import { MaterialStatus } from "@/components/MaterialStatus";
 import { getProject } from "@/lib/data";
 import { getSubmittalRow, listSubmittals, revLabel } from "@/lib/materials/products";
 import { addProductAction, updateSubmittalAction } from "../../../../material-actions";
 import { ProductHeaderFields } from "../../_components/ProductHeaderFields";
-import { SubmittalFields } from "../../_components/SubmittalFields";
+import { SubmittalFields, SubmittalView } from "../../_components/SubmittalFields";
 
 /**
  * One material submittal (Sprint 3, D11): its own details and its products.
@@ -27,6 +27,13 @@ export default async function SubmittalPage({ params }: PageProps<"/projects/[id
   // Latest revision first within each product, products in the order added.
   const chains = products.filter((p) => p.latest);
   const older = products.filter((p) => !p.latest);
+
+  const ids = (
+    <>
+      <input type="hidden" name="projectId" value={id} />
+      <input type="hidden" name="submittalId" value={submittal.id} />
+    </>
+  );
 
   return (
     <PageChrome
@@ -74,31 +81,27 @@ export default async function SubmittalPage({ params }: PageProps<"/projects/[id
             {older.length} earlier revision{older.length === 1 ? "" : "s"}, kept as reviewed: open a product to see its history.
           </p>
         ) : null}
-        <details className="border-t border-slate-100 px-5 py-3" open={chains.length === 0}>
-          <summary className="cursor-pointer text-sm font-semibold text-brand-700">Add a product</summary>
-          <ActionForm action={addProductAction} className="mt-3 space-y-3">
-            <input type="hidden" name="projectId" value={id} />
-            <input type="hidden" name="submittalId" value={submittal.id} />
-            <ProductHeaderFields defaults={{ supplier: submittal.supplier }} />
-            <button type="submit" className={primaryButtonClass}>
-              Add product
-            </button>
-          </ActionForm>
-        </details>
+        <div className="border-t border-slate-100 px-5 py-3">
+          <EditableSection
+            action={addProductAction}
+            hidden={ids}
+            fields={<ProductHeaderFields defaults={{ supplier: submittal.supplier }} />}
+            editLabel="+ Add a product"
+            saveLabel="Add product"
+            startOpen={chains.length === 0}
+          />
+        </div>
       </Card>
 
       <Card className="px-5 py-4">
-        <details>
-          <summary className="cursor-pointer text-sm font-semibold text-slate-700">Edit submittal details</summary>
-          <ActionForm action={updateSubmittalAction} className="mt-3 space-y-3">
-            <input type="hidden" name="projectId" value={id} />
-            <input type="hidden" name="submittalId" value={submittal.id} />
-            <SubmittalFields values={submittal} />
-            <button type="submit" className={primaryButtonClass}>
-              Save submittal
-            </button>
-          </ActionForm>
-        </details>
+        <EditableSection
+          action={updateSubmittalAction}
+          hidden={ids}
+          title={<h2 className="text-base font-semibold text-slate-900">Submittal details</h2>}
+          view={<SubmittalView values={submittal} />}
+          fields={<SubmittalFields values={submittal} />}
+          saveLabel="Save submittal"
+        />
       </Card>
     </PageChrome>
   );

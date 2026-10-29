@@ -5,6 +5,12 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 export const primaryButtonClass =
   "inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700";
 
+/** Compact primary and secondary buttons, for actions inside a card. */
+export const smallPrimaryButtonClass =
+  "inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50";
+export const secondaryButtonClass =
+  "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-default disabled:opacity-40";
+
 /** Primary <button>. Inherits every native button prop (type, formAction, …). */
 export function Button({
   children,

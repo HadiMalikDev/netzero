@@ -268,7 +268,7 @@ export async function editSmqSettings(
   return true;
 }
 
-export type SmqSectionOp = "rename" | "toggle" | "up" | "down" | "parts";
+export type SmqSectionOp = "save" | "rename" | "toggle" | "up" | "down" | "parts";
 
 export async function editSmqSection(
   templateId: string,
@@ -278,10 +278,12 @@ export async function editSmqSection(
 ): Promise<boolean> {
   const s = await ownSection(templateId, sectionId);
   if (!s) return false;
-  if (op === "rename") {
+  if (op === "save" || op === "rename") {
     const h = clean(input.heading ?? "", 300);
     if (!h) return false;
-    await db.update(smqSections).set({ heading: h }).where(eq(smqSections.id, sectionId));
+    // "save" is the editor's one form: the name and the parts it pre-ticks.
+    const parts = op === "save" ? { defaultParts: JSON.stringify([...new Set((input.parts ?? []).filter((k) => PART_KEYS.has(k)))]) } : {};
+    await db.update(smqSections).set({ heading: h, ...parts }).where(eq(smqSections.id, sectionId));
   } else if (op === "toggle") {
     // The "For all materials" block is answered by every product: it stays on.
     if (s.kind === "all_materials") return false;

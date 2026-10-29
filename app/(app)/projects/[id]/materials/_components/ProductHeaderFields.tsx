@@ -1,4 +1,5 @@
 import type { MaterialProduct } from "@/db/schema";
+import { ReadField } from "@/components/EditableSection";
 
 /** The SMQ's "Manufacture and Product Information" block. */
 export function ProductHeaderFields({
@@ -42,5 +43,19 @@ export function ProductHeaderFields({
         <input name="contactMobile" defaultValue={values?.contactMobile ?? ""} className="input mt-1" />
       </label>
     </fieldset>
+  );
+}
+
+/** The same block as saved, for reading at a glance. */
+export function ProductHeaderView({ values: p }: { values: MaterialProduct }) {
+  return (
+    <dl className="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-2 md:grid-cols-3">
+      <ReadField label="Material subject (product)">{p.name}</ReadField>
+      <ReadField label="Location of use">{p.locationOfUse}</ReadField>
+      <ReadField label="Manufacturer">{p.manufacturer}</ReadField>
+      <ReadField label="Supplier / sub-contractor">{p.supplier}</ReadField>
+      <ReadField label="Country of origin">{p.countryOfOrigin}</ReadField>
+      <ReadField label="Contact">{[p.contactName, p.contactMobile].filter(Boolean).join(" · ")}</ReadField>
+    </dl>
   );
 }

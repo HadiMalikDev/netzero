@@ -214,3 +214,19 @@ evidence file with such a name.
 **Prevention:** Test uploads with real-world names (macOS screenshot names, Arabic, spaces). Never
 catch broadly around code that can fail for more than one reason; catch only the failure the message
 describes. Prefer refreshing in place over redirecting back to the same page.
+
+## 2026-10-29 — Material editors mixed saved values and live inputs
+
+**What happened:** Hadi had to ask for a redesign of the material questionnaire editor. Opening a
+material type showed its name as a live input with "Rename", its credit ticks as live checkboxes
+with "Save ticks", and each row as text plus a small "▼ Edit" link that unfolded the same values a
+second time as inputs. There was no clear saved state, the action buttons were tiny, and the
+submittal and product pages followed the same pattern.
+
+**Root cause:** I copied the inspections form editor's "every control is a form" layout and checked
+that each save worked, but never looked at the page as a reader who only wants to scan the
+requirements. QA checked behaviour, not how the screen reads.
+
+**Prevention:** Any screen that shows saved data reads as text first, and Edit opens one block's
+inputs with Save and Cancel (`components/EditableSection.tsx`). Browser checks include a screenshot
+of the resting state, judged for whether someone can scan it, not only whether the saves work.

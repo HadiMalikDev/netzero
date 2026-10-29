@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../../../_components/PageChrome";
 import { ActionForm } from "@/components/ActionForm";
+import { EditableSection, ReadField } from "@/components/EditableSection";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
-import { Badge, Card, primaryButtonClass } from "@/components/ui";
+import { Badge, Card, primaryButtonClass, secondaryButtonClass } from "@/components/ui";
 import { MaterialStatus } from "@/components/MaterialStatus";
 import { MaterialUpload } from "@/components/MaterialUpload";
 import { getProject } from "@/lib/data";
@@ -35,7 +36,7 @@ import {
   setProductTypesAction,
   uploadMaterialDocAction,
 } from "../../../../material-actions";
-import { ProductHeaderFields } from "../../_components/ProductHeaderFields";
+import { ProductHeaderFields, ProductHeaderView } from "../../_components/ProductHeaderFields";
 
 /**
  * One product's SMQ (Sprint 3): the product information, the material types
@@ -45,8 +46,6 @@ import { ProductHeaderFields } from "../../_components/ProductHeaderFields";
  * replaced by a newer one is shown read-only (D9).
  */
 
-const small =
-  "rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40";
 const ANSWER_LABEL = { yes: "Yes", no: "No", na: "N/A" } as const;
 
 function ExpiryBadge({ issuedOn, years, today }: { issuedOn: string | null; years: number; today: string }) {
@@ -277,73 +276,115 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
       ) : null}
 
       <Card id="header" className="mb-6 px-5 py-4">
-        <h2 className="mb-3 text-base font-semibold text-slate-900">Manufacture and product information</h2>
-        <ActionForm action={saveProductHeaderAction} className="space-y-3">
-          {ids}
-          <ProductHeaderFields values={p} disabled={!editable} />
-          {editable ? (
-            <button type="submit" className={small}>
-              Save product information
-            </button>
-          ) : null}
-        </ActionForm>
+        <EditableSection
+          action={saveProductHeaderAction}
+          hidden={ids}
+          locked={!editable}
+          title={<h2 className="text-base font-semibold text-slate-900">Manufacture and product information</h2>}
+          view={<ProductHeaderView values={p} />}
+          fields={<ProductHeaderFields values={p} />}
+          saveLabel="Save product information"
+        />
       </Card>
 
       <Card id="types" className="mb-6 px-5 py-4">
-        <h2 className="text-base font-semibold text-slate-900">Material types</h2>
-        <p className="mb-3 text-sm text-slate-500">
-          Pick what this product is. The &quot;For all materials&quot; block always applies; each type adds its own rows to the questionnaire below.
-        </p>
-        <form action={setProductTypesAction} className="space-y-3">
-          {ids}
-          <fieldset disabled={!editable} className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
-            {types.map((s) => (
-              <label key={s.id} className="flex items-start gap-2 text-sm text-slate-700">
-                <input type="checkbox" name="types" value={s.id} defaultChecked={view.typeIds.includes(s.id)} className="mt-0.5 h-4 w-4 rounded border-slate-300" />
-                <span>{s.heading}</span>
-              </label>
-            ))}
-          </fieldset>
-          {editable ? (
-            <button type="submit" className={small}>
-              Save material types
-            </button>
-          ) : null}
-        </form>
-
-        <form action={setProductPartsAction} className="mt-5 space-y-2 border-t border-slate-100 pt-4">
-          {ids}
-          <h3 className="text-sm font-semibold text-slate-800">Counts toward</h3>
-          <p className="text-xs text-slate-500">
-            Ticked from the material types. Untick what doesn&apos;t apply, e.g. aluminium under &quot;All metals&quot; is not reinforcing steel.
-          </p>
-          <fieldset disabled={!editable} className="space-y-2">
-            <div className="flex gap-4 text-sm text-slate-700">
-              <label className="flex items-center gap-1.5">
-                <input type="radio" name="interior" value="yes" defaultChecked={p.interior} /> Interior (inside the weatherproofing line)
-              </label>
-              <label className="flex items-center gap-1.5">
-                <input type="radio" name="interior" value="no" defaultChecked={!p.interior} /> Exterior
-              </label>
+        <EditableSection
+          action={setProductTypesAction}
+          hidden={ids}
+          locked={!editable}
+          startOpen={editable && view.typeIds.length === 0}
+          title={
+            <>
+              <h2 className="text-base font-semibold text-slate-900">Material types</h2>
+              <p className="text-sm text-slate-500">
+                What this product is. The &quot;For all materials&quot; block always applies; each type adds its own rows to the questionnaire below.
+              </p>
+            </>
+          }
+          view={
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {view.typeIds.length ? (
+                types
+                  .filter((s) => view.typeIds.includes(s.id))
+                  .map((s) => (
+                    <Badge key={s.id} tone="brand">
+                      {s.heading}
+                    </Badge>
+                  ))
+              ) : (
+                <span className="text-sm text-slate-400">None picked yet</span>
+              )}
             </div>
-            <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
-              {CREDIT_PARTS.map((part) => (
-                <label key={part.key} className="flex items-start gap-2 text-sm text-slate-700">
-                  <input type="checkbox" name="parts" value={part.key} defaultChecked={view.parts.includes(part.key)} className="mt-0.5 h-4 w-4 rounded border-slate-300" />
-                  <span>
-                    <span className="font-medium">{part.creditCode}</span> {part.label}
-                    {part.interiorOnly ? <span className="text-xs text-slate-400"> · interior only</span> : null}
-                  </span>
+          }
+          fields={
+            <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+              {types.map((s) => (
+                <label key={s.id} className="flex items-start gap-2 text-sm text-slate-700">
+                  <input type="checkbox" name="types" value={s.id} defaultChecked={view.typeIds.includes(s.id)} className="mt-0.5 h-4 w-4 rounded border-slate-300" />
+                  <span>{s.heading}</span>
                 </label>
               ))}
             </div>
-          </fieldset>
-          {editable ? (
-            <button type="submit" className={small}>
-              Save
-            </button>
-          ) : null}
-        </form>
+          }
+          saveLabel="Save material types"
+        />
+
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <EditableSection
+            action={setProductPartsAction}
+            hidden={ids}
+            locked={!editable}
+            title={
+              <>
+                <h3 className="text-sm font-semibold text-slate-800">Counts toward</h3>
+                <p className="text-xs text-slate-500">
+                  Ticked from the material types. Untick what doesn&apos;t apply, e.g. aluminium under &quot;All metals&quot; is not reinforcing steel.
+                </p>
+              </>
+            }
+            view={
+              <dl className="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-3">
+                <ReadField label="Used">{p.interior ? "Interior (inside the weatherproofing line)" : "Exterior"}</ReadField>
+                <ReadField label="Credit parts" className="sm:col-span-2">
+                  {view.parts.length ? (
+                    <span className="mt-1 flex flex-wrap gap-1.5">
+                      {CREDIT_PARTS.filter((part) => view.parts.includes(part.key)).map((part) => (
+                        <Badge key={part.key} tone="brand">
+                          {part.creditCode} {part.label}
+                        </Badge>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="text-slate-500">No calculated credit</span>
+                  )}
+                </ReadField>
+              </dl>
+            }
+            fields={
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-4 text-sm text-slate-700">
+                  <label className="flex items-center gap-1.5">
+                    <input type="radio" name="interior" value="yes" defaultChecked={p.interior} /> Interior (inside the weatherproofing line)
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input type="radio" name="interior" value="no" defaultChecked={!p.interior} /> Exterior
+                  </label>
+                </div>
+                <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+                  {CREDIT_PARTS.map((part) => (
+                    <label key={part.key} className="flex items-start gap-2 text-sm text-slate-700">
+                      <input type="checkbox" name="parts" value={part.key} defaultChecked={view.parts.includes(part.key)} className="mt-0.5 h-4 w-4 rounded border-slate-300" />
+                      <span>
+                        <span className="font-medium">{part.creditCode}</span> {part.label}
+                        {part.interiorOnly ? <span className="text-xs text-slate-400"> · interior only</span> : null}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            }
+          />
+        </div>
       </Card>
 
       <Card id="documents" className="mb-6 px-5 py-4">
@@ -406,28 +447,36 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
           The BOQ quantity is the forecast; deliveries are the actual. Enter what the credits this product counts toward are measured in: steel and
           adhesives by weight, aggregates by volume, timber and KSA content by cost.
         </p>
-        <ActionForm action={saveBoqQuantitiesAction} className="space-y-3">
-          {ids}
-          <fieldset disabled={!editable} className="grid max-w-3xl gap-3 sm:grid-cols-3">
-            <label className="text-sm font-medium text-slate-700">
-              BOQ weight (t)
-              <input name="weightT" inputMode="decimal" defaultValue={p.boqWeightT ?? ""} className="input mt-1" />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              BOQ volume (m³)
-              <input name="volumeM3" inputMode="decimal" defaultValue={p.boqVolumeM3 ?? ""} className="input mt-1" />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              BOQ cost (SAR)
-              <input name="costSar" inputMode="decimal" defaultValue={p.boqCostSar ?? ""} className="input mt-1" />
-            </label>
-          </fieldset>
-          {editable ? (
-            <button type="submit" className={small}>
-              Save BOQ quantities
-            </button>
-          ) : null}
-        </ActionForm>
+        <EditableSection
+          action={saveBoqQuantitiesAction}
+          hidden={ids}
+          locked={!editable}
+          title={<h3 className="text-sm font-semibold text-slate-800">BOQ quantities (forecast)</h3>}
+          view={
+            <dl className="mt-3 grid max-w-3xl gap-x-6 gap-y-4 sm:grid-cols-3">
+              <ReadField label="Weight">{p.boqWeightT != null ? `${formatQty(p.boqWeightT)} t` : null}</ReadField>
+              <ReadField label="Volume">{p.boqVolumeM3 != null ? `${formatQty(p.boqVolumeM3)} m³` : null}</ReadField>
+              <ReadField label="Cost">{p.boqCostSar != null ? `SAR ${formatQty(p.boqCostSar)}` : null}</ReadField>
+            </dl>
+          }
+          fields={
+            <div className="grid max-w-3xl gap-3 sm:grid-cols-3">
+              <label className="text-sm font-medium text-slate-700">
+                BOQ weight (t)
+                <input name="weightT" inputMode="decimal" defaultValue={p.boqWeightT ?? ""} className="input mt-1" />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                BOQ volume (m³)
+                <input name="volumeM3" inputMode="decimal" defaultValue={p.boqVolumeM3 ?? ""} className="input mt-1" />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                BOQ cost (SAR)
+                <input name="costSar" inputMode="decimal" defaultValue={p.boqCostSar ?? ""} className="input mt-1" />
+              </label>
+            </div>
+          }
+          saveLabel="Save BOQ quantities"
+        />
 
         <h3 className="mt-5 text-sm font-semibold text-slate-800">Deliveries</h3>
         <table className="mt-2 w-full text-sm">
@@ -491,7 +540,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
             <input name="weightT" inputMode="decimal" placeholder="t" aria-label="Weight (t)" className="input text-sm" />
             <input name="volumeM3" inputMode="decimal" placeholder="m³" aria-label="Volume (m³)" className="input text-sm" />
             <input name="costSar" inputMode="decimal" placeholder="SAR" aria-label="Cost (SAR)" className="input text-sm" />
-            <button type="submit" className={small}>
+            <button type="submit" className={secondaryButtonClass}>
               Add delivery
             </button>
           </ActionForm>
@@ -520,10 +569,35 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
       ) : null}
 
       <Card id="review" className="mb-6 px-5 py-4">
-        <h2 className="mb-3 text-base font-semibold text-slate-900">Review</h2>
-        <ActionForm action={saveReviewAction} className="space-y-3">
-          {ids}
-          <fieldset disabled={!editable} className="grid gap-3 md:grid-cols-6">
+        <EditableSection
+          action={saveReviewAction}
+          hidden={ids}
+          locked={!editable}
+          startOpen={editable && !p.status}
+          title={<h2 className="text-base font-semibold text-slate-900">Review</h2>}
+          view={
+            <dl className="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-2 md:grid-cols-3">
+              <ReadField label="Status">
+                <MaterialStatus status={p.status} />
+              </ReadField>
+              <ReadField label="Review date">{p.reviewedOn}</ReadField>
+              <ReadField label="Reviewed by">{p.reviewer}</ReadField>
+              <ReadField label="The proposed material is" className="md:col-span-3">
+                {p.applicable === true ? "Applicable to the sustainability requirements" : p.applicable === false ? "Not applicable" : null}
+              </ReadField>
+              <ReadField label="Consultant remarks" className="sm:col-span-2 md:col-span-3">
+                {p.remarks}
+              </ReadField>
+              <ReadField label="Manufacturer / supplier statement by">
+                {[p.manufacturerSignatory, p.manufacturerSignedOn].filter(Boolean).join(" · ")}
+              </ReadField>
+              <ReadField label="Contractor's sustainability manager">
+                {[p.contractorSignatory, p.contractorSignedOn].filter(Boolean).join(" · ")}
+              </ReadField>
+            </dl>
+          }
+          fields={
+            <div className="grid gap-3 md:grid-cols-6">
             <label className="text-sm font-medium text-slate-700 md:col-span-2">
               Status
               <select name="status" defaultValue={p.status ?? ""} className="input mt-1">
@@ -571,20 +645,17 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
               Date
               <input name="contractorSignedOn" type="date" defaultValue={p.contractorSignedOn ?? ""} max={today} className="input mt-1" />
             </label>
-          </fieldset>
-          {editable ? (
-            <button type="submit" className={primaryButtonClass}>
-              Save review
-            </button>
-          ) : null}
-        </ActionForm>
+            </div>
+          }
+          saveLabel="Save review"
+        />
         {editable && p.status ? (
           <form action={newRevisionAction} className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
             {ids}
             <p className="flex-1 text-sm text-slate-600">
               Resubmitted by the contractor? Start {revLabel(p.revision + 1)} as a copy of this one, without the review and the sign-offs (the new SMQ is signed again). {revLabel(p.revision)} stays as reviewed.
             </p>
-            <button type="submit" className={small}>
+            <button type="submit" className={secondaryButtonClass}>
               New revision ({revLabel(p.revision + 1)})
             </button>
           </form>

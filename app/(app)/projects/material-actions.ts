@@ -102,13 +102,13 @@ export async function editSmqSectionAction(formData: FormData): Promise<FormErro
   await requireUser();
   const { projectId, templateId } = await projectTemplateId(formData);
   const op = str(formData, "op") as SmqSectionOp;
-  if (!["rename", "toggle", "up", "down", "parts"].includes(op)) throw new Error("bad op");
+  if (!["save", "rename", "toggle", "up", "down", "parts"].includes(op)) throw new Error("bad op");
   const sectionId = str(formData, "sectionId");
   const ok = await editSmqSection(templateId, sectionId, op, {
     heading: str(formData, "heading"),
     parts: formData.getAll("parts").map(String),
   });
-  if (!ok && op === "rename") return "type_name";
+  if (!ok && (op === "save" || op === "rename")) return "type_name";
   backToForm(projectId, `s-${sectionId}`);
 }
 

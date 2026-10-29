@@ -1,3 +1,4 @@
+import { ReadField } from "@/components/EditableSection";
 import { todayIso } from "@/lib/materials/expiry";
 
 /** The submittal's own fields, for creating and editing one. */
@@ -25,5 +26,18 @@ export function SubmittalFields({ values }: { values?: { ref: string; title: str
         <input name="submittedOn" type="date" defaultValue={values?.submittedOn ?? ""} max={todayIso()} className="input mt-1" />
       </label>
     </div>
+  );
+}
+
+/** The submittal as saved. */
+export function SubmittalView({ values: v }: { values: { ref: string; title: string; discipline: string | null; supplier: string | null; submittedOn: string | null } }) {
+  return (
+    <dl className="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-2 md:grid-cols-3">
+      <ReadField label="Submittal reference">{v.ref}</ReadField>
+      <ReadField label="Title" className="md:col-span-2">{v.title}</ReadField>
+      <ReadField label="Discipline">{v.discipline}</ReadField>
+      <ReadField label="Supplier / sub-contractor">{v.supplier}</ReadField>
+      <ReadField label="Date of submission">{v.submittedOn}</ReadField>
+    </dl>
   );
 }
