@@ -28,6 +28,8 @@ import { SaveCreditButton } from "./SaveCreditButton";
 import { groupByOption, pathStates, type PathState } from "@/lib/option-group";
 import { OptionGroup } from "@/components/OptionGroup";
 import { formatPointsSpan } from "@/lib/points";
+import { creditSlice } from "@/lib/materials/credit-slice";
+import { MaterialReviewSection } from "./MaterialReviewSection";
 
 export default async function CreditDetailPage({
   params,
@@ -46,6 +48,7 @@ export default async function CreditDetailPage({
     pathStates(block.items).forEach((p, i) => paths.set(block.items[i].entryId, p));
   }
   const { sections, setAside } = documentSections(credit.requirements, paths);
+  const materials = await creditSlice(id, credit.projectCreditId, credit.code);
 
   return (
     <PageChrome
@@ -159,6 +162,8 @@ export default async function CreditDetailPage({
         />
       </Card>
 
+      <MaterialReviewSection projectId={id} code={credit.code} slice={materials} />
+
       <Card className="p-5">
         <h2 className="mb-2 text-sm font-semibold text-slate-800">
           Requirements Checklist
@@ -169,7 +174,9 @@ export default async function CreditDetailPage({
             const chosen = items.find((r) => paths.get(r.entryId) === "chosen");
             const body = items.map((req) => (
               <RequirementItem
-                key={req.entryId}
+                // Keyed by when the entry was last written: "Use this value" refreshes the page in
+                // place (D41), and the item's inputs only read their value when they mount.
+                key={`${req.entryId}:${req.updatedAt}`}
                 req={req}
                 rsVersionId={project.rsVersionId}
                 grouped={block.kind === "xor"}

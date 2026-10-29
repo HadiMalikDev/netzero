@@ -21,12 +21,16 @@ export function Button({
 export function Card({
   children,
   className = "",
+  id,
 }: {
   children: ReactNode;
   className?: string;
+  /** For in-page links (#review) that return the reader to this card. */
+  id?: string;
 }) {
   return (
     <div
+      id={id}
       className={`rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}
     >
       {children}

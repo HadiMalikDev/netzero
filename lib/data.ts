@@ -178,6 +178,8 @@ export interface RequirementView {
   valueNumber: number | null;
   valueText: string | null;
   note: string | null;
+  /** When the entry was last written (unix seconds): the credit page re-reads its inputs when it changes. */
+  updatedAt: number;
   evidenceCount: number;
   /** Files attached to this requirement, oldest first. */
   attachments: EvidenceAttachment[];
@@ -275,6 +277,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       valueNumber: requirementEntries.valueNumber,
       valueText: requirementEntries.valueText,
       note: requirementEntries.note,
+      updatedAt: requirementEntries.updatedAt,
       planned: requirementEntries.planned,
     })
     .from(requirementEntries)
@@ -323,9 +326,11 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
   for (const e of evidence) {
     if (!e.entryId && notAdditional.has(e.id)) continue;
     // No requirement => a credit-level additional attachment.
+    // Selected by credit, so the credit is always set here (only material
+    // review files have none).
     const [map, key] = e.entryId
       ? [evByEntry, e.entryId]
-      : [evByCredit, e.projectCreditId];
+      : [evByCredit, e.projectCreditId!];
     const arr = map.get(key) ?? [];
     arr.push({
       id: e.id,
@@ -414,6 +419,7 @@ export async function getProjectCredits(projectId: string): Promise<CreditView[]
       valueNumber: e.valueNumber,
       valueText: e.valueText,
       note: e.note,
+      updatedAt: e.updatedAt,
       evidenceCount,
       attachments,
       status,

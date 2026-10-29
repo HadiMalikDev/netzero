@@ -1,8 +1,5 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
@@ -41,6 +38,7 @@ import {
 } from "@/lib/checklists";
 import { getCreditByCode, WORKSPACE_ID } from "@/lib/data";
 import { creditPhotos } from "@/lib/report/checklist";
+import { storeUpload } from "@/lib/uploads";
 
 /**
  * Inspection-sheet actions (Sprint 2 item 3): start an inspection (the AI
@@ -223,12 +221,7 @@ async function savePhoto(file: FormDataEntryValue | null, projectId: string, pro
   if (!(file instanceof File) || file.size === 0) return null;
   const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
   if (!PHOTO_TYPES[ext]) throw new Error("Photos must be PNG or JPEG");
-  const dir = join(".data/uploads", projectId, "evidence");
-  await mkdir(dir, { recursive: true });
-  const id = randomUUID();
-  const filePath = join(dir, `${id}-${file.name.replace(/[^\w.\-() ]+/g, "_")}`);
-  const buf = Buffer.from(await file.arrayBuffer());
-  await writeFile(filePath, buf);
+  const { id, filePath, size } = await storeUpload(file, projectId);
   await db.insert(evidenceDocs).values({
     id,
     workspaceId: WORKSPACE_ID,
@@ -236,7 +229,7 @@ async function savePhoto(file: FormDataEntryValue | null, projectId: string, pro
     requirementEntryId: null,
     fileName: file.name,
     filePath,
-    fileSize: buf.length,
+    fileSize: size,
   });
   return id;
 }

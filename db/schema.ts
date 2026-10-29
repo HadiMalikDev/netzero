@@ -1,11 +1,13 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   doublePrecision,
   index,
   integer,
   pgTable,
   text,
+  type AnyPgColumn,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
@@ -318,10 +320,21 @@ export const evidenceDocs = pgTable("evidence_doc", {
   workspaceId: text("workspace_id")
     .notNull()
     .references(() => workspaces.id),
-  /** The credit the file belongs to. Always set. */
-  projectCreditId: text("project_credit_id")
-    .notNull()
-    .references(() => projectCredits.id),
+  /**
+   * The credit the file belongs to. Null only for a material review file,
+   * which belongs to a product instead (exactly one of the two is set): one
+   * SMQ document can support several credits, or none (a LEED-only row).
+   */
+  projectCreditId: text("project_credit_id").references(() => projectCredits.id),
+  /** The material product (one SMQ revision) the file was uploaded to. */
+  materialProductId: text("material_product_id").references(
+    (): AnyPgColumn => materialProducts.id,
+  ),
+  /**
+   * When a certificate or test report was issued (YYYY-MM-DD), for the
+   * project's expiry window. Required on SMQ row documents (2026-10-27).
+   */
+  issuedOn: text("issued_on"),
   /**
    * The requirement the file was attached to. Null for a credit-level
    * "additional attachment" (revised shop drawings, approvals…) that supports
@@ -342,7 +355,12 @@ export const evidenceDocs = pgTable("evidence_doc", {
    */
   evidenceSpecIndex: integer("evidence_spec_index"),
   createdAt: integer("created_at").notNull().default(now),
-});
+}, (t) => [
+  check(
+    "evidence_doc_one_owner",
+    sql`(${t.projectCreditId} is null) <> (${t.materialProductId} is null)`,
+  ),
+]);
 
 /**
  * The AI's read of one uploaded document against the requirement it was
@@ -601,6 +619,281 @@ export const checklistResponsePhotos = pgTable(
   ],
 );
 
+/**
+ * MATERIAL REVIEW (Sprint 3, 2026-10-27). The client's Sustainability Material
+ * Questionnaire (SMQ): one questionnaire per product, a fixed "For all
+ * materials" block plus the rows of the material types picked for it, each row
+ * pointing at the credit it serves. See
+ * docs/feedback/2026-10-sprint-3-material-review/01-material-review/task.md.
+ *
+ * Same two layers as the inspection forms: a workspace default (no
+ * project_id, rows hold credit CODES because no catalog exists when it is
+ * seeded) copied into a project on first use (rows then hold that project's
+ * project_credit ids). Edits to a copy never touch the default.
+ */
+export const smqTemplates = pgTable(
+  "smq_template",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    /** Null for the workspace default; set for a project's own copy. */
+    projectId: text("project_id").references(() => projects.id),
+    title: text("title").notNull(),
+    /** The questionnaire's own revision label, e.g. "Rev03". */
+    revision: text("revision"),
+    /** Certificates older than this many years count as expired (D7). */
+    expiryYears: integer("expiry_years").notNull().default(3),
+    /**
+     * The project's total construction material cost from the BOQ, in SAR:
+     * the RC-01 denominator (D14). Null until entered.
+     */
+    boqMaterialCostSar: doublePrecision("boq_material_cost_sar"),
+    createdAt: integer("created_at").notNull().default(now),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => [
+    uniqueIndex("smq_template_project_uq")
+      .on(t.projectId)
+      .where(sql`${t.projectId} is not null`),
+  ],
+);
+
+/**
+ * One block of the questionnaire: the "For all materials" block, which every
+ * product answers, or one material type ("Paints & Coatings"), whose rows a
+ * product answers when the type is picked for it.
+ */
+export const smqSections = pgTable("smq_section", {
+  id: text("id").primaryKey(),
+  templateId: text("template_id")
+    .notNull()
+    .references(() => smqTemplates.id, { onDelete: "cascade" }),
+  seq: integer("seq").notNull(),
+  /** all_materials | material_type */
+  kind: text("kind").notNull().default("material_type"),
+  heading: text("heading").notNull(),
+  /** Switched off rather than deleted, like checklist items. */
+  active: boolean("active").notNull().default(true),
+  /**
+   * The calculated credit parts a product of this type counts toward unless
+   * the reviewer unticks it (D33), as a JSON list of part keys from
+   * lib/materials/credits.ts, e.g. ["MW-05:steel"].
+   */
+  defaultParts: text("default_parts").notNull().default("[]"),
+});
+
+export const smqRows = pgTable("smq_row", {
+  id: text("id").primaryKey(),
+  sectionId: text("section_id")
+    .notNull()
+    .references(() => smqSections.id, { onDelete: "cascade" }),
+  seq: integer("seq").notNull(),
+  /** The required documents / parameters, as the SMQ words them. */
+  text: text("text").notNull(),
+  /** The LEED reference, kept as text only (D2): it never counts. */
+  leedRef: text("leed_ref"),
+  /** The Mostadam credit code in the default ("MW-05"); kept on copies for display. */
+  creditCode: text("credit_code"),
+  /**
+   * The credit in a project's copy, resolved once from credit_code when the
+   * copy is made (D20). Null with a code = unlinked (the catalog lacks it);
+   * null without one = a LEED-only row.
+   */
+  projectCreditId: text("project_credit_id").references(() => projectCredits.id),
+  /**
+   * fixed | project_value | design_package | construction_team |
+   * project_requirement — the SMQ's own note on where the value comes from.
+   */
+  kind: text("kind").notNull().default("fixed"),
+  /** The SMQ's note on the row, verbatim ("VOC content and emission test report is required…"). */
+  note: text("note"),
+  /** The project's target, shown beside the answer; never compared automatically (D21). */
+  targetText: text("target_text"),
+  /** Unit of the value the row asks for, e.g. "g/L", "%", "W/m²K". */
+  valueUnit: text("value_unit"),
+  active: boolean("active").notNull().default(true),
+});
+
+/** One material submittal (MTS / TBE), holding one or more products (D11). */
+export const materialSubmittals = pgTable("material_submittal", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id")
+    .notNull()
+    .references(() => workspaces.id),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id),
+  /** The contractor's reference, e.g. "JCD-OCN-MBL-PRO-MTS-0411". */
+  ref: text("ref").notNull(),
+  title: text("title").notNull(),
+  discipline: text("discipline"),
+  supplier: text("supplier"),
+  /** YYYY-MM-DD */
+  submittedOn: text("submitted_on"),
+  createdAt: integer("created_at").notNull().default(now),
+});
+
+/**
+ * One product of a submittal at one revision: its SMQ header, review and BOQ
+ * quantities. A resubmission is a new row (revision + 1) linked to the one it
+ * replaces, which then stays as it was reviewed (D9); only the latest
+ * revision counts.
+ */
+export const materialProducts = pgTable(
+  "material_product",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    submittalId: text("submittal_id")
+      .notNull()
+      .references(() => materialSubmittals.id),
+    revision: integer("revision").notNull().default(0),
+    previousRevisionId: text("previous_revision_id").references(
+      (): AnyPgColumn => materialProducts.id,
+    ),
+    /** "Material Subject" on the SMQ, e.g. "Jotafloor Easyflow Primer HS". */
+    name: text("name").notNull(),
+    locationOfUse: text("location_of_use"),
+    /** Inside the weatherproofing line. HC-11 counts interior products only (D33). */
+    interior: boolean("interior").notNull().default(true),
+    manufacturer: text("manufacturer"),
+    supplier: text("supplier"),
+    countryOfOrigin: text("country_of_origin"),
+    contactName: text("contact_name"),
+    contactMobile: text("contact_mobile"),
+    /** A | B | C | D, null until reviewed. A and B count toward credits (D6). */
+    status: text("status"),
+    /** YYYY-MM-DD: puts the review into a month (D26). */
+    reviewedOn: text("reviewed_on"),
+    reviewer: text("reviewer"),
+    /** "The proposed material is Applicable / Not Applicable…" */
+    applicable: boolean("applicable"),
+    remarks: text("remarks"),
+    manufacturerSignatory: text("manufacturer_signatory"),
+    manufacturerSignedOn: text("manufacturer_signed_on"),
+    contractorSignatory: text("contractor_signatory"),
+    contractorSignedOn: text("contractor_signed_on"),
+    /** BOQ quantities: the forecast (D13), in fixed units (D25). */
+    boqWeightT: doublePrecision("boq_weight_t"),
+    boqVolumeM3: doublePrecision("boq_volume_m3"),
+    boqCostSar: doublePrecision("boq_cost_sar"),
+    createdAt: integer("created_at").notNull().default(now),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => [index("material_product_submittal_idx").on(t.submittalId)],
+);
+
+/** The material types picked for a product (D12): which sections it answers. */
+export const materialProductTypes = pgTable(
+  "material_product_type",
+  {
+    productId: text("product_id")
+      .notNull()
+      .references(() => materialProducts.id, { onDelete: "cascade" }),
+    sectionId: text("section_id")
+      .notNull()
+      .references(() => smqSections.id),
+  },
+  (t) => [uniqueIndex("material_product_type_uq").on(t.productId, t.sectionId)],
+);
+
+/** The calculated credit parts a product counts toward (D33), e.g. "MW-05:steel". */
+export const materialProductParts = pgTable(
+  "material_product_part",
+  {
+    productId: text("product_id")
+      .notNull()
+      .references(() => materialProducts.id, { onDelete: "cascade" }),
+    part: text("part").notNull(),
+  },
+  (t) => [uniqueIndex("material_product_part_uq").on(t.productId, t.part)],
+);
+
+/**
+ * One answer per questionnaire row shown for a product. The row's text,
+ * credit, target and kind are copied in when the answer is made, so editing
+ * the project's questionnaire never rewrites a product already entered. An
+ * answer whose material type is later unpicked stays, hidden, and comes back
+ * if the type is picked again.
+ */
+export const materialAnswers = pgTable(
+  "material_answer",
+  {
+    id: text("id").primaryKey(),
+    productId: text("product_id")
+      .notNull()
+      .references(() => materialProducts.id, { onDelete: "cascade" }),
+    rowId: text("row_id").references(() => smqRows.id, { onDelete: "set null" }),
+    sectionId: text("section_id").references(() => smqSections.id, { onDelete: "set null" }),
+    sectionHeading: text("section_heading").notNull(),
+    sectionKind: text("section_kind").notNull(),
+    sectionSeq: integer("section_seq").notNull(),
+    seq: integer("seq").notNull(),
+    text: text("text").notNull(),
+    leedRef: text("leed_ref"),
+    creditCode: text("credit_code"),
+    projectCreditId: text("project_credit_id").references(() => projectCredits.id),
+    kind: text("kind").notNull(),
+    note: text("note"),
+    targetText: text("target_text"),
+    /** yes | no | na | null (not answered yet). */
+    answer: text("answer"),
+    value: text("value"),
+    unit: text("unit"),
+    remark: text("remark"),
+  },
+  (t) => [
+    index("material_answer_product_idx").on(t.productId),
+    uniqueIndex("material_answer_product_row_uq").on(t.productId, t.rowId),
+  ],
+);
+
+/**
+ * Where a material file shows: on one answer's row, or in one of the
+ * product's named slots (submittal | boq | datasheet | filled_smq), or as an
+ * extra product attachment (neither). Links, not copies, so a new revision
+ * carries the same file forward; the file goes when its last link does.
+ */
+export const materialDocs = pgTable(
+  "material_doc",
+  {
+    id: text("id").primaryKey(),
+    productId: text("product_id")
+      .notNull()
+      .references(() => materialProducts.id, { onDelete: "cascade" }),
+    answerId: text("answer_id").references(() => materialAnswers.id, { onDelete: "cascade" }),
+    slot: text("slot"),
+    evidenceDocId: text("evidence_doc_id")
+      .notNull()
+      .references(() => evidenceDocs.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [index("material_doc_product_idx").on(t.productId)],
+);
+
+/** One delivery of a product (date, PO, quantity, cost): the actual (D13). */
+export const materialDeliveries = pgTable(
+  "material_delivery",
+  {
+    id: text("id").primaryKey(),
+    productId: text("product_id")
+      .notNull()
+      .references(() => materialProducts.id, { onDelete: "cascade" }),
+    /** YYYY-MM-DD */
+    deliveredOn: text("delivered_on").notNull(),
+    poNumber: text("po_number"),
+    weightT: doublePrecision("weight_t"),
+    volumeM3: doublePrecision("volume_m3"),
+    costSar: doublePrecision("cost_sar"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [index("material_delivery_product_idx").on(t.productId)],
+);
+
 export type Workspace = typeof workspaces.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type RatingSystem = typeof ratingSystems.$inferSelect;
@@ -615,3 +908,10 @@ export type ProjectCredit = typeof projectCredits.$inferSelect;
 export type RequirementEntry = typeof requirementEntries.$inferSelect;
 export type EvidenceDoc = typeof evidenceDocs.$inferSelect;
 export type EvidenceReview = typeof evidenceReviews.$inferSelect;
+export type SmqTemplate = typeof smqTemplates.$inferSelect;
+export type SmqSection = typeof smqSections.$inferSelect;
+export type SmqRow = typeof smqRows.$inferSelect;
+export type MaterialSubmittal = typeof materialSubmittals.$inferSelect;
+export type MaterialProduct = typeof materialProducts.$inferSelect;
+export type MaterialAnswer = typeof materialAnswers.$inferSelect;
+export type MaterialDelivery = typeof materialDeliveries.$inferSelect;
