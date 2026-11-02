@@ -6,6 +6,7 @@ import { todayIso } from "./expiry";
 import { monthSummaries } from "./months";
 import { projectProducts, type ProductSummary } from "./products";
 import { loadSnapshot } from "./progress";
+import { answerRowActive } from "./smq";
 import type { MaterialSubmittal } from "@/db/schema";
 
 /**
@@ -52,7 +53,7 @@ export async function creditSlice(projectId: string, projectCreditId: string, cr
     ? await db
         .select()
         .from(materialAnswers)
-        .where(and(inArray(materialAnswers.productId, ids), eq(materialAnswers.projectCreditId, projectCreditId)))
+        .where(and(inArray(materialAnswers.productId, ids), eq(materialAnswers.projectCreditId, projectCreditId), answerRowActive))
     : [];
   const withAnswers = [...new Set(answers.map((a) => a.productId))];
   const [types, docs] = withAnswers.length

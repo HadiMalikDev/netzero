@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   catalogCredits,
+  materialAnswers,
   projectCredits,
   smqRows,
   smqSections,
@@ -232,6 +233,13 @@ async function ownRow(templateId: string, rowId: string) {
     .limit(1);
   return r?.row ?? null;
 }
+
+/**
+ * Answers whose questionnaire row is still active (D48): an inactive
+ * requirement counts toward nothing, for products entered before it was
+ * switched off too. An answer whose row is gone keeps counting.
+ */
+export const answerRowActive = sql`not exists (select 1 from ${smqRows} where ${smqRows.id} = ${materialAnswers.rowId} and not ${smqRows.active})`;
 
 /** Swap with the neighbour in seq order, re-sequencing 1..n first. */
 async function move(

@@ -137,7 +137,7 @@ function AnswerRow({
 }) {
   const kind = ROW_KIND_LABEL[a.kind as keyof typeof ROW_KIND_LABEL] ?? a.kind;
   return (
-    <li id={`a-${a.id}`} className="grid gap-3 px-4 py-3 lg:grid-cols-[7rem_1fr_22rem]">
+    <li id={`a-${a.id}`} className={`grid gap-3 px-4 py-3 lg:grid-cols-[7rem_1fr_22rem] ${a.inactive ? "bg-slate-50 opacity-60" : ""}`}>
       <div className="space-y-1">
         {a.projectCreditId && a.creditCode ? (
           <Badge tone="brand">{a.creditCode}</Badge>
@@ -147,6 +147,11 @@ function AnswerRow({
           <Badge>LEED only</Badge>
         )}
         <div className="text-[11px] text-slate-500">{kind}</div>
+        {a.inactive ? (
+          <span title="Switched off in the questionnaire: kept on record, counts toward no credit">
+            <Badge>Inactive requirement</Badge>
+          </span>
+        ) : null}
       </div>
       <div className="text-sm text-slate-700">
         <p className="whitespace-pre-line">{a.text}</p>
@@ -408,7 +413,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">Questionnaire</h2>
           <span className="text-sm text-slate-500">
-            {answered.filter((a) => a.answer).length} of {answered.length} answered
+            {answered.filter((a) => a.answer && !a.inactive).length} of {answered.filter((a) => !a.inactive).length} answered
           </span>
         </div>
         <div className="space-y-4">

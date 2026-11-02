@@ -340,6 +340,24 @@ describeDb("material review: products", () => {
     expect(p.revisions[1].answers.some((a) => a.text.startsWith("technical datasheet with a maximum formaldehyde"))).toBe(false);
   });
 
+  it("a requirement switched off stops counting for products that already answered it (D48)", async () => {
+    const t = (await ensureProjectSmq(pid()))!;
+    const [{ products }] = await listSubmittals(pid());
+    const latest = products.find((p) => p.latest)!;
+    const answer = (await getProduct(pid(), latest.id))!.sections[0].answers[0];
+    const counted = async () => (await loadSnapshot(pid())).products[0].revisions.at(-1)!.answers.some((a) => a.text === answer.text);
+    expect(await counted()).toBe(true);
+
+    expect(await editSmqRow(t.id, answer.rowId!, "toggle")).toBe(true);
+    expect(await counted()).toBe(false);
+    // Kept on record, marked.
+    const kept = (await getProduct(pid(), latest.id))!.sections[0].answers.find((a) => a.id === answer.id)!;
+    expect(kept.inactive).toBe(true);
+
+    expect(await editSmqRow(t.id, answer.rowId!, "toggle")).toBe(true);
+    expect(await counted()).toBe(true);
+  });
+
   it("a month lists its reviews, carries open C/D forward and flags overdue resubmissions as of then", async () => {
     // Rev 00 was reviewed C on 2026-05-05; Rev 01 was entered today (after October 2026 began).
     const today = todayIso();

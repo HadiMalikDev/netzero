@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   evidenceDocs,
@@ -10,7 +10,7 @@ import {
 } from "@/db/schema";
 import { computeParts, type PartResult, type Snapshot, type SnapshotProduct } from "./credits";
 import { existsFrom, projectProducts } from "./products";
-import { ensureProjectSmq } from "./smq";
+import { answerRowActive, ensureProjectSmq } from "./smq";
 
 /**
  * Read a project's material reviews into the snapshot the credit maths works
@@ -25,7 +25,7 @@ export async function loadSnapshot(projectId: string): Promise<Snapshot> {
     ? await Promise.all([
         db.select().from(materialProductParts).where(inArray(materialProductParts.productId, ids)),
         db.select().from(materialProductTypes).where(inArray(materialProductTypes.productId, ids)),
-        db.select().from(materialAnswers).where(inArray(materialAnswers.productId, ids)),
+        db.select().from(materialAnswers).where(and(inArray(materialAnswers.productId, ids), answerRowActive)),
         db
           .select({ answerId: materialDocs.answerId, issuedOn: evidenceDocs.issuedOn })
           .from(materialDocs)

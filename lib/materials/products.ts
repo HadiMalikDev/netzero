@@ -677,6 +677,8 @@ export interface MaterialDocView {
 
 export interface AnswerView extends MaterialAnswer {
   docs: MaterialDocView[];
+  /** Its questionnaire row was switched off: kept on record, counts toward nothing (D48). */
+  inactive: boolean;
 }
 
 export interface AnswerSection {
@@ -753,12 +755,13 @@ export async function getProduct(projectId: string, productId: string): Promise<
   ]);
   const typeIds = types.map((t) => t.sectionId);
   const shown = new Set(typeIds);
+  const inactive = new Set(smq.sections.flatMap((s) => s.rows.filter((r) => !r.active).map((r) => r.id)));
   const visible = answers.filter((a) => a.sectionKind === "all_materials" || (a.sectionId && shown.has(a.sectionId)));
   const sections = new Map<string, AnswerSection>();
   for (const a of [...visible].sort((x, y) => x.sectionSeq - y.sectionSeq || x.seq - y.seq)) {
     const key = a.sectionId ?? `gone:${a.sectionHeading}`;
     const s = sections.get(key) ?? { sectionId: a.sectionId, heading: a.sectionHeading, kind: a.sectionKind, answers: [] };
-    s.answers.push({ ...a, docs: links.filter((l) => l.answerId === a.id) });
+    s.answers.push({ ...a, docs: links.filter((l) => l.answerId === a.id), inactive: Boolean(a.rowId && inactive.has(a.rowId)) });
     sections.set(key, s);
   }
   return {
