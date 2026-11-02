@@ -106,7 +106,10 @@ On hold: 1.3 (D47). 1.4 needs no change of its own.
   tests: one product per upload, files in their slots; an empty product creates nothing.
 - `020b00a` D46: the AI fills each uploaded product's information. DB test with the model
   stubbed: the file's text and the type list reach the model; read values are saved, types
-  must be on the list, typed values are never overwritten. **Not run live:** the dev
-  `OPENROUTER_API_KEY` is rejected by OpenRouter (401 "User not found"); the browser check
-  shows the fallback note (`evidence/r5-ai-unavailable.png`).
+  must be on the list, typed values are never overwritten. With the dev key rejected (401) the
+  upload fell back as designed (`evidence/r5-ai-unavailable.png`). Live run after the key was
+  replaced (2026-11-02, `deepseek/deepseek-v3.2`): one SMQ page uploaded through the browser,
+  read in about 9 s; name, location, manufacturer, supplier, country, the submittal reference
+  and "Adhesives & Sealants" were filled, which pre-ticked HC-11 VOC and RC-01
+  (`evidence/r5-ai-filled.png`). The contact name and mobile on the page are not asked for.
 - `pnpm test` 216 passed; `pnpm test:db` 272 passed; lint 0 errors; build passes.
