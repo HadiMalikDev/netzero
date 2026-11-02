@@ -13,7 +13,7 @@ import {
   type SmqTemplate,
 } from "@/db/schema";
 import { WORKSPACE_ID } from "@/lib/catalog";
-import { PART_KEYS } from "./parts";
+import { CALCULATED_CODES, PART_KEYS } from "./parts";
 
 /**
  * The project's Sustainability Material Questionnaire (SMQ): its own copy of
@@ -99,6 +99,31 @@ export async function projectCreditsByCode(projectId: string): Promise<Map<strin
     .innerJoin(catalogCredits, eq(projectCredits.catalogCreditId, catalogCredits.id))
     .where(and(eq(projectCredits.projectId, projectId), eq(projectCredits.workspaceId, WORKSPACE_ID)));
   return new Map(rows.map((r) => [r.code, { id: r.id, title: r.title }]));
+}
+
+/**
+ * The project's targeted material credits (client review Rev 01, 1.1): each
+ * targeted credit that has a calculated part or that an active questionnaire
+ * row links to, by code.
+ */
+export async function targetedMaterialCredits(projectId: string, templateId: string): Promise<{ code: string; title: string }[]> {
+  const [credits, linked] = await Promise.all([
+    db
+      .select({ id: projectCredits.id, code: catalogCredits.code, title: catalogCredits.title })
+      .from(projectCredits)
+      .innerJoin(catalogCredits, eq(projectCredits.catalogCreditId, catalogCredits.id))
+      .where(and(eq(projectCredits.projectId, projectId), eq(projectCredits.workspaceId, WORKSPACE_ID), eq(projectCredits.targeted, true))),
+    db
+      .selectDistinct({ id: smqRows.projectCreditId })
+      .from(smqRows)
+      .innerJoin(smqSections, eq(smqRows.sectionId, smqSections.id))
+      .where(and(eq(smqSections.templateId, templateId), eq(smqRows.active, true))),
+  ]);
+  const ids = new Set(linked.map((l) => l.id));
+  return credits
+    .filter((c) => CALCULATED_CODES.has(c.code) || ids.has(c.id))
+    .map(({ code, title }) => ({ code, title }))
+    .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
 }
 
 /**

@@ -1,11 +1,11 @@
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { evidenceDocs, materialAnswers, materialDocs, materialProductTypes, type MaterialSubmittal } from "@/db/schema";
-import { computeParts, previousMonth, type PartResult } from "./credits";
+import { computeParts, countCredit, previousMonth, type CreditCount, type PartResult } from "./credits";
 import { expiryOf, monthEnd, todayIso } from "./expiry";
 import { existsFrom, projectProducts, type ProductSummary } from "./products";
 import { loadSnapshot } from "./progress";
-import { ensureProjectSmq } from "./smq";
+import { ensureProjectSmq, targetedMaterialCredits } from "./smq";
 
 /**
  * The monthly material checklist (D3, D8, D30, D31): the products reviewed
@@ -39,9 +39,12 @@ export interface MonthView {
   /** C / D reviewed before the month and not yet resubmitted by its end. */
   carried: MonthProduct[];
   flags: MonthFlag[];
+  /** The calculated parts of the targeted credits (client review 1.1). */
   parts: PartResult[];
   /** The same parts at the end of the month before, for "what this month added". */
   previous: PartResult[];
+  /** Targeted material credits without a calculation: products and how many comply (D45). */
+  others: (CreditCount & { title: string })[];
 }
 
 export interface MonthSummary {
@@ -155,14 +158,20 @@ export async function monthView(projectId: string, month: string, today = todayI
   }
 
   const snap = await loadSnapshot(projectId);
+  const targeted = template ? await targetedMaterialCredits(projectId, template.id) : [];
+  const codes = new Set(targeted.map((c) => c.code));
+  const mine = (ps: PartResult[]) => ps.filter((p) => codes.has(p.part.creditCode));
+  const parts = mine(computeParts(snap, month));
+  const calculated = new Set(parts.map((p) => p.part.creditCode));
   return {
     month,
     reviewed,
     counts: tally(reviewed.map((r) => r.product)),
     carried,
     flags,
-    parts: computeParts(snap, month),
-    previous: computeParts(snap, previousMonth(month)),
+    parts,
+    previous: mine(computeParts(snap, previousMonth(month))),
+    others: targeted.filter((c) => !calculated.has(c.code)).map((c) => ({ ...countCredit(c.code, snap, month), title: c.title })),
   };
 }
 

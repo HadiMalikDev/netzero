@@ -175,7 +175,7 @@ export default async function MaterialsPage({ params, searchParams }: PageProps<
           <div className="border-b border-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-800">
             Material credits {isCurrent ? "to date" : `at the end of ${monthLabel(month)}`}
           </div>
-          <MaterialPartsTable projectId={id} parts={view.parts} previous={view.previous} />
+          <MaterialPartsTable projectId={id} parts={view.parts} previous={view.previous} others={view.others} />
         </Card>
       </section>
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computePart, previousMonth, revisionAt, type Snapshot, type SnapshotProduct, type SnapshotRevision } from "@/lib/materials/credits";
+import { computePart, countCredit, previousMonth, revisionAt, type Snapshot, type SnapshotProduct, type SnapshotRevision } from "@/lib/materials/credits";
 import { expiryOf, monthEnd, parseIsoDate, todayIso } from "@/lib/materials/expiry";
 import { partByKey } from "@/lib/materials/parts";
 
@@ -155,5 +155,27 @@ describe("computePart", () => {
   it("flags products without a quantity for the part's basis", () => {
     const s = snap([product("a", [rev({ boq: { weightT: null, volumeM3: 5, costSar: 10 } })])]);
     expect(computePart(steel, s, "2026-05").missingQuantity).toBe(1);
+  });
+});
+
+describe("countCredit (D45)", () => {
+  const mw07 = (answer: string | null, over: Partial<SnapshotRevision> = {}) =>
+    rev({ parts: [], answers: [{ creditCode: "MW-07", linked: true, answer, text: "Waste plan", docs: [] }], ...over });
+
+  it("counts products with rows for the credit, and the A/B ones that meet them", () => {
+    const s = snap([
+      product("yes-a", [mw07("yes")]),
+      product("yes-b", [mw07("yes", { status: "B" })]),
+      product("answered-no", [mw07("no")]),
+      product("under-review", [mw07("yes", { status: null, reviewedOn: null })]),
+      product("rejected", [mw07("yes", { status: "D" })]),
+      product("other-credit", [rev()]),
+      product("unlinked", [mw07("yes", { answers: [{ creditCode: "MW-07", linked: false, answer: "yes", text: "x", docs: [] }] })]),
+    ]);
+    expect(countCredit("MW-07", s, "2026-05")).toEqual({ creditCode: "MW-07", products: 4, comply: 2 });
+  });
+
+  it("is as of the month's end", () => {
+    expect(countCredit("MW-07", snap([product("a", [mw07("yes", { createdOn: "2026-06-02", reviewedOn: "2026-06-03" })])]), "2026-05").products).toBe(0);
   });
 });

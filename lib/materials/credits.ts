@@ -117,10 +117,10 @@ function basisQty(basis: CreditPart["basis"], q: { weightT: number | null; volum
 }
 
 /** Whether a revision meets the part's credit on its answers and documents (not its status). */
-export function answersMeet(part: CreditPart, r: SnapshotRevision, expiryYears: number, end: string): string[] {
-  const rows = r.answers.filter((a) => a.creditCode === part.creditCode && a.linked);
+export function answersMeet(creditCode: string, r: SnapshotRevision, expiryYears: number, end: string): string[] {
+  const rows = r.answers.filter((a) => a.creditCode === creditCode && a.linked);
   const reasons: string[] = [];
-  if (!rows.length) return [`No ${part.creditCode} rows on its questionnaire`];
+  if (!rows.length) return [`No ${creditCode} rows on its questionnaire`];
   for (const a of rows) {
     const short = a.text.split("\n")[0].slice(0, 80);
     if (!a.answer) reasons.push(`Not answered: ${short}`);
@@ -131,7 +131,7 @@ export function answersMeet(part: CreditPart, r: SnapshotRevision, expiryYears: 
         else if (expiryOf(d.issuedOn, expiryYears, end).state === "expired") reasons.push(`Certificate expired (issued ${d.issuedOn}): ${short}`);
       }
   }
-  if (!reasons.length && !rows.some((a) => a.answer === "yes")) reasons.push(`No row answered Yes for ${part.creditCode}`);
+  if (!reasons.length && !rows.some((a) => a.answer === "yes")) reasons.push(`No row answered Yes for ${creditCode}`);
   return reasons;
 }
 
@@ -150,7 +150,7 @@ export function computePart(part: CreditPart, snap: Snapshot, month: string): Pa
       state = "pending";
       reasons.push(r.status === "C" ? "Revise and resubmit (C)" : "Under review");
     } else {
-      reasons.push(...answersMeet(part, r, snap.expiryYears, end));
+      reasons.push(...answersMeet(part.creditCode, r, snap.expiryYears, end));
       state = reasons.length ? "not_compliant" : "compliant";
     }
     const boqQty = basisQty(part.basis, r.boq);
@@ -207,6 +207,31 @@ export function computePart(part: CreditPart, snap: Snapshot, month: string): Pa
       : null,
     missingQuantity,
   };
+}
+
+export interface CreditCount {
+  creditCode: string;
+  /** Products (latest revision at the month's end, not D) with questionnaire rows linked to the credit. */
+  products: number;
+  /** Of those: status A or B, and their rows for the credit meet it as a calculated part's do. */
+  comply: number;
+}
+
+/**
+ * A targeted material credit with no quantity rule in the manual (D45): a
+ * fixed count over the saved answers, no percentage and no AI.
+ */
+export function countCredit(creditCode: string, snap: Snapshot, month: string): CreditCount {
+  const end = monthEnd(month);
+  let products = 0;
+  let comply = 0;
+  for (const p of snap.products) {
+    const r = revisionAt(p, month);
+    if (!r || r.status === "D" || !r.answers.some((a) => a.linked && a.creditCode === creditCode)) continue;
+    products++;
+    if ((r.status === "A" || r.status === "B") && !answersMeet(creditCode, r, snap.expiryYears, end).length) comply++;
+  }
+  return { creditCode, products, comply };
 }
 
 export function computeParts(snap: Snapshot, month: string, creditCode?: string): PartResult[] {
