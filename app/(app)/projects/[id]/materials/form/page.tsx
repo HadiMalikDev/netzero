@@ -350,6 +350,7 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
 
       <div className="space-y-3">
         {all ? section(all) : null}
+        <h2 className="pt-3 text-sm font-semibold tracking-wide text-slate-500 uppercase">Material-specific requirements</h2>
         <SortableList as="div" className="space-y-3" save={reorderSmqTypesAction.bind(null, id)}>
           {types.map((s) => (
             <Sortable key={s.id} id={s.id}>

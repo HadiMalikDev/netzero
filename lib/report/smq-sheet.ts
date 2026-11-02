@@ -4,7 +4,7 @@ import { expiryOf } from "@/lib/materials/expiry";
 
 /**
  * One product's filled SMQ for print, in the client's form order (SMQ Rev03):
- * Manufacture and Product Information, "For All Materials", the Material
+ * Manufacture and Product Information, the General Requirements, the Material-specific
  * Requirements of its material types, the two statements, and the
  * Contractor Sustainability Consultant Remarks. Pure: built from the product
  * view so tests can read it without rendering.

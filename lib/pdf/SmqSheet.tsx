@@ -5,8 +5,8 @@ import type { SmqSheetModel, SmqSheetRow } from "@/lib/report/smq-sheet";
 
 /**
  * A product's filled Sustainability Material Questionnaire, laid out as the
- * client's SMQ Rev03: the product information block, "For All Materials",
- * the Material Requirements of the product's types (Material Type | Credit
+ * client's SMQ Rev03: the product information block, the General Requirements,
+ * the Material-specific Requirements of the product's types (Material Type | Credit
  * Reference | Required Documents / Parameters | Yes/No/NA/Value), the
  * manufacturer and contractor statements, and the consultant's remarks.
  */
@@ -85,10 +85,10 @@ export function SmqSheet({ model: m }: { model: SmqSheetModel }) {
           ))}
         </View>
 
-        <Text style={s.band}>For All Materials</Text>
+        <Text style={s.band}>General Requirements</Text>
         <Rows rows={m.allMaterials} withType={false} />
 
-        <Text style={s.band}>Material Requirements</Text>
+        <Text style={s.band}>Material-specific Requirements</Text>
         {m.requirements.length ? (
           <Rows rows={m.requirements} withType />
         ) : (

@@ -127,6 +127,13 @@
       "when": 1793104762121,
       "tag": "0017_seed_smq_rev03",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793608134970,
+      "tag": "0018_general_requirements",
+      "breakpoints": true
     }
   ]
 }

@@ -66,14 +66,14 @@ describeDb("material review: files", () => {
 });
 
 describeDb("material review: the seeded SMQ Rev03 default", () => {
-  it("has the 'For all materials' block first, then the material types, with every row", async () => {
+  it("has the general requirements first, then the material types, with every row", async () => {
     const sections = await db
       .select()
       .from(smqSections)
       .where(eq(smqSections.templateId, "smq_default"))
       .orderBy(asc(smqSections.seq));
     expect(sections).toHaveLength(48);
-    expect(sections[0]).toMatchObject({ kind: "all_materials", heading: "For all materials" });
+    expect(sections[0]).toMatchObject({ kind: "all_materials", heading: "General requirements" });
     expect(sections.slice(1).every((s) => s.kind === "material_type")).toBe(true);
     expect(sections.map((s) => s.heading)).toContain("Paints & Coatings");
 
@@ -173,7 +173,7 @@ describeDb("material review: the project's own questionnaire", () => {
     const moved = [types[1], types[0], ...types.slice(2)];
     expect(await reorderSmqTypes(t.id, moved)).toBe(true);
     smq = (await getSmq(t.id))!;
-    // "For all materials" stays first.
+    // The general requirements stay first.
     expect(smq.sections[0].kind).toBe("all_materials");
     expect(smq.sections.slice(1).map((s) => s.id)).toEqual(moved);
     expect(await reorderSmqTypes(t.id, [smq.sections[0].id, ...moved.slice(1)])).toBe(false);
@@ -191,7 +191,7 @@ describeDb("material review: the project's own questionnaire", () => {
     expect(after).toMatchObject({ heading: "Renamed type", defaultParts: ["MW-05:steel"] });
   });
 
-  it("refuses a credit from another project and keeps 'For all materials' first and on", async () => {
+  it("refuses a credit from another project and keeps the general requirements first and on", async () => {
     const t = (await ensureProjectSmq(copyFx.projectId))!;
     const smq = (await getSmq(t.id))!;
     const row = smq.sections[1].rows[0];
@@ -221,11 +221,11 @@ describeDb("material review: products", () => {
   const header = { name: "Jotafloor Easyflow Primer HS", locationOfUse: "Flooring", manufacturer: "Jotun Saudi Limited", supplier: "", countryOfOrigin: "Norway", contactName: "", contactMobile: "" };
   const pdf = (name = "report.pdf") => new File([new Uint8Array([37, 80, 68, 70])], name, { type: "application/pdf" });
 
-  it("a new product answers the 'For all materials' block and counts toward RC-01", async () => {
+  it("a new product answers the general requirements and counts toward RC-01", async () => {
     const sub = await createSubmittal(pid(), { ref: "MTS-0411", title: "All epoxy flooring systems", discipline: "Architecture", supplier: "Jotun", submittedOn: "2026-04-28" });
     const productId = (await addProduct(pid(), sub!, header))!;
     const v = (await getProduct(pid(), productId))!;
-    expect(v.sections.map((s) => s.heading)).toEqual(["For all materials"]);
+    expect(v.sections.map((s) => s.heading)).toEqual(["General requirements"]);
     expect(v.sections[0].answers).toHaveLength(7);
     expect(v.parts).toEqual(["RC-01:ksa"]);
     expect(v.latest).toBe(true);
@@ -242,7 +242,7 @@ describeDb("material review: products", () => {
 
     expect(await setProductTypes(pid(), productId, [paints.id, flooring.id, ceilings.id])).toBe(true);
     let v = (await getProduct(pid(), productId))!;
-    expect(v.sections.map((s) => s.heading)).toEqual(["For all materials", "Paints & Coatings", "Carpet, Hard Flooring", "Ceilings"]);
+    expect(v.sections.map((s) => s.heading)).toEqual(["General requirements", "Paints & Coatings", "Carpet, Hard Flooring", "Ceilings"]);
     expect(new Set(v.parts)).toEqual(new Set(["RC-01:ksa", "HC-11:voc", "HC-11:formaldehyde"]));
 
     const ceilingAnswer = v.sections[3].answers[0];
@@ -250,7 +250,7 @@ describeDb("material review: products", () => {
     // The contractor's mistake in MTS-0411: Ceilings rows on a floor primer. Drop them.
     await setProductTypes(pid(), productId, [paints.id, flooring.id]);
     v = (await getProduct(pid(), productId))!;
-    expect(v.sections.map((s) => s.heading)).toEqual(["For all materials", "Paints & Coatings", "Carpet, Hard Flooring"]);
+    expect(v.sections.map((s) => s.heading)).toEqual(["General requirements", "Paints & Coatings", "Carpet, Hard Flooring"]);
     expect(new Set(v.parts)).toEqual(new Set(["RC-01:ksa", "HC-11:voc"]));
     // Picking Ceilings again brings its earlier answer back.
     await setProductTypes(pid(), productId, [paints.id, flooring.id, ceilings.id]);

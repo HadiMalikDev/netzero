@@ -694,7 +694,7 @@ export interface ProductView {
   smq: SmqView;
   typeIds: string[];
   parts: string[];
-  /** The answers shown: "For all materials" plus the picked types, in order. */
+  /** The answers shown: the general requirements plus the picked types, in order. */
   sections: AnswerSection[];
   /** Product-level files (named slots and extras). */
   docs: MaterialDocView[];

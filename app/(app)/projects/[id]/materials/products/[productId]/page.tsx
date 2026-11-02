@@ -298,7 +298,7 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
             <>
               <h2 className="text-base font-semibold text-slate-900">Material types</h2>
               <p className="text-sm text-slate-500">
-                What this product is. The &quot;For all materials&quot; block always applies; each type adds its own rows to the questionnaire below.
+                What this product is. The general requirements always apply; each type adds its material-specific requirements to the questionnaire below.
               </p>
             </>
           }
@@ -412,15 +412,20 @@ export default async function ProductPage({ params }: PageProps<"/projects/[id]/
           </span>
         </div>
         <div className="space-y-4">
-          {view.sections.map((s) => (
-            <Card key={s.sectionId ?? s.heading} className="overflow-hidden">
-              <div className="bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-800">{s.heading}</div>
-              <ul className="divide-y divide-slate-100">
-                {s.answers.map((a) => (
-                  <AnswerRow key={a.id} a={a} projectId={id} productId={p.id} editable={editable} years={years} today={today} />
-                ))}
-              </ul>
-            </Card>
+          {view.sections.map((s, i) => (
+            <div key={s.sectionId ?? s.heading} className="space-y-4">
+              {s.kind !== "all_materials" && view.sections[i - 1]?.kind === "all_materials" ? (
+                <h3 className="pt-2 text-sm font-semibold tracking-wide text-slate-500 uppercase">Material-specific requirements</h3>
+              ) : null}
+              <Card className="overflow-hidden">
+                <div className="bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-800">{s.heading}</div>
+                <ul className="divide-y divide-slate-100">
+                  {s.answers.map((a) => (
+                    <AnswerRow key={a.id} a={a} projectId={id} productId={p.id} editable={editable} years={years} today={today} />
+                  ))}
+                </ul>
+              </Card>
+            </div>
           ))}
         </div>
         {editable ? (
