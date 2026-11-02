@@ -16,8 +16,11 @@ import { SubmittalFields, SubmittalView } from "../../_components/SubmittalField
  * the contractor's MTS where every product has its own questionnaire.
  */
 
-export default async function SubmittalPage({ params }: PageProps<"/projects/[id]/materials/submittals/[submittalId]">) {
+export default async function SubmittalPage({ params, searchParams }: PageProps<"/projects/[id]/materials/submittals/[submittalId]">) {
   const { id, submittalId } = await params;
+  // Set by an upload (D46): how many products' information the AI read from their files.
+  const { read, of } = await searchParams;
+  const uploaded = typeof of === "string" ? { read: Number(read) || 0, of: Number(of) || 0 } : null;
   const project = await getProject(id);
   if (!project) notFound();
   const submittal = await getSubmittalRow(id, submittalId);
@@ -53,6 +56,14 @@ export default async function SubmittalPage({ params }: PageProps<"/projects/[id
           </Link>
         }
       />
+
+      {uploaded ? (
+        <Card className={`mb-6 px-5 py-3 text-sm ${uploaded.read ? "border-brand-200 bg-brand-50 text-brand-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+          {uploaded.read
+            ? `Uploaded. The information of ${uploaded.read} of ${uploaded.of} product${uploaded.of === 1 ? "" : "s"} was read from their files by AI: check each product's name, manufacturer, origin and material types before answering its questionnaire.`
+            : "Uploaded. The products' information could not be read from their files: enter it on each product, and pick its material types."}
+        </Card>
+      ) : null}
 
       <Card className="mb-6 overflow-hidden">
         <div className="border-b border-slate-100 px-5 py-3">

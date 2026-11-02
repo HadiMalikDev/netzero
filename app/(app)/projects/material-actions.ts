@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/session";
+import { fillProductFromFiles } from "@/lib/ai/product-header";
 import { applyPartValue, describeApplied } from "@/lib/materials/apply";
 import { getProject } from "@/lib/data";
 import { parseIsoDate, todayIso } from "@/lib/materials/expiry";
@@ -26,6 +27,8 @@ import {
   attachMaterialDoc,
   createSubmittal,
   createUploadedSubmittal,
+  getSubmittalRow,
+  nameFromFiles,
   newRevision,
   parseSlot,
   productState,
@@ -323,10 +326,17 @@ export async function uploadSubmittalAction(formData: FormData): Promise<string 
   const products: UploadedProduct[] = [];
   for (let i = 0; formData.has(`p${i}`); i++) products.push({ datasheet: files(`p${i}_datasheet`), boq: files(`p${i}_boq`), smq: files(`p${i}_smq`) });
   if (!products.length) return "Add at least one product before submitting.";
-  const made = await createUploadedSubmittal(projectId, { ref: str(formData, "ref"), title: str(formData, "title") }, products);
+  const ref = str(formData, "ref");
+  const made = await createUploadedSubmittal(projectId, { ref, title: str(formData, "title") }, products);
   if (!made) return "Every product needs at least one file.";
+  // D46: the AI fills each product's information from its files, for the reviewer to check.
+  const readings = await Promise.all(made.productIds.map((id, i) => fillProductFromFiles(projectId, id, nameFromFiles(products[i])).catch(() => null)));
+  const readRef = readings.find((r) => r?.submittalRef)?.submittalRef;
+  const submittal = await getSubmittalRow(projectId, made.submittalId);
+  if (!ref.trim() && readRef && submittal)
+    await updateSubmittal(projectId, made.submittalId, { ...submittal, ref: readRef, discipline: submittal.discipline ?? "", supplier: submittal.supplier ?? "", submittedOn: submittal.submittedOn ?? "" });
   refresh(projectId);
-  redirect(`${materialsBase(projectId)}/submittals/${made.submittalId}`);
+  redirect(`${materialsBase(projectId)}/submittals/${made.submittalId}?read=${readings.filter(Boolean).length}&of=${made.productIds.length}`);
 }
 
 export async function uploadMaterialDocAction(_prev: string | null, formData: FormData): Promise<string | null> {
