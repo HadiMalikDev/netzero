@@ -74,3 +74,39 @@ Three questions put, all answered **"Leave for now"**:
    OpenRouter client and PDF text extraction), shown for the reviewer to check.
 
 On hold: 1.3 (D47). 1.4 needs no change of its own.
+
+## Choices I made (flagged — say if any is wrong)
+
+1. Step 3: "material credit" = a targeted credit that has a calculated part or that an active
+   questionnaire row links to. Untargeted credits drop out of the table and the monthly PDF.
+   The other credits sit under one heading row with "M of N comply"; D products are left out,
+   as in the calculated parts.
+2. Step 4: the upload is a page of its own (`/materials/upload`); "+ New submittal" (typed)
+   stays for entering one by hand. Data sheets go in the Technical data sheet slot, the BOQ
+   extract in BOQ line, the SMQ pages and their attachments all in Filled SMQ. A product is
+   named from its first file until the AI or the reviewer names it. Files picked but not yet
+   added to the list are submitted too. Over 50 MB in one submit (the server's limit) is
+   refused before sending.
+3. Step 5: the AI reads only PDFs with text (no scans, images or spreadsheets), up to 16,000
+   characters per product, fills only empty fields, and is shown as a note on the submittal
+   page after the upload, not stored on the product.
+
+## Done
+
+- `04e9076` D49: "General requirements" / "Material-specific requirements" — migration 0018
+  renames the block and the wording copied into answers; editor, product page and SMQ PDF
+  (`evidence/r1-editor.png`).
+- `b2b1f79` D48: an answer whose row is inactive counts toward no credit, for every product;
+  greyed as "Inactive requirement" (`evidence/r2-inactive.png`). DB test: off → out of the
+  snapshot, on → back.
+- `c47568e` 1.1 / D45: the credits table lists targeted material credits, with source notes
+  and tooltips (`evidence/r3-credits.png`). Unit tests of the count rule.
+- `93b25c2` D44: "Upload material submittal" on the Materials and Questionnaire pages; a queue
+  of products submitted together (`evidence/r4-queue.png`, `evidence/r4-submittal.png`). DB
+  tests: one product per upload, files in their slots; an empty product creates nothing.
+- `020b00a` D46: the AI fills each uploaded product's information. DB test with the model
+  stubbed: the file's text and the type list reach the model; read values are saved, types
+  must be on the list, typed values are never overwritten. **Not run live:** the dev
+  `OPENROUTER_API_KEY` is rejected by OpenRouter (401 "User not found"); the browser check
+  shows the fallback note (`evidence/r5-ai-unavailable.png`).
+- `pnpm test` 216 passed; `pnpm test:db` 272 passed; lint 0 errors; build passes.

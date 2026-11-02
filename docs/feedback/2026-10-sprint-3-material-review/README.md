@@ -1,6 +1,6 @@
 # Sprint 3 — Material Review (SMQ)
 
-Raised: 2026-10-27 · Built: 2026-10-27 · Status: items 1–2 merged (PR #8); item 3 shipped on `main`
+Raised: 2026-10-27 · Built: 2026-10-27 · Status: items 1–2 merged (PR #8); items 3–4 shipped on `main`
 
 Project context: Jeddah Central Oceanarium — Mostadam Commercial D+C v1.0-2019.
 
@@ -17,3 +17,4 @@ for screenshots. When the item ships, a "Done" section is appended to its `task.
 | 1 | [Material Review: the SMQ per product, monthly checklists, credit progress](./01-material-review/task.md) | Feature | **Shipped**, Done section in its `task.md` |
 | 2 | [QA fixes: on-page form errors, date checks, confirmations, PDF polish](./02-qa-fixes/task.md) | Bugs | **Shipped**: 9 of 9, Done sections in its `task.md` |
 | 3 | [Editor UX: read first, edit on demand; Active switch; credit tags](./03-editor-ux/task.md) | UX | **Shipped** on `main`, Done section in its `task.md` |
+| 4 | [Client review Rev 01: targeted credits, inactive rows, naming, upload, AI-filled products](./04-client-review-rev01/task.md) | Client review | **Shipped** on `main` (1.3 assessment on hold, D47) |
