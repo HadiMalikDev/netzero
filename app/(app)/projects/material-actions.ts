@@ -25,6 +25,7 @@ import {
   addProduct,
   attachMaterialDoc,
   createSubmittal,
+  createUploadedSubmittal,
   newRevision,
   parseSlot,
   productState,
@@ -37,6 +38,7 @@ import {
   setProductParts,
   setProductTypes,
   updateSubmittal,
+  type UploadedProduct,
 } from "@/lib/materials/products";
 
 /**
@@ -308,6 +310,25 @@ export async function saveAnswersAction(formData: FormData): Promise<void> {
 }
 
 /** Upload result for the client control: an error message, or null when stored. */
+/**
+ * "Upload material submittal" (client review Rev 01, 1.2, D44): the queued
+ * products arrive together as p0_datasheet, p0_boq, p0_smq, p1_… Returns
+ * why nothing was created, or redirects to the new submittal.
+ */
+export async function uploadSubmittalAction(formData: FormData): Promise<string | null> {
+  await requireUser();
+  const projectId = str(formData, "projectId");
+  if (!(await getProject(projectId))) throw new Error("project not found");
+  const files = (key: string) => formData.getAll(key).filter((f): f is File => f instanceof File && f.size > 0);
+  const products: UploadedProduct[] = [];
+  for (let i = 0; formData.has(`p${i}`); i++) products.push({ datasheet: files(`p${i}_datasheet`), boq: files(`p${i}_boq`), smq: files(`p${i}_smq`) });
+  if (!products.length) return "Add at least one product before submitting.";
+  const made = await createUploadedSubmittal(projectId, { ref: str(formData, "ref"), title: str(formData, "title") }, products);
+  if (!made) return "Every product needs at least one file.";
+  refresh(projectId);
+  redirect(`${materialsBase(projectId)}/submittals/${made.submittalId}`);
+}
+
 export async function uploadMaterialDocAction(_prev: string | null, formData: FormData): Promise<string | null> {
   await requireUser();
   const { projectId, productId, frozen } = await productTarget(formData);

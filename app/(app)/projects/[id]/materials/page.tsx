@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PageChrome, PageHeader } from "../../../_components/PageChrome";
 import { ProjectTabs } from "../_components/ProjectTabs";
 import { EditableSection } from "@/components/EditableSection";
-import { Card } from "@/components/ui";
+import { Card, primaryButtonClass } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { MaterialStatus } from "@/components/MaterialStatus";
 import { getProject } from "@/lib/data";
@@ -97,6 +97,9 @@ export default async function MaterialsPage({ params, searchParams }: PageProps<
             </a>
             <Link href={`${base}/form`} className={secondary}>
               Questionnaire
+            </Link>
+            <Link href={`${base}/upload`} className={primaryButtonClass}>
+              Upload material submittal
             </Link>
           </div>
         }

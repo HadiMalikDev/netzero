@@ -13,6 +13,7 @@ import {
   addProduct,
   attachMaterialDoc,
   createSubmittal,
+  createUploadedSubmittal,
   getProduct,
   listSubmittals,
   newRevision,
@@ -437,5 +438,48 @@ describeDb("material review: a credit's slice and 'Use this value'", () => {
     const met = (await applyPartValue(pid, "RC-01", "RC-01:ksa", "forecast"))!;
     expect(met.entries).toEqual([{ seq: 1, kind: "ticked", threshold: 20 }, { seq: 2, kind: "ticked", threshold: 40 }]);
     expect((await getCreditByCode(pid, "RC-01"))!.requirements.map((r) => r.valueBool)).toEqual([true, true]);
+  });
+});
+
+describeDb("material review: uploading a submittal (D44)", () => {
+  const upFx = materialFixture();
+  beforeAll(() => upFx.setup());
+  afterAll(async () => {
+    await rm(join(UPLOAD_ROOT, upFx.projectId), { recursive: true, force: true });
+    await upFx.teardown();
+  });
+  const file = (name: string) => new File([new Uint8Array([37, 80, 68, 70])], name, { type: "application/pdf" });
+
+  it("makes one product per queued upload, with each file in its slot", async () => {
+    const made = (await createUploadedSubmittal(
+      upFx.projectId,
+      { ref: "", title: "" },
+      [
+        { datasheet: [file("Jotafloor_Primer-HS TDS.pdf")], boq: [file("boq.xlsx")], smq: [file("smq.pdf"), file("voc-report.pdf")] },
+        { datasheet: [], boq: [], smq: [file("Rebar SMQ.pdf")] },
+      ],
+      "2026-11-02",
+    ))!;
+    expect(made.productIds).toHaveLength(2);
+    const [s] = await listSubmittals(upFx.projectId);
+    expect(s).toMatchObject({ ref: "Upload 2026-11-02", title: "Uploaded material submittal", submittedOn: "2026-11-02" });
+    const first = (await getProduct(upFx.projectId, made.productIds[0]))!;
+    expect(first.product.name).toBe("Jotafloor Primer HS TDS");
+    expect(first.docs.map((d) => [d.slot, d.fileName])).toEqual([
+      ["datasheet", "Jotafloor_Primer-HS TDS.pdf"],
+      ["boq", "boq.xlsx"],
+      ["filled_smq", "smq.pdf"],
+      ["filled_smq", "voc-report.pdf"],
+    ]);
+    // Each product answers the general requirements, as one added by hand.
+    expect(first.sections.map((x) => x.heading)).toEqual(["General requirements"]);
+    expect((await getProduct(upFx.projectId, made.productIds[1]))!.product.name).toBe("Rebar SMQ");
+  });
+
+  it("refuses a product without files, creating nothing", async () => {
+    const before = (await listSubmittals(upFx.projectId)).length;
+    expect(await createUploadedSubmittal(upFx.projectId, { ref: "X", title: "Y" }, [{ datasheet: [], boq: [], smq: [] }])).toBeNull();
+    expect(await createUploadedSubmittal(upFx.projectId, { ref: "X", title: "Y" }, [])).toBeNull();
+    expect((await listSubmittals(upFx.projectId)).length).toBe(before);
   });
 });

@@ -530,6 +530,64 @@ export async function removeDelivery(projectId: string, productId: string, deliv
 
 // ---------- documents ----------
 
+/** One queued product of an upload: its files, by the slot they go in. */
+export interface UploadedProduct {
+  datasheet: File[];
+  boq: File[];
+  smq: File[];
+}
+
+const UPLOAD_SLOTS = { datasheet: "datasheet", boq: "boq", smq: "filled_smq" } as const satisfies Record<keyof UploadedProduct, Slot>;
+
+/** A product's name until it is read from its files: the first file's name, without the extension. */
+export function nameFromFiles(p: UploadedProduct): string {
+  const first = p.datasheet[0] ?? p.smq[0] ?? p.boq[0];
+  return first ? first.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().slice(0, 200) || "Product" : "Product";
+}
+
+/**
+ * An uploaded material submittal (client review Rev 01, 1.2, D44): one
+ * product per queued upload, each with its data sheets, BOQ extract and SMQ
+ * pages in the product's named slots. A blank reference or title gets a
+ * placeholder to correct. Refused (null) when a product has no file.
+ */
+export async function createUploadedSubmittal(
+  projectId: string,
+  input: { ref: string; title: string },
+  products: UploadedProduct[],
+  today = todayIso(),
+): Promise<{ submittalId: string; productIds: string[] } | null> {
+  if (!products.length || products.some((p) => !p.datasheet.length && !p.boq.length && !p.smq.length)) return null;
+  const submittalId = await createSubmittal(projectId, {
+    ref: input.ref.trim() || `Upload ${today}`,
+    title: input.title.trim() || "Uploaded material submittal",
+    discipline: "",
+    supplier: "",
+    submittedOn: today,
+  });
+  if (!submittalId) return null;
+  const productIds: string[] = [];
+  for (const p of products) {
+    const id = await addProduct(projectId, submittalId, {
+      name: nameFromFiles(p),
+      locationOfUse: "",
+      manufacturer: "",
+      supplier: "",
+      countryOfOrigin: "",
+      contactName: "",
+      contactMobile: "",
+    });
+    if (!id) return null;
+    productIds.push(id);
+    for (const key of Object.keys(UPLOAD_SLOTS) as (keyof UploadedProduct)[])
+      for (const file of p[key]) {
+        const error = await attachMaterialDoc(projectId, id, file, { slot: UPLOAD_SLOTS[key] }, "", today);
+        if (error) throw new Error(error);
+      }
+  }
+  return { submittalId, productIds };
+}
+
 /**
  * Attach a file to one answer's row (an issue date is required, D27) or to
  * one of the product's slots (the date is optional there: a BOQ line has

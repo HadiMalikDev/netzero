@@ -7,7 +7,7 @@ import { CreditPartsPicker } from "@/components/CreditPartsPicker";
 import { EditableSection, ReadField } from "@/components/EditableSection";
 import { OpenOnHash } from "@/components/OpenOnHash";
 import { DragHandle, Sortable, SortableList } from "@/components/SortableList";
-import { Badge, Card, smallPrimaryButtonClass } from "@/components/ui";
+import { Badge, Card, primaryButtonClass, smallPrimaryButtonClass } from "@/components/ui";
 import { getProject } from "@/lib/data";
 import { partByKey } from "@/lib/materials/parts";
 import {
@@ -294,9 +294,14 @@ export default async function MaterialFormPage({ params }: PageProps<"/projects/
         title="Material questionnaire"
         subtitle={`${project.name} · this project's own copy of the SMQ (${template.revision ?? "standard"}): ${types.filter((t) => t.active).length} material types in use. Changes apply to products added from now on; products already entered keep the wording they were filled with.`}
         action={
-          <Link href={base} className="text-sm font-medium text-brand-600 hover:text-brand-700">
-            ← Materials
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href={base} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+              ← Materials
+            </Link>
+            <Link href={`${base}/upload`} className={primaryButtonClass}>
+              Upload material submittal
+            </Link>
+          </div>
         }
       />
 
